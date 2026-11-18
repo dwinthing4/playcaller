@@ -48,8 +48,8 @@ function geoFrom(out, slotsKey, n, stride = n) {
   g.setIndex(new THREE.BufferAttribute(out.index, 1)); g.computeBoundingSphere(); return g;
 }
 // ---------------- asset builders (cached in memory, and in IndexedDB across sessions) ----------------
-const MODEL_V = 7, outs = {};
-const meshKey = (kind, name) => `m${MODEL_V}|${kind}|${name}|${res()[kind]}`;
+const MODEL_V = 7, KIND_V = { body: 8, head: 8 }, outs = {};   // body / head v8: per-region colour slots (sleeves, ankles, beards, eye black)
+const meshKey = (kind, name) => `m${KIND_V[kind] || MODEL_V}|${kind}|${name}|${res()[kind]}`;
 const makers = {
   body: arch => M.meshSDF(M.makeBodyModel(Object.assign({}, ARCH[arch], { res: res().body * (arch === 'BIG' ? 0.86 : 1) }))),   // linemen: bigger pads need a finer grid to stay rounded
   head: arch => { const bp = M.bodyParams(ARCH[arch]); return M.meshSDF(M.makeHeadModel({ headScale: 1 + (bp.H - 1) * 0.35, eyeBlack: false, res: res().head })); },
@@ -74,7 +74,7 @@ function buildBody(arch) {
 function buildHead(arch) {
   if (cache.head[arch]) return cache.head[arch];
   const bp = M.bodyParams(ARCH[arch]), out = outFor('head', arch);
-  return (cache.head[arch] = { geo: geoFrom(out, 'W4', 4), scale: 1 + (bp.H - 1) * 0.35 });
+  return (cache.head[arch] = { geo: geoFrom(out, 'W12', M.NSH), scale: 1 + (bp.H - 1) * 0.35 });
 }
 function buildHelm(shell) {
   if (cache.helm[shell]) return cache.helm[shell];
@@ -88,6 +88,21 @@ function buildMask(style) {
     const p = tg.attributes.position.array, n = tg.attributes.normal.array, ix = tg.index.array; for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); } for (let i = 0; i < ix.length; i++) idx.push(ix[i] + base); base += p.length / 3; tg.dispose(); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx); g.computeBoundingSphere();
   return (cache.mask[style] = g);
+}
+// visor: a curved shield behind the facemask at eye level (helmet space), one shared geometry and one shared material per tint
+let visorGeo = null; const visorMats = {};
+function buildVisor() { if (visorGeo) return visorGeo; const g = new THREE.SphereGeometry(0.158, 22, 6, Math.PI / 2 - 0.78, 1.56, 1.31, 0.55); g.scale(0.79, 1, 1); g.translate(0, -0.006, -0.004); return (visorGeo = g); }
+function visorMat(kind) {
+  if (visorMats[kind]) return visorMats[kind];
+  const o = { clear: { color: '#dfe8f0', opacity: 0.2, roughness: 0.05, metalness: 0.2 }, smoke: { color: '#16191e', opacity: 0.8, roughness: 0.08, metalness: 0.35 }, gold: { color: '#e0a83c', opacity: 0.96, roughness: 0.14, metalness: 1 },
+    black: { color: '#08090b', opacity: 0.97, roughness: 0.12, metalness: 0.5 }, blue: { color: '#3d74e0', opacity: 0.94, roughness: 0.12, metalness: 0.9 } }[kind] || { color: '#16191e', opacity: 0.8, roughness: 0.08, metalness: 0.35 };
+  return (visorMats[kind] = new THREE.MeshStandardMaterial({ color: col(o.color), roughness: o.roughness, metalness: o.metalness, transparent: true, opacity: o.opacity, depthWrite: o.opacity > 0.9, envMapIntensity: 1.6 }));
+}
+// per-player add-ons (hair out of the helmet, beard, mouthguard, towel, pads, braces): one small skinned mesh, cached by build + gear combination
+const gearGeo = new Map();
+function buildGear(arch, L3, headScale) {
+  const k = arch + '|' + L3.gearKey; if (gearGeo.has(k)) return gearGeo.get(k);
+  const out = M.makeGear(ARCH[arch], headScale, L3.spec), g = out ? geoFrom(out, 'W', M.NSG) : null; gearGeo.set(k, g); return g;
 }
 // ---------------- bone frames (y along the bone, x from a twist reference) ----------------
 const BMAP = [['root', 'pelvis', 'spine', 'pelvis'], ['spine', 'spine', 'chest', 'spine'], ['chest', 'chest', 'neck', 'chest'], ['neck', 'neck', 'head', 'neck'], ['head', 'head', 'headTop', 'head'],
@@ -115,14 +130,14 @@ function setBone(r, i, Fc, s, gx, aCur) {
 const xf = (m, p) => V(m[0] * p.x + m[1] * p.y + m[2] * p.z + m[9], m[3] * p.x + m[4] * p.y + m[5] * p.z + m[10], m[6] * p.x + m[7] * p.y + m[8] * p.z + m[11]);
 const BIx = {}; BMAP.forEach(([n], i) => BIx[n] = i);
 function updateSkin(r, J) {
-  const B = r.base, L0 = B.L0, P0 = B.P0, sz = r.sz, g = r.g, rS = J.rT, rH = J.rH || J.rT, fT = J.fT, up = J.tu;
-  let F = frameDir(J.tuL || J.tu, rH, fT); setBone(r, 0, F, sz, g, J.pelvis);
+  const B = r.base, L0 = B.L0, P0 = B.P0, sz = r.sz, g0 = r.g, rS = J.rT, rH = J.rH || J.rT, fT = J.fT, up = J.tu, GB = r.gb, gb = i => (GB ? g0 * GB[i] : g0);   // per-bone girth (build type)
+  let F = frameDir(J.tuL || J.tu, rH, fT); setBone(r, 0, F, sz, gb(0), J.pelvis);
   const spine = add3(J.pelvis, mul3(Vx(F.y), L0.root * sz));
-  F = frameDir(up, rS, fT); setBone(r, 1, F, sz, g, spine);
+  F = frameDir(up, rS, fT); setBone(r, 1, F, sz, gb(1), spine);
   const chest = add3(spine, mul3(Vx(F.y), L0.spine * sz));
-  F = frameDir(up, rS, fT); setBone(r, 2, F, sz, g, chest);
+  F = frameDir(up, rS, fT); setBone(r, 2, F, sz, gb(2), chest);
   const neck = add3(chest, mul3(Vx(F.y), L0.chest * sz));
-  F = frameDir(sub3(J.head, J.neck), J.hr, fT); setBone(r, 3, F, sz, sz, neck);
+  F = frameDir(sub3(J.head, J.neck), J.hr, fT); setBone(r, 3, F, sz, sz * (GB ? GB[3] : 1), neck);
   const head = add3(neck, mul3(Vx(F.y), L0.neck * sz));
   F = frameDir(J.hu, J.hr, fT); setBone(r, 4, F, sz, sz, head);
   const mC = r.m[2], mR = r.m[0];
@@ -130,16 +145,16 @@ function updateSkin(r, J) {
     const A = J.arms[k], sh = xf(mC, P0['sh' + L]); let l1 = L0['sh' + L] * sz, l2 = L0['el' + L] * sz;
     const ad = Math.hypot(A.hand.x - sh.x, A.hand.y - sh.y, A.hand.z - sh.z), st = Math.min(1.06, Math.max(1, ad / ((l1 + l2) * 0.995))); l1 *= st; l2 *= st;
     const ik = ik2(sh, A.hand, l1, l2, sub3(A.elbow, mid3(J.sh[k], A.hand)));
-    const Fu = frameDir(sub3(ik.mid, sh), mul3(rS, sg), up); setBone(r, BIx['sh' + L], Fu, sz * st, g, sh);
-    const Ff = frameDir(sub3(ik.end, ik.mid), Vx(Fu.x), up); setBone(r, BIx['el' + L], Ff, sz * st, g, ik.mid);
+    const Fu = frameDir(sub3(ik.mid, sh), mul3(rS, sg), up); setBone(r, BIx['sh' + L], Fu, sz * st, gb(BIx['sh' + L]), sh);
+    const Ff = frameDir(sub3(ik.end, ik.mid), Vx(Fu.x), up); setBone(r, BIx['el' + L], Ff, sz * st, gb(BIx['el' + L]), ik.mid);
     setBone(r, BIx['wr' + L], Ff, sz, sz, ik.end);
   }
   for (const [L, k] of [['R', 0], ['L', 1]]) {
     const Lg = J.legs[k], hip = xf(mR, P0['hip' + L]); let l1 = L0['hip' + L] * sz, l2 = L0['kn' + L] * sz;
     const dd = Math.hypot(Lg.ankle.x - hip.x, Lg.ankle.y - hip.y, Lg.ankle.z - hip.z), st = Math.min(1.07, Math.max(1, dd / ((l1 + l2) * 0.995))); l1 *= st; l2 *= st;
     const ik = ik2(hip, Lg.ankle, l1, l2, sub3(Lg.knee, mid3(Lg.hip, Lg.ankle)));
-    const Ft = frameDir(sub3(ik.mid, hip), rH, fT); setBone(r, BIx['hip' + L], Ft, sz * st, g, hip);
-    const Fs = frameDir(sub3(ik.end, ik.mid), Vx(Ft.x), fT); setBone(r, BIx['kn' + L], Fs, sz * st, g, ik.mid);
+    const Ft = frameDir(sub3(ik.mid, hip), rH, fT); setBone(r, BIx['hip' + L], Ft, sz * st, gb(BIx['hip' + L]), hip);
+    const Fs = frameDir(sub3(ik.end, ik.mid), Vx(Ft.x), fT); setBone(r, BIx['kn' + L], Fs, sz * st, gb(BIx['kn' + L]), ik.mid);
     const Fa = frameDir(sub3(Lg.toe, Lg.ankle), Vx(Fs.x), fT); setBone(r, BIx['an' + L], Fa, sz, sz, ik.end);
   }
 }
@@ -162,31 +177,33 @@ function logoTexture(team, kit) {
 }
 // ---------------- rigs ----------------
 function makeRig(rp, team, kit) {
-  const arch = POS_ARCH[rp.pos] || 'BACK', base = buildBody(arch), headB = buildHead(arch), helmG = buildHelm(kit.shell || 'sleek'), maskG = buildMask(POS_MASK[rp.pos] || 'opo');
+  const arch = POS_ARCH[rp.pos] || 'BACK', base = buildBody(arch), headB = buildHead(arch), helmG = buildHelm(kit.shell || 'sleek');
+  const L3 = M.look3(rp, kit, arch), maskG = buildMask(L3.mask);   // the player's look: sleeves, tape, gloves, cleats, beard, eye black, mask, visor, build, gear
   const root = new THREE.Group(); root.matrixAutoUpdate = false; scene.add(root);
   const bones = M.BONES.map(() => { const b = new THREE.Bone(); b.matrixAutoUpdate = false; root.add(b); return b; });
   const sk = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
   const mat = palMat(M.NS, 'standard', { roughness: 0.62, metalness: 0, skinning: true });
-  const skin = SKIN[(rp.lk && rp.lk.sk) ?? (rp.id % SKIN.length)] || SKIN[4];
-  const h = Math.imul((rp.id | 0) + 7, 2654435761) >>> 0, big = arch === 'BIG', sl = (h >>> 4) % (big ? 4 : 6);
-  const sleeve = sl === 0 ? '#151517' : sl === 1 ? (kit.jersey === '#f2f0ea' ? kit.trim : '#f2f0ea') : sl === 2 && !big ? kit.trim : skin;
-  const tape = ((h >>> 9) % 3) ? '#eeeae0' : skin, band = ((h >>> 12) % 2) ? kit.jersey : '#eeeae0';
-  setPal(mat, [kit.jersey, kit.trim, kit.pants, kit.pstripe || kit.jersey, kit.socks, skin, kit.glove || '#151517', kit.cleat || '#151517', '#2a2b30', tape, '#15151a', sleeve, band, '#4a3b28', '#3f5a22', '#2a2b30']);
+  setPal(mat, L3.body);
   mat.userData.decal = numberTexture(String(rp.num ?? ''), (rp.ln || '').toUpperCase().slice(0, 12), kit);
   const body = new THREE.SkinnedMesh(base.geo, mat); body.bind(sk, new THREE.Matrix4()); body.frustumCulled = false; body.castShadow = true; body.receiveShadow = true; scene.add(body);
   const gear = new THREE.Group(), hb = bones[M.BI.head]; gear.position.set(...base.J.head); hb.add(gear);
-  const hm = palMat(4, 'standard', { roughness: 0.52, metalness: 0 }); setPal(hm, [skin, '#5a2a22', '#e8e2d8', '#2a1a10']); const head = new THREE.Mesh(headB.geo, hm); gear.add(head);
+  const hm = palMat(M.NSH, 'standard', { roughness: 0.52, metalness: 0 }); setPal(hm, L3.head); const head = new THREE.Mesh(headB.geo, hm); gear.add(head);
   const shell = new THREE.Group(); shell.scale.setScalar(headB.scale); gear.add(shell);
   const helmMat = palMat(5, 'physical', { roughness: 0.28, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.06 }); setPal(helmMat, [kit.helmet, kit.hstripe, kit.hstripe2, '#141416', '#202226']); helmMat.userData.decal = logoTexture(team, kit);
   const helm = new THREE.Mesh(helmG, helmMat); helm.castShadow = true; shell.add(helm);
   const mm = new THREE.MeshStandardMaterial({ color: col(kit.mask || '#d4d8de'), roughness: 0.38, metalness: 0.45 }); const mask = new THREE.Mesh(maskG, mm); mask.castShadow = true; shell.add(mask);
+  if (L3.visor) { const vz = new THREE.Mesh(buildVisor(), visorMat(L3.visor)); vz.renderOrder = 2; shell.add(vz); }
+  const mats = [mat, hm, helmMat, mm]; let extra = null;
+  const xg = L3.hasGear ? buildGear(arch, L3, headB.scale) : null;
+  if (xg) { const xm = palMat(M.NSG, 'standard', { roughness: 0.72, metalness: 0.05, skinning: true }); setPal(xm, L3.gearPal); mats.push(xm);
+    extra = new THREE.SkinnedMesh(xg, xm); extra.bind(sk, new THREE.Matrix4()); extra.frustumCulled = false; extra.castShadow = false; extra.receiveShadow = true; scene.add(extra); }
   const physSize = (rp.ht || base.heightIn) / 73, archSize = base.heightIn / 73, ratio = physSize / archSize;
   const pg = Math.sqrt(((rp.wt || 220) * 0.4536) / (95 * Math.pow(physSize, 3)));
-  return { root, bones, body, gear, mats: [mat, hm, helmMat, mm], base, m: bones.map(() => new Float64Array(12)), sz: ratio, g: ratio * Math.pow(pg / base.girth, 0.9), pid: rp.id, tid: team.id, kitKey: kitKey(kit), visible: true };
+  return { root, bones, body, gear, extra, mats, base, m: bones.map(() => new Float64Array(12)), sz: ratio, g: ratio * Math.pow(pg / base.girth, 0.9), gb: L3.girth, pid: rp.id, tid: team.id, kitKey: kitKey(kit), visible: true };
 }
 const kitKey = k => [k.jersey, k.trim, k.pants, k.helmet, k.num, k.shell, k.mask].join('|');
-function hideRig(r, v) { r.body.visible = v; r.gear.visible = v; r.visible = v; }
-function disposeRig(r) { scene.remove(r.root); scene.remove(r.body); for (const m of r.mats) { if (m.userData.decal && !Object.values(logoTex).includes(m.userData.decal)) m.userData.decal.dispose(); m.dispose(); } }
+function hideRig(r, v) { r.body.visible = v; r.gear.visible = v; if (r.extra) r.extra.visible = v; r.visible = v; }
+function disposeRig(r) { scene.remove(r.root); scene.remove(r.body); if (r.extra) scene.remove(r.extra); for (const m of r.mats) { if (m.userData.decal && !Object.values(logoTex).includes(m.userData.decal)) m.userData.decal.dispose(); m.dispose(); } }
 // ---------------- field ----------------
 function fieldTexture(offTeam, defTeam, homeTeam, view) {
   const key = offTeam.id + '_' + defTeam.id + '_' + homeTeam.id + '_' + view; if (cache.fieldTex[key]) return cache.fieldTex[key];
@@ -364,13 +381,14 @@ const R = {
   // build every body shape this game needs before kickoff (slow part), reporting progress
   async prepare(players, kits, home, onProgress) {
     const need = new Set(), shells = new Set(), masks = new Set();
-    for (const p of players) { need.add(POS_ARCH[p.pos] || 'BACK'); masks.add(POS_MASK[p.pos] || 'opo'); }
+    for (const p of players) { need.add(POS_ARCH[p.pos] || 'BACK'); masks.add(M.maskStyle(p)); }
     for (const k of kits) shells.add(k.shell || 'sleek');
     const meshes = []; for (const a of need) meshes.push(['body', a], ['head', a]); for (const s of shells) meshes.push(['helm', s]);
     const todo = []; for (const [kind, name] of meshes) { const k = meshKey(kind, name); if (outs[k]) continue; const got = await idbGet(k); if (got && got.count) outs[k] = got; else todo.push([kind, name, k]); }
     const weight = kind => kind === 'head' ? 0.2 : 1, total = todo.reduce((s, t) => s + weight(t[0]), 0) || 1; let doneW = 0;
     for (const [kind, name, k] of todo) { if (onProgress) onProgress(doneW / total, true); await new Promise(r => setTimeout(r, 16)); outs[k] = makers[kind](name); idbPut(k, outs[k]); doneW += weight(kind); }
     for (const a of need) { buildBody(a); buildHead(a); } for (const s of shells) buildHelm(s); for (const m of masks) buildMask(m);
+    for (const p of players) { const a = POS_ARCH[p.pos] || 'BACK', L3 = M.look3(p, {}, a); if (L3.hasGear) buildGear(a, L3, cache.head[a].scale); }   // gear meshes now, not mid-play
     if (onProgress) onProgress(1, todo.length > 0);
     const old = scene.getObjectByName('stadium'); if (old) { scene.remove(old); disposeTree(old); } standMats.length = 0; scene.add(buildStadium(home));
   },
@@ -383,7 +401,7 @@ const R = {
     for (const [pid, r] of rigs) if (!live.has(pid) && r.visible) hideRig(r, false);
   },
   // end of a game: release every per-game GPU resource (rigs, number decals, field textures, helmet logos)
-  clearPlayers() { for (const r of rigs.values()) disposeRig(r); rigs.clear();
+  clearPlayers() { for (const r of rigs.values()) disposeRig(r); rigs.clear(); for (const g of gearGeo.values()) if (g) g.dispose(); gearGeo.clear();
     for (const k in cache.fieldTex) { if (fieldMat && fieldMat.map === cache.fieldTex[k]) { fieldMat.map = null; fieldMat.needsUpdate = true; } cache.fieldTex[k].dispose(); delete cache.fieldTex[k]; } lastField = '';
     for (const k in logoTex) { logoTex[k].dispose(); delete logoTex[k]; } },
   setField(offTeam, defTeam, homeTeam, losZ, fdZ, goal, view = 1) {

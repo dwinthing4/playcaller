@@ -213,7 +213,7 @@ function makeHeadModel(o) {
         if (eye) { const front = z - (eye[2] - 0.004), ir = Math.hypot(x - eye[0], y - eye[1]); c = front > 0.0075 && ir < 0.0058 ? IR : WH; }
         else {
           c = mx(c, SO, (1 - sstep(0.017, 0.027, dso)) * 0.85);
-          const yTop = lp(-0.062, -0.012, sstep(0.028, 0.07, ax)), jaw = (1 - sstep(yTop - 0.006, yTop + 0.004, y)) * sstep(-0.05, -0.022, z); c = mx(c, JW, jaw);
+          const yTop = lp(-0.06, -0.03, sstep(0.03, 0.072, ax)), jaw = (1 - sstep(yTop - 0.006, yTop + 0.004, y)) * sstep(-0.05, -0.022, z); c = mx(c, JW, jaw);
           const chin = (1 - sstep(0.024, 0.034, ax)) * (1 - sstep(-0.088, -0.082, y)) * sstep(0.015, 0.045, z); c = mx(c, CH, chin);
           const mu = (1 - sstep(0.025, 0.031, ax)) * sstep(-0.066, -0.061, y) * (1 - sstep(-0.05, -0.045, y)) * sstep(0.072, 0.082, z); c = mx(c, MU, mu);
           const lip = (1 - sstep(0.02, 0.026, ax)) * sstep(-0.084, -0.08, y) * (1 - sstep(-0.058, -0.054, y)) * sstep(0.085, 0.09, z); c = mx(c, LP, lip * 0.3);
@@ -289,5 +289,145 @@ function maskBars(style) {
     case 'robo': return { r: 0.0076, bars: [brow, eyeLow, mouth, chin, postFull, ...S, ...v2(0.036), ...v2(0.068), ...topV(0.034)] };   // heavy "robot" mask
     default: return { r: 0.0046, bars: [brow, eyeHi, chin, postLow, ...S] }; }                               // 'bullet': thin open skill mask
 }
-Object.assign(R3D._, { NS, meshSDF, bodyParams, skeleton, BONES, BI, makeBodyModel, makeHeadModel, makeHelmetModel, maskBars, HELMS });
+// ---- gear: small add-ons (hair out of the helmet, beards, mouthguards, towel, hand warmer, elbow pads, knee braces, neck roll) ----
+// built from plain tubes and ellipsoids in the rest pose and skinned to the body's skeleton, so one cheap mesh per player follows the pose.
+// gear slots: 0 hair 1 hair tips 2 towel 3 elbow pad 4 brace 5 hinge metal 6 mouthguard 7 hand warmer 8 neck roll 9 beard 10 strap 11 spare
+const gearBodies = {}, gearParts = {};
+function makeGear(A, hsc, spec) {
+  const bp = bodyParams(A), J = skeleton(bp), { H, g } = bp, Rg = H * g, Y = v => v * H, belt = Y(1.045);
+  const key = [A.heightIn, A.weightLb, A.muscle, A.pads].join('|'), BM = gearBodies[key] || (gearBodies[key] = makeBodyModel(Object.assign({}, A, { res: 0.02 })));
+  // every part is built once per build (and head size) and cached; a player's gear mesh is just the parts he wears, concatenated
+  let Pp, Nn, Ww, SI, SWt, IX, nv = 0; const list = [];
+  const part = (name, fn) => { const k = key + '|' + hsc.toFixed(3) + '|' + name; let pc = gearParts[k]; if (!pc) { Pp = []; Nn = []; Ww = []; SI = []; SWt = []; IX = []; nv = 0; fn(); pc = gearParts[k] = { P: Pp, N: Nn, W: Ww, SI, SW: SWt, IX, nv }; } if (pc.nv) list.push(pc); };
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], addv = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], nrm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }, lq = (a, b, t) => [lp(a[0], b[0], t), lp(a[1], b[1], t), lp(a[2], b[2], t)];
+  const vtx = (p, n, slot, bw) => { Pp.push(p[0], p[1], p[2]); Nn.push(n[0], n[1], n[2]); const w = new Array(NSG).fill(0); if (typeof slot === 'number') w[slot] = 1; else for (const [k, v] of slot) w[k] += v; for (const v of w) Ww.push(v);
+    for (let k = 0; k < 4; k++) { SI.push(bw[k] ? bw[k][0] : 0); SWt.push(bw[k] ? bw[k][1] : 0); } return nv++; };
+  // body surface along a ray from inside (steps back first if the start is outside)
+  const surf = (p, d) => { let q = p.slice(), k = 0; while (BM.sdf(q[0], q[1], q[2]) > 0 && k++ < 80) q = sub(q, mul(d, 0.004)); for (k = 0; k < 120; k++) { const n2 = addv(q, mul(d, 0.003)); if (BM.sdf(n2[0], n2[1], n2[2]) > 0) return n2; q = n2; } return q; };
+  const grad = q => { const e = 0.003, F = (x, y, z) => BM.sdf(x, y, z); return nrm([F(q[0] + e, q[1], q[2]) - F(q[0] - e, q[1], q[2]), F(q[0], q[1] + e, q[2]) - F(q[0], q[1] - e, q[2]), F(q[0], q[1], q[2] + e) - F(q[0], q[1], q[2] - e)]); };
+  const clearOf = (q, m, dir) => { for (let k = 0; k < 40; k++) { const d = BM.sdf(q[0], q[1], q[2]); if (d >= m) break; q = addv(q, dir ? mul(dir, Math.max(0.002, m - d)) : mul(grad(q), m - d + 0.001)); } return q; };
+  // tube along pts; rad(t) -> [radius along u, radius along v]; up(i) -> reference for u; caps close the ends
+  function tube(pts, rad, up, seg, slotF, boneF, caps) {
+    const n = pts.length, rings = [];
+    for (let i = 0; i < n; i++) { const t = i / (n - 1), T = nrm(sub(pts[Math.min(n - 1, i + 1)], pts[Math.max(0, i - 1)])); let u = up(i, t); u = sub(u, mul(T, dot(u, T))); if (Math.hypot(u[0], u[1], u[2]) < 1e-4) u = Math.abs(T[1]) < 0.9 ? sub([0, 1, 0], mul(T, T[1])) : sub([1, 0, 0], mul(T, T[0])); u = nrm(u);
+      const v = cross(T, u), [ra, rb] = rad(t), ring = [];
+      for (let k = 0; k < seg; k++) { const a = k / seg * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a), p = [pts[i][0] + u[0] * ra * ca + v[0] * rb * sa, pts[i][1] + u[1] * ra * ca + v[1] * rb * sa, pts[i][2] + u[2] * ra * ca + v[2] * rb * sa];
+        ring.push(vtx(p, nrm([u[0] * ca / ra + v[0] * sa / rb, u[1] * ca / ra + v[1] * sa / rb, u[2] * ca / ra + v[2] * sa / rb]), slotF(t), boneF(p, t))); }
+      rings.push(ring); }
+    for (let i = 0; i < n - 1; i++) for (let k = 0; k < seg; k++) { const a = rings[i][k], b = rings[i][(k + 1) % seg], c = rings[i + 1][(k + 1) % seg], d = rings[i + 1][k]; IX.push(a, b, c, a, c, d); }
+    if (caps) for (const [i, sg] of [[0, -1], [n - 1, 1]]) { const t = i / (n - 1), T = mul(nrm(sub(pts[Math.min(n - 1, i + 1)], pts[Math.max(0, i - 1)])), sg), c = vtx(pts[i], T, slotF(t), boneF(pts[i], t));
+      const ring = rings[i].map(id => vtx([Pp[id * 3], Pp[id * 3 + 1], Pp[id * 3 + 2]], T, slotF(t), boneF([Pp[id * 3], Pp[id * 3 + 1], Pp[id * 3 + 2]], t)));
+      for (let k = 0; k < seg; k++) { if (sg > 0) IX.push(c, ring[k], ring[(k + 1) % seg]); else IX.push(c, ring[(k + 1) % seg], ring[k]); } }
+  }
+  // ellipsoid with radii r along the right-handed axes ax = [ex, ey, ez]
+  function ellip(c, r, ax, nLat, nLon, slot, boneF) {
+    const [ex, ey, ez] = ax, rows = [];
+    for (let i = 0; i <= nLat; i++) { const th = i / nLat * Math.PI, st = Math.sin(th), ct = Math.cos(th), row = [];
+      for (let j = 0; j <= nLon; j++) { const ph = j / nLon * Math.PI * 2, d = [st * Math.cos(ph), ct, st * Math.sin(ph)];
+        const p = [c[0] + ex[0] * r[0] * d[0] + ey[0] * r[1] * d[1] + ez[0] * r[2] * d[2], c[1] + ex[1] * r[0] * d[0] + ey[1] * r[1] * d[1] + ez[1] * r[2] * d[2], c[2] + ex[2] * r[0] * d[0] + ey[2] * r[1] * d[1] + ez[2] * r[2] * d[2]];
+        const nn = nrm([ex[0] * d[0] / r[0] + ey[0] * d[1] / r[1] + ez[0] * d[2] / r[2], ex[1] * d[0] / r[0] + ey[1] * d[1] / r[1] + ez[1] * d[2] / r[2], ex[2] * d[0] / r[0] + ey[2] * d[1] / r[1] + ez[2] * d[2] / r[2]]);
+        row.push(vtx(p, nn, slot, boneF(p))); } rows.push(row); }
+    for (let i = 0; i < nLat; i++) for (let j = 0; j < nLon; j++) { const a = rows[i][j], b = rows[i][j + 1], cc = rows[i + 1][j + 1], d = rows[i + 1][j]; IX.push(a, b, cc, a, cc, d); }
+  }
+  const I3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], HJ = J.head, hp = p => [HJ[0] + hsc * p[0], HJ[1] + hsc * p[1], HJ[2] + hsc * p[2]], onHead = () => [[BI.head, 1]];
+  let sd = 1; const rr = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+  // hair out of the back of the helmet (helmet space, mapped onto the head bone)
+  const hx = spec.hair | 0, tipSlot = t => spec.tip && t > 0.55 ? [[0, 1 - sstep(0.55, 0.8, t)], [1, sstep(0.55, 0.8, t)]] : 0;
+  // one strand / lock from under the back rim: spread = how far it fans out, back = how far it falls away from the neck, wob = sideways sway, ins = root inset (inner layer)
+  const strand = (a, L, r0, r1, o) => { o = o || {}; const sa = Math.sin(a), ca = Math.cos(a), ins = o.ins || 1, rx = 0.088 * sa * ins, rz = -0.045 - 0.092 * ca * ins, side = 1 - 0.42 * Math.min(1, Math.abs(a) / 1.35); L *= side;
+    const k = o.spread || 1.16, bk = o.back || 0.038, wb = o.wob || 0, y1 = -0.112 - 0.006 * (1 - Math.abs(sa)), tx = ca, tz = sa;   // sway is along the rim tangent
+    const C0 = [[rx, -0.07, rz], [rx * 1.05, y1, rz - 0.01], [rx * lp(1.05, k, 0.45) + tx * wb * 0.35, y1 - L * 0.45, rz - bk * 0.62 + tz * wb * 0.35], [rx * lp(1.05, k, 0.75) + tx * wb * 0.7, y1 - L * 0.76, rz - bk * 0.86 + tz * wb * 0.7], [rx * k + tx * wb, y1 - L, rz - bk + tz * wb]].map(hp);
+    const rad = (o.flat ? o.flat[0] : r0) * hsc, pts = [C0[0], C0[1]]; for (let i = 1; i < 4; i++) for (const t of [0.5, 1]) pts.push(clearOf(lq(C0[i], C0[i + 1], t), rad + 0.005, nrm([sa * 0.6, 0, -ca])));   // hang behind the pads, never through them
+    const radial = nrm([sa, 0, -ca]);
+    tube(pts, t => o.flat ? [o.flat[0] * hsc * (1 - 0.3 * t), o.flat[1] * hsc * (1 - 0.35 * t)] : [lp(r0, r1, t) * hsc, lp(r0, r1, t) * hsc], () => radial, o.flat ? 6 : 5, tipSlot, hairBones, true); };
+  const J1 = () => rr() - 0.5, hairBones = (p, t) => { const wh = 1 - sstep(0.25, 0.95, t) * 0.75, wc = sstep(0.55, 1, t) * 0.4; return wh >= 1 ? [[BI.head, 1]] : [[BI.head, wh], [BI.neck, 1 - wh - wc], [BI.chest, wc]]; };   // lower hair rides on the pads, not the head
+  if (hx) part('hair' + hx + (spec.tip ? 't' : ''), () => { sd = 9871 + hx * 7919;
+  if (hx === 1) { for (let i = 0; i < 16; i++) { const r0 = 0.0085 + 0.002 * rr(); strand(lp(-1.32, 1.32, i / 15) + J1() * 0.09, 0.11 + 0.1 * rr(), r0, r0 * 0.78, { spread: 1.1 + 0.24 * rr(), back: 0.03 + 0.03 * rr(), wob: J1() * 0.026 }); }
+    for (let i = 0; i < 8; i++) strand(lp(-1.0, 1.0, i / 7) + J1() * 0.1, 0.09 + 0.07 * rr(), 0.0085, 0.0068, { ins: 0.9, spread: 1.08 + 0.1 * rr(), back: 0.045 + 0.02 * rr(), wob: J1() * 0.02 }); }
+  else if (hx === 2) for (let i = 0; i < 22; i++) strand(lp(-1.32, 1.32, i / 21) + J1() * 0.05, 0.07 + 0.08 * rr(), 0.0056, 0.0043, { spread: 1.08 + 0.1 * rr(), back: 0.03 + 0.02 * rr(), wob: J1() * 0.012 });
+  else if (hx === 3) { ellip(hp([0, -0.122, -0.118]), [0.082 * hsc, 0.026 * hsc, 0.04 * hsc], I3, 5, 12, 0, onHead);
+    for (let i = 0; i < 13; i++) strand(lp(-1.32, 1.32, i / 12) + J1() * 0.06, 0.06 + 0.06 * rr(), 0, 0, { flat: [0.0075, 0.024], spread: 1.14 + 0.2 * rr(), back: 0.045 + 0.025 * rr(), wob: J1() * 0.02 }); }
+  else if (hx === 4) for (let i = 0; i < 22; i++) { const row = i < 14 ? 0 : 1, a = (row ? lp(-1.0, 1.0, (i - 14) / 7) : lp(-1.28, 1.28, i / 13)) + J1() * 0.07, rad = 0.014 + 0.008 * rr(), rf = row ? 1.12 : 1.0;
+    ellip(clearOf(hp([0.09 * Math.sin(a) * rf, -0.114 - 0.012 * rr() - row * 0.016, -0.05 - 0.098 * Math.cos(a) * rf]), rad * hsc * 0.7), [rad * hsc, rad * hsc * 0.9, rad * hsc], I3, 5, 7, 0, onHead); }
+  else if (hx === 5) { tube([[0, -0.085, -0.13], [0, -0.13, -0.165], [0, -0.19, -0.19], [0, -0.25, -0.2]].map(hp), t => [lp(0.024, 0.014, t) * hsc, lp(0.022, 0.013, t) * hsc], () => [1, 0, 0], 8, tipSlot, hairBones, true);
+    for (let i = 0; i < 5; i++) strand(lp(-0.95, 0.95, i / 4), 0.08, 0.007, 0.0055, { spread: 1.12, back: 0.035 }); } });
+  // beard volume below the face (full / long), mouthguard
+  if (spec.beard) part('beard' + spec.beard, () => { ellip(hp([0, -0.1, 0.05]), [0.055 * hsc, 0.035 * hsc, 0.05 * hsc], I3, 6, 10, 9, onHead); if (spec.beard > 1) ellip(hp([0, -0.148, 0.058]), [0.04 * hsc, 0.054 * hsc, 0.04 * hsc], I3, 6, 10, 9, onHead); });
+  if (spec.mg) part('mg' + spec.mg, () => { if (spec.mg === 1) { tube([[0.003, -0.074, 0.103], [0.006, -0.08, 0.112], [0.008, -0.086, 0.118]].map(hp), () => [0.0045 * hsc, 0.0045 * hsc], () => [0, 0, 1], 5, () => 6, onHead, true); ellip(hp([0.008, -0.097, 0.119]), [0.019 * hsc, 0.014 * hsc, 0.0055 * hsc], I3, 5, 8, 6, onHead); }
+  else if (spec.mg === 2) ellip(hp([0, -0.07, 0.099]), [0.021 * hsc, 0.0065 * hsc, 0.01 * hsc], I3, 4, 8, 6, onHead); });
+  // towel tucked into the front of the pants, draping over the thigh (lower half follows the leg)
+  if (spec.tw) part('tw' + spec.tw, () => { const s = spec.tw === 1 ? 1 : -1, x0 = s * 0.078 * Rg, pts = [], hipB = BI[s > 0 ? 'hipL' : 'hipR'];
+    for (let i = 0; i < 7; i++) { const t = i / 6, y = belt - 0.004 - t * 0.24, x = x0 + s * 0.014 * t, q = surf([x, y, 0], [0, 0, 1]); pts.push([x, y, q[2] + (i === 0 ? 0.001 : 0.006) + 0.003 * Math.sin(t * 3.1)]); }
+    tube(pts, t => [0.052 * (1 - 0.08 * t), 0.0042], () => [1, 0, 0], 8, () => 2, p => { const w = sstep(belt - 0.03, belt - 0.17, p[1]) * 0.85; return [[BI.root, 1 - w], [hipB, w]]; }, true); });
+  // hand warmer pouch around the front of the waist
+  if (spec.hw) part('hw', () => { const pts = []; for (let i = 0; i < 9; i++) { const x = lp(-0.105, 0.105, i / 8) * Rg, d = nrm([x, 0, 0.1]), q = surf([x * 0.5, belt + 0.008, -0.01], d); pts.push(addv(q, mul(d, 0.012))); }
+    tube(pts, () => [0.04, 0.019], () => [0, 1, 0], 8, () => 7, () => [[BI.root, 1]], true); });
+  // elbow pads
+  for (const [bit, L] of [[1, 'L'], [2, 'R']]) if ((spec.ep | 0) & bit) part('ep' + L, () => { const sh = J['sh' + L], el = J['el' + L], wr = J['wr' + L], ax = nrm(sub(wr, sh)), ex = nrm(cross(ax, [0, 0, 1])), ez = cross(ex, ax);
+    ellip([el[0], el[1] - 0.004, el[2] - 0.014], [0.075 * Rg, 0.07, 0.074 * Rg], [ex, ax, ez], 8, 12, 3, p => { const w = sstep(-0.025, 0.025, dot(sub(p, el), ax)); return [[BI['sh' + L], 1 - w], [BI['el' + L], w]]; }); });
+  // hinged knee braces (bars and hinges both sides, two straps)
+  for (const [bit, L, s] of [[1, 'L', 1], [2, 'R', -1]]) if ((spec.kb | 0) & bit) part('kb' + L, () => {
+    const hpJ = J['hip' + L], kn = J['kn' + L], an = J['an' + L], lh = Math.hypot(...sub(hpJ, kn)), la = Math.hypot(...sub(an, kn)), legPt = dy => dy >= 0 ? lq(kn, hpJ, dy / lh) : lq(kn, an, -dy / la);
+    const bH = BI['hip' + L], bK = BI['kn' + L], wDy = dy => { const w = sstep(-0.015, 0.015, dy); return [[bK, 1 - w], [bH, w]]; };
+    for (const side of [1, -1]) { const dir = [s * side, 0, 0], pts = [];
+      for (let i = 0; i < 7; i++) { const dy = lp(0.15, -0.15, i / 6), a = legPt(dy), q = surf(a, dir); pts.push([q[0] + dir[0] * 0.006, a[1], q[2]]); }
+      tube(pts, () => [0.0055, 0.012], () => dir, 6, () => 4, (p, t) => wDy(lp(0.15, -0.15, t)), true);
+      const a0 = legPt(0), q0 = surf(a0, dir), hr = side > 0 ? 0.025 : 0.019; ellip([q0[0] + dir[0] * 0.011, a0[1], q0[2]], [0.008, hr, hr], [dir, [0, 1, 0], cross(dir, [0, 1, 0])], 4, 10, 5, () => [[bK, 0.5], [bH, 0.5]]); }
+    for (const dy of [0.105, -0.105]) { const a = legPt(dy), pts = [], ups = [];
+      for (let k = 0; k <= 8; k++) { const ang = k / 8 * Math.PI, d = [s * Math.cos(ang), 0, Math.sin(ang)], q = surf(a, d); pts.push(addv(q, mul(d, 0.004))); ups.push(d); }
+      tube(pts, () => [0.0035, 0.016], i => ups[i], 6, () => 10, () => dy > 0 ? [[bH, 1]] : [[bK, 1]], true); } });
+  // neck roll on top of the pads (the trench pads have one sculpted in)
+  if (spec.nr) part('nr', () => { const PS = PADS[A.pads || 'speed'], R0 = 0.085 * H * (0.8 + 0.25 * g) * PS.hole + 0.02, pts = [];
+    for (let k = 0; k <= 12; k++) { const a = lp(-2.05, 2.05, k / 12), x = R0 * Math.sin(a), z = -R0 * Math.cos(a) - 0.005, q = surf([x, Y(1.42), z], [0, 1, 0]); pts.push([x, q[1] + 0.011, z]); }
+    tube(pts, t => { const e = 0.55 + 0.45 * Math.min(1, Math.min(t, 1 - t) * 6); return [0.02 * e, 0.023 * e]; }, () => [0, 1, 0], 8, () => 8, () => [[BI.chest, 1]], true); });
+  let tv = 0, ti = 0; for (const pc of list) { tv += pc.nv; ti += pc.IX.length; } if (!tv) return null;
+  const out = { position: new Float32Array(tv * 3), normal: new Float32Array(tv * 3), index: tv > 65535 ? new Uint32Array(ti) : new Uint16Array(ti), count: tv, W: new Float32Array(tv * NSG), skinIndex: new Uint16Array(tv * 4), skinWeight: new Float32Array(tv * 4) };
+  let v0 = 0, i0 = 0; for (const pc of list) { out.position.set(pc.P, v0 * 3); out.normal.set(pc.N, v0 * 3); out.W.set(pc.W, v0 * NSG); out.skinIndex.set(pc.SI, v0 * 4); out.skinWeight.set(pc.SW, v0 * 4); for (let k = 0; k < pc.IX.length; k++) out.index[i0 + k] = pc.IX[k] + v0; v0 += pc.nv; i0 += pc.IX.length; }
+  return out;
+}
+// ---- one player's 3D look from his lk + the team kit: palettes for body / face / gear, mask, visor, per-bone girth, gear spec ----
+function hexMix(a, b, t) { const p = h => { const s = String(h || '#808080').replace('#', ''); return [0, 2, 4].map(i => parseInt(s.slice(i, i + 2), 16) || 0); }, A = p(a), B2 = p(b); return '#' + A.map((v, i) => Math.round(v + (B2[i] - v) * t).toString(16).padStart(2, '0')).join(''); }
+function hexLum(h) { const s = String(h || '#808080').replace('#', ''), v = [0, 2, 4].map(i => (parseInt(s.slice(i, i + 2), 16) || 0) / 255); return 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2]; }
+const POS_MASK3 = { QB: 'opo', RB: 'ropo', FB: 'ropo', WR: 'bullet', TE: 'cage', OT: 'bigcage', OG: 'bigcage', C: 'bigcage', DE: 'cage', DT: 'bigcage', LB: 'cage', CB: 'bullet', S: 'egop', K: '2bar', P: '2bar' };
+function lookOf(rp) { return (typeof ensureLook === 'function' && rp ? ensureLook(rp) : rp && rp.lk) || {}; }
+function maskStyle(rp) { const lk = lookOf(rp), M2 = typeof LK_MASKS !== 'undefined' ? LK_MASKS : null; return (M2 && lk.fm != null && M2[lk.fm]) || POS_MASK3[rp && rp.pos] || 'opo'; }
+function look3(rp, kit, arch) {
+  const lk = lookOf(rp);
+  const SKN = (typeof SKIN !== 'undefined' && SKIN) || ['#bd8152'], HC = (typeof HAIRC !== 'undefined' && HAIRC) || ['#16110e'], EC = (typeof EYEC !== 'undefined' && EYEC) || ['#3b2416'];
+  const skin = SKN[lk.sk] || (rp && rp.id != null ? SKN[rp.id % SKN.length] : SKN[4]) || '#bd8152', hair = HC[lk.hc] || HC[0], big = arch === 'BIG';
+  const J0 = kit.jersey || '#7a7a7a', T0 = kit.trim || '#ffffff', WH = '#efede7', BK = '#151517', TAPE = '#eeeae0';
+  // arms: item 0 bare / 1 full / 2 elbow / 3 half; wrist 0 bare / 1 tape / 2 band; tattoo ink only shows on bare skin
+  const sleeve = [BK, WH, J0, T0][lk.ac | 0] || BK, band = [WH, BK, J0, T0][lk.wc | 0] || WH, ink = hexMix(skin, '#1a222e', hexLum(skin) > 0.45 ? 0.55 : 0.38);
+  const arm = (item, wrist, tat) => { const up = item === 1 ? sleeve : skin, elb = item ? sleeve : skin, fo = item === 1 || item === 3 ? sleeve : skin, wr = wrist === 1 ? TAPE : wrist === 2 ? band : item === 1 ? sleeve : skin;
+    return [up, elb, fo, wr, tat && up === skin ? ink : up, tat && fo === skin ? ink : fo]; };
+  const AL = arm(lk.aL | 0, lk.wL | 0, lk.tat && (lk.ta & 1)), AR = arm(lk.aR | 0, lk.wR | 0, lk.tat && (lk.ta & 2));
+  const glove = [kit.glove || BK, BK, '#eceae4', J0, T0, skin][lk.gl | 0] || kit.glove || BK;
+  let cleat = [kit.cleat || BK, BK, '#efede7', J0, T0][lk.clc | 0] || BK, spat = cleat, ankle = kit.socks || J0; const sole = hexLum(cleat) > 0.7 ? '#d8d6d0' : '#2a2b30', sp = lk.sp | 0;
+  if (sp === 1 || sp === 2 || sp === 4) { cleat = spat = ankle = sp === 1 ? '#f2f0ea' : sp === 2 ? BK : J0; } else if (sp === 3) spat = ankle = TAPE;
+  const roll = ['#2a2b30', J0, '#eceae4', T0][lk.nrc | 0] || '#2a2b30';
+  const body = [J0, T0, kit.pants || '#e8e8e8', kit.pstripe || J0, kit.socks || J0, skin, glove, cleat, sole, spat, '#15151a', ankle, '#4a3b28', '#3f5a22', roll, AL[0], AL[1], AL[2], AL[3], AR[0], AR[1], AR[2], AR[3], AL[4], AL[5], AR[4], AR[5], J0];
+  // face: [mustache, chin, jaw] per beard style, eye black, nose strip, brows
+  const st = k => hexMix(skin, hair, k), bd = lk.bd | 0;
+  const BEARD = { 1: [st(.35), st(.35), st(.35)], 2: [hair, hair, skin], 3: [hair, hair, hair], 4: [hair, skin, skin], 5: [hair, skin, hair], 6: [skin, st(.75), st(.75)], 7: [skin, st(.6), skin], 8: [hair, hair, hair], 9: [st(.55), st(.55), st(.55)], 10: [hair, st(.3), skin] }[bd] || [skin, skin, skin];
+  const ebOn = lk.ey && lk.eb, eb = ebOn ? '#121214' : skin, ebl = ebOn && lk.eb === 3 ? '#121214' : skin;
+  const head = [skin, hexMix(skin, '#4a1f1a', 0.42), hexMix('#e8e2d8', skin, 0.35), EC[lk.ec] || '#2a1a10', BEARD[0], BEARD[1], BEARD[2], eb, ebl, lk.ns ? '#e4dfd3' : skin, hexMix(hair, '#120c08', 0.3), hexMix(skin, '#000000', 0.2)];
+  // gear
+  const pants = kit.pants || '#e8e8e8', tip = lk.ht === 1 ? '#e3cf98' : lk.ht === 2 ? '#b5532a' : hair; let towel = ['#f4f2ec', J0, T0, BK][lk.twc | 0] || '#f4f2ec';
+  if (Math.abs(hexLum(towel) - hexLum(pants)) < 0.18) towel = hexLum(pants) > 0.5 ? (hexLum(J0) < 0.55 ? J0 : hexLum(T0) < 0.55 ? T0 : BK) : '#f4f2ec';   // a towel has to read against the pants
+  const epad = [BK, '#e9e7e1', J0, T0][lk.ac | 0] || BK;
+  const mgc = ['#dce6e8', BK, J0, T0][lk.mgc | 0] || '#dce6e8', warmer = hexLum(J0) > 0.8 ? T0 : J0;
+  const gearPal = [hair, tip, towel, epad, '#1c1d21', '#aab0b8', mgc, warmer, roll, hexMix(hair, '#000000', 0.12), '#141416', J0];
+  const spec = { hair: lk.hx | 0, tip: lk.ht ? 1 : 0, beard: bd === 8 ? 2 : bd === 3 ? 1 : 0, mg: lk.mg | 0, tw: lk.tw | 0, hw: lk.hw | 0, ep: lk.ep | 0, kb: lk.kb | 0, nr: !big && lk.nr ? 1 : 0 };
+  const gearKey = Object.values(spec).join(''), hasGear = /[1-9]/.test(gearKey);
+  // build: per-bone girth (x/z) from the build type and how heavy he is for his height at his position
+  const BD = (typeof BODY !== 'undefined' && BODY[rp && rp.pos]) || null; let rel = 0;
+  if (BD && rp.ht && rp.wt) { const hu = cl((rp.ht - BD[0]) / Math.max(1, BD[1] - BD[0]), 0, 1), wexp = BD[2] + hu * (BD[3] - BD[2]); rel = cl((rp.wt - wexp) / Math.max(6, (BD[3] - BD[2]) / 2), -1.2, 1.2); }
+  const bt = lk.bt == null ? 1 : lk.bt, f = (lean, thick, kr) => (bt === 0 ? lean : bt === 2 ? thick : 1) + kr * rel;
+  const up = f(0.88, 1.12, 0.03), fo = f(0.9, 1.08, 0.02), th = f(0.925, 1.08, 0.03), sh = f(0.94, 1.05, 0.015);
+  const girth = [f(0.955, 1.045, 0.025), f(0.93, 1.07, 0.05), f(0.965, 1.035, 0.015), f(0.95, 1.1, 0.03), 1, up, fo, 1, up, fo, 1, th, sh, 1, th, sh, 1];
+  const visor = lk.vz ? ((typeof LK_VISOR !== 'undefined' && LK_VISOR[lk.vt | 0]) || 'smoke') : null;
+  return { body, head, gearPal, spec, gearKey, hasGear, girth, visor, mask: maskStyle(rp) };
+}
+Object.assign(R3D._, { NS, NSH, NSG, meshSDF, bodyParams, skeleton, BONES, BI, makeBodyModel, makeHeadModel, makeHelmetModel, maskBars, HELMS, makeGear, look3, maskStyle });
 })();
