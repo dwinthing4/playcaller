@@ -110,7 +110,7 @@ function hubKeyStat(p) { const s = p.st || {}; if (!s.gp) return `Age ${p.age} Â
 function hubTier(p) { if (typeof devTier === 'function') { try { const d = devTier(p); if (d && d.n) return { n: d.n, c: d.c || '#9fb0bd' }; } catch (e) { } } const d = HUB_DEV[p.dev] || HUB_DEV.normal; return { n: d[0], c: d[1] }; }
 function hubGrade(p) { if (typeof potGrade !== 'function') return null; try { const g = potGrade(p); return g && g.g ? g : null; } catch (e) { return null; } }
 function hubSpark(v) { const w = 58, h = 26, mn = Math.min(...v) - 1, mx = Math.max(...v) + 1; const pts = v.map((y, i) => `${(i / (v.length - 1) * (w - 4) + 2).toFixed(1)},${(h - 2 - (y - mn) / (mx - mn) * (h - 4)).toFixed(1)}`).join(' ');
-  return `<svg class="hb-spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-label="OVR by season"><polyline points="${pts}"/></svg>`; }
+  return `<svg class="hb-spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-label="OVR by season"><polyline points="${pts}"/><circle cx="${w - 2}" cy="${(h - 2 - (v[v.length - 1] - mn) / (mx - mn) * (h - 4)).toFixed(1)}" r="2.6"/></svg>`; }
 // young players on the rise: weekly progression reports + offseason jumps + OVR history + room to grow
 function hubRisers(T, n) {
   const ups = {}; for (const h of L.devHist || []) if (h && h.y === L.year && h.byP) for (const id in h.byP) ups[id] = (ups[id] || 0) + ((h.byP[id].up || []).length);

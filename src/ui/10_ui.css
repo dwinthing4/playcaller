@@ -19,7 +19,7 @@
 .chip{flex:0 0 auto;font:700 13px var(--cond);padding:6px 11px;background:var(--panel2);border:1px solid var(--line2);border-radius:999px;text-transform:none}
 .chip.on{background:var(--gold);color:#1b1606;border-color:transparent}
 .seg{display:inline-flex;flex-wrap:wrap;gap:4px}.seg button{font-size:13px;padding:.4em .8em}.seg button.on{background:var(--gold);color:#1b1606;border-color:transparent}
-.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.grid>*{min-width:0}.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
 th{font:700 12px var(--cond);color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
 table.mini td,table.mini th{padding:4px 6px;font-size:13px}tr.me td{background:color-mix(in srgb,var(--gold) 16%,transparent)}.click{cursor:pointer}tr.click:hover td{background:var(--panel2)}
 .news{margin:.4em 0;padding-left:1.1em}.news li{margin-bottom:3px}

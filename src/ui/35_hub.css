@@ -174,7 +174,8 @@
 .hb-drm{display:flex;justify-content:space-between;gap:6px;font:600 12px var(--cond);color:var(--mute);flex-wrap:wrap}
 .hb-drm b{color:#fff}
 .hb-upt{color:var(--good)}
-.hb-spark{flex:0 0 auto}.hb-spark polyline{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.hb-spark{flex:0 0 auto}.hb-spark polyline{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.85}.hb-spark circle{fill:var(--good)}
+@media (max-width:400px){.hb-spark{width:40px}}
 
 /* owner goals */
 .hb-own{display:flex;gap:10px;align-items:center;margin-bottom:6px}.hb-own canvas{border-radius:8px;flex:0 0 auto}
@@ -363,3 +364,22 @@
 .hb-locker .hb-feed li{padding:5px 0;font-size:13px}
 .hb-locker .hb-ntag{flex-basis:52px}
 .hb-locker .hb-tbl td{padding:4px 5px}
+
+/* ===== short screens (phones in landscape): slimmer chrome so content gets the room ===== */
+@media (max-height:500px) and (max-width:999px){
+  :root{--navh:calc(44px + var(--sab))}
+  .topbar{position:relative;min-height:46px;padding-top:calc(5px + var(--sat));padding-bottom:5px}
+  .topbar .tname b{font-size:1.3rem}
+  .subnav{top:0;padding:5px 16px}
+  .subnav button{padding:.3em .8em}
+  .nav{padding:3px 4px calc(3px + var(--sab))}
+  .nav button,.nav button.on{flex-direction:row;justify-content:center;align-items:center;gap:4px;font-size:11px;padding:2px 0}
+  .nav .ni{width:40px;height:30px}
+  .nav .dot{top:0;right:auto;left:calc(50% - 50px)}
+  .wrap{padding-bottom:calc(60px + var(--sab))}
+  #toasts{bottom:calc(54px + var(--sab))}
+  .hb-bar{margin-bottom:8px}
+  .hb-cast-hd{min-height:0}
+  .hb-crawl.bottom{position:static}
+  .hb-lk-in{padding-top:28px}
+}
