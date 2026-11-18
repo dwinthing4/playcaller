@@ -1,0 +1,44 @@
+/* Design tokens + base components shared by every screen. Night-game look: deep navy, chalk text, flag-yellow accent. */
+:root{
+  --bg:#0a1320;--bg2:#0f1c2c;--panel:#132338;--panel2:#1b3050;--line:rgba(238,241,234,.12);--line2:rgba(238,241,234,.22);
+  --text:#eef1ea;--mute:#9fb0bd;--gold:#f2c230;--flag:#f2c230;--red:#ef5b5b;--green:#5fd38a;--amber:#f29c3b;--blue:#5fa8ff;--tc:#f2c230;
+  --good:#5fd38a;--bad:#ef5b5b;
+  --disp:"Teko","Barlow Condensed","Arial Narrow",Impact,sans-serif;--cond:"Barlow Condensed","Arial Narrow",sans-serif;--body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;--num:"Graduate","Arial Black",Impact,serif;
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.45 var(--body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;
+  background-image:radial-gradient(1100px 520px at 50% -220px,color-mix(in srgb,var(--tc) 18%,transparent),transparent)}
+[hidden]{display:none!important}
+h1,h2,h3{font-family:var(--cond);font-weight:700;margin:0 0 .35em;line-height:1.05;letter-spacing:.01em}
+h1{font:600 2.4rem/.95 var(--disp);letter-spacing:.02em}h2{font-size:1.4rem}h3{font-size:1.06rem}
+button,input,select,textarea{font:inherit;color:inherit}
+button{font:700 15px var(--cond);letter-spacing:.04em;cursor:pointer;border:1px solid var(--line2);border-radius:8px;padding:.55em 1em;background:var(--panel2);color:var(--text);text-transform:uppercase;transition:transform .08s,filter .12s;touch-action:manipulation}
+button:active{transform:scale(.97)}button:hover{filter:brightness(1.08)}
+button:disabled{opacity:.45;cursor:default;filter:none;transform:none}
+button.pri{background:var(--gold);color:#1b1606;border-color:transparent}
+button.go{background:var(--green);color:#04210f;border-color:transparent}
+button.bad{background:var(--red);color:#fff;border-color:transparent}
+button.sm{padding:.32em .65em;font-size:13px}
+button.big{font-size:18px;padding:.7em 1.3em}
+button.ghost{background:transparent}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+select,input,textarea{background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:.42em .6em}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;position:relative;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 22px rgba(0,0,0,.18)}
+.panel.tight{padding:9px 11px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sp{flex:1}
+.grid{display:grid;gap:12px}
+@media (min-width:760px){.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}}
+.mute{color:var(--mute)}.small{font-size:13px}
+.tag{display:inline-block;font:600 12px var(--cond);padding:2px 8px;background:var(--panel2);border-radius:4px;margin:2px 3px 2px 0;letter-spacing:.02em}
+.tag.t{background:var(--gold);color:#1b1606}
+.meter{height:10px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.meter>i{display:block;height:100%;background:var(--green);border-radius:6px}
+.ovr{display:inline-block;min-width:34px;text-align:center;font:600 20px/1 var(--disp);padding:4px 5px 1px;color:#08130c;border-radius:4px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
+.toastbox{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--sab));z-index:900;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.toast{background:var(--gold);color:#1b1606;padding:9px 16px;border-radius:8px;font:700 15px var(--cond);box-shadow:0 6px 18px rgba(0,0,0,.4);max-width:90vw;animation:toastIn .25s ease}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--sab));z-index:900;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}

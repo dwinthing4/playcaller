@@ -1,0 +1,12 @@
+/* growth: potential grades, development tiers, archetype tags, OVR history, on-field ratings */
+.potg{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:20px;padding:0 6px;border-radius:6px;font:800 12px var(--cond,sans-serif);letter-spacing:.02em;color:#0b1016;background:var(--pg,#8a96a3);vertical-align:middle;white-space:nowrap}
+.devb{display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 7px;border-radius:10px;font:700 11px var(--cond,sans-serif);letter-spacing:.05em;text-transform:uppercase;color:var(--dv,#ddd);border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);vertical-align:middle;white-space:nowrap}
+.devb.dev-star{border-color:rgba(255,210,63,.6);background:rgba(255,210,63,.12);box-shadow:0 0 10px rgba(255,210,63,.25)}.devb.dev-quick{border-color:rgba(108,198,255,.5);background:rgba(108,198,255,.1)}
+.archt{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:9px;font:700 11px var(--cond,sans-serif);letter-spacing:.04em;vertical-align:middle;white-space:nowrap;background:rgba(255,255,255,.08);color:#dfe6ee;border:1px solid rgba(255,255,255,.18)}
+.archt.arch-raw{color:#7fd3ff;border-color:rgba(127,211,255,.5)}.archt.arch-gem{color:#ffd23f;border-color:rgba(255,210,63,.6);background:rgba(255,210,63,.1)}.archt.arch-polished{color:#b8f0a0;border-color:rgba(184,240,160,.45)}.archt.arch-boom{color:#ff9b6b;border-color:rgba(255,155,107,.5)}
+.devp .row{gap:8px;flex-wrap:wrap}
+.spark{display:block;margin:6px 0 2px;overflow:visible}.spark .sl{fill:none;stroke:var(--gold,#f2c230);stroke-width:2.2;stroke-linejoin:round}.spark .spot{stroke:rgba(255,255,255,.28);stroke-dasharray:4 4;stroke-width:1}
+.spark .sd{fill:#0e1620;stroke:var(--gold,#f2c230);stroke-width:1.6}.spark .sn{fill:var(--gold,#f2c230)}.spark.empty{margin:4px 0}
+.devch{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px}.devch .up{color:#7be495}.devch .dn{color:#ff8a7a}.devch>b{font:800 13px var(--cond,sans-serif)}
+.onf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 2px}.onf em{font:700 11px var(--cond,sans-serif);font-style:normal;letter-spacing:.08em;text-transform:uppercase;color:var(--gold,#f2c230);margin-right:2px}
+.onf span{padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:12px}.onf span b{font-family:var(--cond,sans-serif);font-size:14px}

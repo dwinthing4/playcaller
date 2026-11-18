@@ -1,0 +1,8 @@
+node_modules/
+dist/
+qa/shots/
+qa/tester/**/*.txt
+qa/tester/**/out_*.json
+*.log
+.DS_Store
+Thumbs.db
