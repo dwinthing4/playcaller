@@ -12,6 +12,8 @@ A head-coach football game for phones and desktop. You run the whole team: roste
 
 All teams, names and logos are original.
 
+Careers are saved in your browser, so each site or file keeps its own saves. To move a career between devices, export the league file and use **Import league file** on the title screen.
+
 ## Build
 The game is a single HTML file built from `src/`:
 
