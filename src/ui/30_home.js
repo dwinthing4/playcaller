@@ -136,7 +136,7 @@ function hubSnap(c) { const T = c.T, n = T.w + T.l + T.tie, mor = teamMorale(T),
   const jcls = /hot/i.test(js) ? 'hot' : /warm/i.test(js) ? 'warn' : '';
   return `<section class="hb-card hb-snap">${hubHead('Team snapshot', `<span class="hb-js ${jcls}" title="Job security">${esc(js)}</span>`)}
    <div class="hb-snaptop"><div class="hb-rec"><b>${hubRec(T)}</b><span>${hubStreak(T)} · ${hubOrd(divRank(T))} in ${esc(T.div)}</span></div><div class="hb-ovrb"><span>OVR</span><b>${teamOvr(T)}</b></div></div>
-   <div class="hb-kpis"><div><b>#${c.pr}</b><span>Power</span></div><div><b>#${c.cr}</b><span>${esc(CONF_NAME[T.conf] || 'Conf')}</span></div><div><b>${n ? (T.pf / n).toFixed(1) : '—'}</b><span>Pts / g</span></div><div><b>${n ? (T.pa / n).toFixed(1) : '—'}</b><span>Allowed</span></div></div>
+   <div class="hb-kpis"><div><b>#${c.pr}</b><span>Power</span></div><div><b>#${c.cr}</b><span>${esc(confName(T.conf) || 'Conf')}</span></div><div><b>${n ? (T.pf / n).toFixed(1) : '—'}</b><span>Pts / g</span></div><div><b>${n ? (T.pa / n).toFixed(1) : '—'}</b><span>Allowed</span></div></div>
    <div class="hb-rings">${ring(mor, 'Morale')}${ring(T.ownerSup, 'Owner')}${ring(T.fanSup, 'Fans')}</div>
    <div class="hb-cap"><div class="row small"><b>Salary cap</b><span class="sp"></span><span class="mute">${money(used)} of ${money(CAP)}</span></div><div class="hb-capbar"><i style="width:${clamp(used / CAP * 100, 0, 100)}%${used > CAP * 0.97 ? ';background:var(--bad)' : ''}"></i></div><div class="small"><b>${money(capRoom(T))}</b> <span class="mute">room</span></div></div></section>`; }
 function hubStars(c) { const ps = c.ros.slice().sort((a, b) => b.ovr - a.ovr).slice(0, 8);
@@ -219,7 +219,7 @@ function hubCast(c) {
 }
 // ---------- layout 3: Locker room (dense lists + quick actions) ----------
 function lockerHeader(c) { const T = c.T, g = c.g, o = c.opp;
-  return `<section class="hb-lk-hd" style="--c:${T.c1};--c2:${hubLite(T.c2)}"><div class="hb-lkdoors"></div><div class="hb-lk-in">${logoC(T, 56)}<div class="sp"><span class="pos">${esc(T.city)} · ${L.year}</span><b>${esc(T.name)}</b>
+  return `<section class="hb-lk-hd" style="--c:${T.c1};--c2:${hubLite(T.c2)}"><div class="hb-lkdoors"></div><div class="hb-lk-in">${logoC(T, 56)}<div class="sp"><span class="pos">${T.name !== T.city ? esc(T.city) + " · " : ""}${L.year}</span><b>${esc(T.name)}</b>
     <div class="hb-lkk"><span>${hubRec(T)}</span><span>${hubStreak(T)}</span><span>OVR ${teamOvr(T)}</span><span>#${c.pr} power</span><span>${moodIcon(teamMorale(T))} ${teamMorale(T)}</span></div></div></div>
    ${g ? `<div class="hb-lk-next">${logoC(o, 36)}<div class="sp"><span class="pos">${L.phase === 'playoffs' ? esc(ROUND_NAMES[L.playoff.round]) : 'Week ' + (L.week + 1)} · ${c.home ? 'Home' : 'Away'}${isRival(T, o) ? ' · Rivalry' : ''}</span><b>${c.home ? 'vs' : '@'} ${esc(teamName(o))}</b><span class="small mute"> ${hubRec(o)} · OVR ${teamOvr(o)}</span></div>
     <div class="hb-lk-btns"><button class="pri" onclick="startUserGame('play')">Play</button><button onclick="startUserGame('watch')">Watch</button><button onclick="startUserGame('instant')">Instant</button></div></div>` : ''}</section>`; }

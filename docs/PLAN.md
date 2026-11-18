@@ -18,6 +18,7 @@ The user's three prototypes (in `C:\Users\dwint\Downloads`) are merged into one 
 - Physical, real-physics tackles; breaking tackles must not be easy; defense must not be outclassed; real blocking for every player; no glitchy pursuit.
 - Mobile first (portrait and landscape), single HTML file.
 - Original teams and names only (no real league teams/logos). The Retro Bowl genre is fine; no copying of any specific game.
+- "Real cities" league option (src/league/12_real.js): the 32 real markets, conferences, divisions and team colors. NFL nicknames, logos and real player names are NOT built in (trademarks / player rights, and the game is public on GitHub Pages); teams go by their city with an original emblem, and League > Editor (src/ui/85_editor.js) lets the user rename teams and players, upload a logo, or paste a roster in their own save.
 
 ## Layout and build
 ```

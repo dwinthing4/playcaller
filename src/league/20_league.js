@@ -1,7 +1,7 @@
 // League core: creation, teams, depth charts, schedule, fast sim, standings, playoffs, awards.
 let L = null;   // the league in play
 function UT() { return L.teams[L.user]; }
-function teamName(t) { return t ? t.city + ' ' + t.name : ''; }
+function teamName(t) { return teamLabel(t); }
 function news(s) { L.news.unshift({ y: L.year, w: L.week, s }); if (L.news.length > 120) L.news.pop(); }
 // inbox: messages from staff, scouts, owner, league. actions are {label, act, arg} run by the UI through LG.act()
 function inbox(from, title, body, opt = {}) {
@@ -74,8 +74,9 @@ function newLeague(opts) {
     draftOrder: [], draftPick: 0, rel: {}, coachHist: [], offers: [], settings: { sound: true, haptics: true, theme: 'stadium', tags: true, view: 'auto' },
     rec: { mine: {}, lg: {} }, hof: [], lhist: [], lhof: [], ach: {}, unis: {}, uid: 0, picking: true };
   const cities = shuffle(R_CITIES.slice()), masc = shuffle(R_MASCOTS.slice()), cols = shuffle(R_COLORS.slice());
-  const usedAbbr = new Set();
-  for (let i = 0; i < 32; i++) {
+  const usedAbbr = new Set(); L.real = !!opts.real;
+  if (L.real) REAL_TEAMS.forEach((d, i) => { const t = genTeam(i, { conf: d[2], div: d[3], abbr: d[0], city: d[1], name: d[1], c1: d[4], c2: d[5], q: d[7] }); t.hel = d[6]; t.logo = { v: 2, sh: d[9], icon: d[8], st: i % 3 }; L.teams.push(t); });
+  for (let i = 0; i < (L.real ? 0 : 32); i++) {
     const conf = i < 16 ? 'A' : 'N', div = DIVS[Math.floor((i % 16) / 4)];
     let ab = cities[i].replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase(); if (usedAbbr.has(ab)) ab = (cities[i][0] + masc[i].slice(0, 2)).toUpperCase(); usedAbbr.add(ab);
     L.teams.push(genTeam(i, { conf, div, abbr: ab, city: cities[i], name: masc[i], c1: cols[i], c2: contrastTrim(cols[i]), q: ri(62, 84) }));

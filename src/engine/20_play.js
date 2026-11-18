@@ -159,7 +159,7 @@ class Play {
     const cp = this.op.paths && this.op.paths[r.slot];
     const pts = cp && cp.length ? cp.map(([f, l]) => v2(cl(r.p.x - flip * l * YD, -FIELD.halfW + 0.8, FIELD.halfW - 0.8), r.p.z + f * YD))
       : (ROUTES[r.routeName] || []).map(([f, i]) => v2(cl(r.p.x + i * inward * YD, -FIELD.halfW + 0.8, FIELD.halfW - 0.8), r.p.z + f * YD));
-    r.route = pts; r.ri = 0; r.settle = !!SETTLE_ROUTES[r.routeName]; r.deepR = !!DEEP_ROUTES[r.routeName];
+    r.route = pts; r.ri = 0; r.settle = !!SETTLE_ROUTES[r.routeName]; r.deepR = !!DEEP_ROUTES[r.routeName]; r.start = v2(r.p.x, r.p.z); r.startX = r.p.x;
   }
 
   // ---------------- public control ----------------
@@ -552,10 +552,10 @@ class Play {
       des = v2(dx / d * vT, dz / d * vT); if (d < (nxt ? 0.7 : 0.5)) r.ri++;
     } else if (r.settle) { this.settleSpot(r, dt, env); return; }
     else if (r.deepR && r.p.z > FIELD.goalZ - 0.5) { this.findSpace(r, dt, env, FIELD.goalZ + 1, FIELD.goalZ + 8.5); return; }
-    else { const n = r.route.length, a = n >= 1 ? r.route[n - 1] : r.p, b0 = n >= 2 ? r.route[n - 2] : v2(r.p.x, r.p.z - 1); let ex = a.x - b0.x, ez = a.z - b0.z; const em = Math.hypot(ex, ez) || 1; ex /= em; ez /= em;
+    else { const n = r.route.length, a = n >= 1 ? r.route[n - 1] : r.p, b0 = n >= 2 ? r.route[n - 2] : (r.start || v2(a.x, a.z - 1)); let ex = a.x - b0.x, ez = a.z - b0.z; const em = Math.hypot(ex, ez) || 1; ex /= em; ez /= em;
       if (Math.abs(r.p.x) > FIELD.halfW - 2 && ex * r.p.x > 0) { ex = 0; ez = 1; }        // out of room: turn upfield along the sideline
       des = v2(ex * r.vmax, ez * r.vmax);                                                   // otherwise keep running the last leg (that is where the QB leads him)
-      if (this.liveT > 3.2) { this.findSpace(r, dt, env, Math.max(this.losZ + 3, r.p.z - 4), r.p.z + 4); return; } }
+      if (this.liveT > 3.2 && !r.deepR) { this.findSpace(r, dt, env, Math.max(this.losZ + 3, r.p.z - 4), r.p.z + 4); return; } }     // a go / post / fade / seam keeps running: the QB can still put it out in front of him
     locomote(r, this.aroundCarrier(r, des), dt, env); if (len2(r.vel) > 1.5) slewHeading(r, Math.atan2(r.vel.x, r.vel.z), 9, dt);
   }
   settleSpot(r, dt, env) {     // sit in the window, slide away from the closest defender
@@ -756,7 +756,9 @@ class Play {
   // a jump: airborne for half a second, height from his jumping rating
   jump(p) { if (p.jumpT > 0 || !p.upright()) return; p.jumpT = 0.52; p.jumpH = cl(0.28 + ((p.A.jmp || 60) - 50) / 220, 0.2, 0.55); }
   // receivers play the ball: time the run to where it comes down, attack it on its line, eyes and hands to it, go up when it is contested
-  playsBall(r) { const B = this.ball; if (!this.air || !B.land || !r.upright() || r.ol || r === this.qb) return false; if (B.target === r) return true; const eta = B.T - B.t; return eta < 1.4 && Math.hypot(B.land.x - r.p.x, B.land.z - r.p.z) < 4.5; }
+  playsBall(r) { const B = this.ball; if (!this.air || !B.land || !r.upright() || r.ol || r === this.qb) return false; if (B.target === r) return true; const eta = Math.max(0.05, B.T - B.t), dl = Math.hypot(B.land.x - r.p.x, B.land.z - r.p.z); if (eta < 1.4 && dl < 4.5) return true;
+    if (r.deepR && !B.away && (B.land.z - r.p.z) > -2 && Math.abs(B.land.x - r.p.x) < 9 && dl / eta < r.vmax * 1.12 && (!B.target || !B.target.upright() || Math.hypot(B.target.p.x - B.land.x, B.target.p.z - B.land.z) > dl)) return true;
+    return false; }
   trackBall(r, dt, env) {
     const B = this.ball, eta = Math.max(0.04, B.T - B.t), hv = Math.hypot(B.v.x, B.v.z) || 1, ux = B.v.x / hv, uz = B.v.z / hv;
     const ax = B.land.x - ux * 0.45, az = B.land.z - uz * 0.45, dx = ax - r.p.x, dz = az - r.p.z, m = Math.hypot(dx, dz) || 1e-6;
@@ -861,7 +863,9 @@ class Play {
     const T = Math.max(0.35, d / (q.arm * 0.9)), L = v2(hand.x + dx, hand.z + dz), vy = (1.3 - hand.y + 0.5 * G * T * T) / T;
     return { hand, L, T, d, v: V3(dx / T, vy, dz / T), max: mx, capped: d0 > mx + 0.5, sigma: this.throwSigma(q, d, this.pressureOn(q), true) };
   }
-  spotTarget(L, T) { let r = null, best = 5.5; for (const p of this.receivers) { if (!p.upright()) continue; const at = this.predictRoute(p, T), m = Math.hypot(at.x - L.x, at.z - L.z) - Math.min(p.vmax * T * 0.3, 3); if (m < best) { best = m; r = p; } } return r; }
+  spotTarget(L, T) { let r = null, best = 5.5; for (const p of this.receivers) { if (!p.upright()) continue; const at = this.predictRoute(p, T), m = Math.hypot(at.x - L.x, at.z - L.z) - Math.min(p.vmax * T * 0.3, 3);
+      const reach = Math.hypot(L.x - p.p.x, L.z - p.p.z), late = (reach / (p.vmax * 0.97) + 0.2 - T) * p.vmax, ahead = (L.z - p.p.z) > 0 && p.deepR ? Math.max(0, late) : 99, sc = Math.min(m, ahead);
+      if (sc < best) { best = sc; r = p; } } return r; }
   throwSpot(x, z) { const q = this.qb; if (!this.canThrow()) return false; q.windup = this.windupFor(q); q.windTarget = { spot: true, p: v2(x, z) }; q.throwAnim = 0.45; return true; }
   launchSpot(spot) {
     const q = this.qb, f = this.spotFlight(spot.x, spot.z), hand = f.hand, T = f.T; let L = v2(f.L.x, f.L.z);
@@ -940,7 +944,7 @@ class Play {
       if (result === 'inc' && off) {
         let pc = off.p.hands + 0.07 - Math.max(0, off.d - 0.75) * 0.3;
         if (def) pc -= cl(1 - def.d / 1.8, 0, 1) * cl(0.42 - battle * 0.3 - (off.p.tr.includes('hands') ? 0.1 : 0), 0.1, 0.62);
-        pc -= Math.max(0, Math.hypot(at.x - B.from.x, at.z - B.from.z) / YD - 17) * 0.02;     // a long ball comes in over the shoulder: harder to track and secure
+        pc -= Math.max(0, Math.hypot(at.x - B.from.x, at.z - B.from.z) / YD - 22) * 0.011;     // a long ball comes in over the shoulder: harder to track and secure
         if (this.env.wet) pc -= 0.04;
         if (this.r() < cl(pc, 0.05, 0.97)) { result = 'catch'; who = off.p; } else result = off.d < 0.85 && !(def && def.d < 1.2) ? 'drop' : 'off';
         // a contested ball that gets away can be tipped up and picked: the defender at the catch point has a shot at the carom

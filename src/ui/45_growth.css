@@ -10,3 +10,15 @@
 .devch{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px}.devch .up{color:#7be495}.devch .dn{color:#ff8a7a}.devch>b{font:800 13px var(--cond,sans-serif)}
 .onf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 2px}.onf em{font:700 11px var(--cond,sans-serif);font-style:normal;letter-spacing:.08em;text-transform:uppercase;color:var(--gold,#f2c230);margin-right:2px}
 .onf span{padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:12px}.onf span b{font-family:var(--cond,sans-serif);font-size:14px}
+
+/* new career: league choice */
+.lgpick{display:grid;grid-template-columns:1fr 1fr;gap:10px}.lgpick button{text-align:left;display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);text-transform:none;font:inherit;color:inherit;height:auto}
+.lgpick button b{font:700 17px var(--cond,sans-serif);letter-spacing:.03em}.lgpick button span{font-size:12.5px;line-height:1.35;opacity:.78}.lgpick button.on{border-color:var(--gold,#f2c230);background:rgba(242,194,48,.1);box-shadow:0 0 0 1px var(--gold,#f2c230) inset}
+@media (max-width:560px){.lgpick{grid-template-columns:1fr}}
+
+/* league editor */
+.edteam{display:flex;gap:14px;align-items:flex-start;margin-top:8px}.edteam>canvas{flex:none}
+.edgrid{flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}.edgrid label{display:flex;flex-direction:column;gap:3px;font-size:12px;opacity:.9}.edgrid input:not([type=color]){width:100%}
+.edcols{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.edcols input[type=color]{width:42px;height:32px;padding:0;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:none}.edcols small{opacity:.6}
+.edtbl input{width:100%;min-width:70px}.edtbl .ednum{width:56px;min-width:0}
+@media (max-width:560px){.edteam{flex-direction:column}.edgrid{grid-template-columns:1fr}}

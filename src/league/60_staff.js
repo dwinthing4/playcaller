@@ -110,7 +110,7 @@ function ensurePlan(force) {
   L.plan = plan; return plan;
 }
 function ocIntro(S, T) { const o = S.o; const lines = [];
-  lines.push(`${o.city} ${o.name} run a ${o.defStyle} defense and blitz about ${pctTxt(S.blitz)} of the time.`);
+  lines.push(`${teamLabel(o)} run a ${o.defStyle} defense and blitz about ${pctTxt(S.blitz)} of the time.`);
   if (S.starD) lines.push(`Their best defender is ${S.starD.pos} ${S.starD.fn} ${S.starD.ln} (${S.starD.ovr}). We plan around him.`);
   if (S.weakD) lines.push(`The weak spot is ${S.weakD.pos} ${S.weakD.ln} (${S.weakD.ovr}); I want to test him early.`);
   lines.push(S.runD < S.cover ? 'They are softer against the run than the pass, so we lean on the ground game.' : 'Their front is stout; we win this one through the air.');

@@ -5,8 +5,8 @@ function defaultKits(T) {
   const tr = lum(T.c2) > 0.16 ? T.c2 : '#ffffff'; const dark = shade(T.c1, -0.55); const numH = Math.abs(lum(tr) - lum(T.c1)) > 0.3 ? tr : (lum(T.c1) > 0.5 ? '#111111' : '#ffffff');
   const shell = SHELLS3D[T.id % 4];
   return [
-    { name: 'Home', jersey: T.c1, trim: tr, pants: teamPants(T.c1, tr), pstripe: T.c1, socks: T.c1, helmet: T.c1, hstripe: tr, hstripe2: dark, mask: lum(T.c1) > 0.6 ? '#1b1b1e' : '#d4d8de', num: numH, numOutline: shade(T.c1, -0.5), glove: tr, cleat: '#151517', logo: T.c1, logo2: tr, letter: T.name[0], shell },
-    { name: 'Away', jersey: '#f2f0ea', trim: T.c1, pants: teamPants(T.c1, tr), pstripe: T.c1, socks: T.c1, helmet: T.c1, hstripe: tr, hstripe2: dark, mask: lum(T.c1) > 0.6 ? '#1b1b1e' : '#d4d8de', num: T.c1, numOutline: tr, glove: '#f2f0ea', cleat: '#f2f0ea', logo: T.c1, logo2: tr, letter: T.name[0], shell },
+    { name: 'Home', jersey: T.c1, trim: tr, pants: teamPants(T.c1, tr), pstripe: T.c1, socks: T.c1, helmet: T.hel || T.c1, hstripe: tr, hstripe2: dark, mask: lum(T.c1) > 0.6 ? '#1b1b1e' : '#d4d8de', num: numH, numOutline: shade(T.c1, -0.5), glove: tr, cleat: '#151517', logo: T.c1, logo2: tr, letter: T.name[0], shell },
+    { name: 'Away', jersey: '#f2f0ea', trim: T.c1, pants: teamPants(T.c1, tr), pstripe: T.c1, socks: T.c1, helmet: T.hel || T.c1, hstripe: tr, hstripe2: dark, mask: lum(T.c1) > 0.6 ? '#1b1b1e' : '#d4d8de', num: T.c1, numOutline: tr, glove: '#f2f0ea', cleat: '#f2f0ea', logo: T.c1, logo2: tr, letter: T.name[0], shell },
     { name: 'Alternate', jersey: dark, trim: T.c1, pants: dark, pstripe: T.c1, socks: dark, helmet: dark, hstripe: T.c1, hstripe2: tr, mask: T.c1, num: T.c1, numOutline: tr, glove: '#151517', cleat: '#151517', logo: dark, logo2: T.c1, letter: T.name[0], shell },
   ];
 }

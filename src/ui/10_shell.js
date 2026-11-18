@@ -22,7 +22,7 @@ const NAVG = [
   ['plays', 'Plays', [['plan', 'Game plan'], ['playbook', 'Playbook'], ['film', 'Film room']]],
   ['staffg', 'Staff', [['staff', 'Staff room'], ['coach', 'Coach career'], ['facilities', 'Facilities']]],
   ['office', 'Office', [['trade', 'Trade'], ['fa', 'Free agents'], ['scouting', 'Scouting'], ['draft', 'Draft'], ['mock', 'Mock draft'], ['contracts', 'Contracts']]],
-  ['leagueg', 'League', [['standings', 'Standings'], ['schedule', 'Schedule'], ['leaders', 'Leaders'], ['history', 'History'], ['records', 'Records']]],
+  ['leagueg', 'League', [['standings', 'Standings'], ['schedule', 'Schedule'], ['leaders', 'Leaders'], ['history', 'History'], ['records', 'Records'], ['editor', 'Editor']]],
   ['settings', 'More', [['settings', 'Settings']]],
 ];
 const NAV_SVG = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -58,7 +58,7 @@ function render() {
   const hubCls = TAB === 'home' && !L.ghost && !L.fired ? ' hub-' + hubLayout() : '';
   try { body = (VIEWS[TAB] || VIEWS.home)(); } catch (e) { console.error(e); body = `<div class="panel">Something went wrong drawing this screen: ${esc(e.message)}</div>`; }
   const ur = unreadCount();
-  app.innerHTML = `<div class="shell tab-${TAB}${hubCls}"><header class="topbar">${logoC(T, 30)}<div class="tname"><b>${esc(T.name)}</b><span>${esc(T.city)} · ${L.year} · ${phaseLabel()}</span></div><span class="rec">${T.w}-${T.l}${T.tie ? '-' + T.tie : ''}</span><span class="cred" title="Coach credits">🪙 ${T.coach.pts}</span></header>
+  app.innerHTML = `<div class="shell tab-${TAB}${hubCls}"><header class="topbar">${logoC(T, 30)}<div class="tname"><b>${esc(T.name)}</b><span>${T.name !== T.city ? esc(T.city) + " · " : ""}${L.year} · ${phaseLabel()}</span></div><span class="rec">${T.w}-${T.l}${T.tie ? '-' + T.tie : ''}</span><span class="cred" title="Coach credits">🪙 ${T.coach.pts}</span></header>
   ${G[2].length > 1 ? `<div class="subnav">${G[2].map(([k, n]) => `<button class="${TAB === k ? 'on' : ''}" onclick="go('${k}')">${n}${k === 'inbox' && ur ? ` <i class="badge">${ur}</i>` : ''}</button>`).join('')}</div>` : ''}
   <main class="wrap">${body}</main>
   <nav class="nav"><div class="railtop" aria-hidden="true">${logoC(T, 44)}</div>${NAVG.map(([k, n]) => `<button class="${G[0] === k ? 'on' : ''}" onclick="goGroup('${k}')" aria-label="${n}"${G[0] === k ? ' aria-current="page"' : ''}><span class="ni">${NAV_ICON[k]}</span><span class="nl">${n}</span>${k === 'home' && ur ? `<i class="dot">${ur > 9 ? '9+' : ur}</i>` : ''}</button>`).join('')}</nav></div>`;
