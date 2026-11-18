@@ -205,9 +205,13 @@ const kitKey = k => [k.jersey, k.trim, k.pants, k.helmet, k.num, k.shell, k.mask
 function hideRig(r, v) { r.body.visible = v; r.gear.visible = v; if (r.extra) r.extra.visible = v; r.visible = v; }
 function disposeRig(r) { scene.remove(r.root); scene.remove(r.body); if (r.extra) scene.remove(r.extra); for (const m of r.mats) { if (m.userData.decal && !Object.values(logoTex).includes(m.userData.decal)) m.userData.decal.dispose(); m.dispose(); } }
 // ---------------- field ----------------
+// the field can be narrower (phone games): stretch the turf and move the borders to the current FIELD.halfW
+const FW = { sides: [], ends: [], bands: [], half0: 26.667 * YD };
+function applyWidth() { const k = FIELD.halfW / FW.half0, bw = 1.83; if (fieldMesh) fieldMesh.scale.x = k; for (const m of FW.sides) m.position.x = Math.sign(m.position.x) * (FIELD.halfW + bw / 2);
+  for (const m of FW.ends) m.scale.x = (2 * FIELD.halfW + 2 * bw) / (2 * FW.half0 + 2 * bw); for (const m of FW.bands) m.position.x = Math.sign(m.position.x) * (FIELD.halfW + bw + 4.2); if (losLine) losLine.scale.x = k; if (fdLine) fdLine.scale.x = k; }
 function fieldTexture(offTeam, defTeam, homeTeam, view) {
-  const key = offTeam.id + '_' + defTeam.id + '_' + homeTeam.id + '_' + view; if (cache.fieldTex[key]) return cache.fieldTex[key];
-  const Wt = coarse ? 1024 : 1536, Ht = Wt * 2.25, s = Wt / 1024, cv = document.createElement('canvas'); cv.width = Wt; cv.height = Ht; const g = cv.getContext('2d');
+  const key = offTeam.id + '_' + defTeam.id + '_' + homeTeam.id + '_' + view + '_' + FIELD.halfW.toFixed(2); if (cache.fieldTex[key]) return cache.fieldTex[key];
+  const W0 = coarse ? 1024 : 1536, Wt = Math.round(W0 * (FIELD.wk || 1)), Ht = W0 * 2.25, s = W0 / 1024, cv = document.createElement('canvas'); cv.width = Wt; cv.height = Ht; const g = cv.getContext('2d');
   const zToY = z => (z + 10 * YDm) / (120 * YDm) * Ht, xToX = x => (x + FIELD.halfW) / (2 * FIELD.halfW) * Wt, ppy = Ht / 120;
   const FONT = '"Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif';
   // turf: 5-yard mowing stripes with a soft sheen across each one
@@ -356,10 +360,10 @@ const R = {
       const apMat = new THREE.MeshStandardMaterial({ map: apT, roughness: 1 }); addDetail(apMat, 90, 130); apMat.color.setScalar(0.72);
       const apron = new THREE.Mesh(new THREE.PlaneGeometry(220, 320), apMat); apron.rotation.x = -Math.PI / 2; apron.position.set(0, -0.01, 50 * YDm); apron.receiveShadow = true; scene.add(apron);
       const white = new THREE.MeshStandardMaterial({ color: col('#eeeee6'), roughness: 0.9 }), bw = 1.83, L0 = 120 * YDm + 2 * bw;
-      for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(bw, L0), white); m.rotation.x = -Math.PI / 2; m.position.set(sx * (FIELD.halfW + bw / 2), 0.004, 50 * YDm); m.receiveShadow = true; scene.add(m); }
-      for (const z of [-10 * YDm - bw / 2, 110 * YDm + bw / 2]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW + 2 * bw, bw), white); m.rotation.x = -Math.PI / 2; m.position.set(0, 0.004, z); m.receiveShadow = true; scene.add(m); }
+      for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(bw, L0), white); m.rotation.x = -Math.PI / 2; m.position.set(sx * (FIELD.halfW + bw / 2), 0.004, 50 * YDm); m.receiveShadow = true; FW.sides.push(m); scene.add(m); }
+      for (const z of [-10 * YDm - bw / 2, 110 * YDm + bw / 2]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW + 2 * bw, bw), white); FW.ends.push(m); m.rotation.x = -Math.PI / 2; m.position.set(0, 0.004, z); m.receiveShadow = true; scene.add(m); }
       sideMat = new THREE.MeshStandardMaterial({ color: col('#1d4f8a'), roughness: 0.85 });
-      for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 50 * YDm), sideMat); m.rotation.x = -Math.PI / 2; m.position.set(sx * (FIELD.halfW + bw + 4.2), 0.003, 50 * YDm); m.receiveShadow = true; scene.add(m); } }
+      for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 50 * YDm), sideMat); m.rotation.x = -Math.PI / 2; m.position.set(sx * (FIELD.halfW + bw + 4.2), 0.003, 50 * YDm); m.receiveShadow = true; FW.bands.push(m); scene.add(m); } }
     losLine = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW, 0.13), new THREE.MeshBasicMaterial({ color: 0x5fa8ff, transparent: true, opacity: 0.85 })); losLine.rotation.x = -Math.PI / 2; losLine.position.y = 0.012; scene.add(losLine);
     fdLine = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW, 0.15), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.9 })); fdLine.rotation.x = -Math.PI / 2; fdLine.position.y = 0.014; scene.add(fdLine);
     // ball
@@ -392,6 +396,8 @@ const R = {
     if (onProgress) onProgress(1, todo.length > 0);
     const old = scene.getObjectByName('stadium'); if (old) { scene.remove(old); disposeTree(old); } standMats.length = 0; scene.add(buildStadium(home));
   },
+  applyWidth() { applyWidth(); },
+  _dbg() { return { fitK, sides: FW.sides.map(m => +m.position.x.toFixed(2)), bands: FW.bands.map(m => +m.position.x.toFixed(2)), fieldScale: fieldMesh && fieldMesh.scale.x, cam: camera.position.toArray().map(v => +v.toFixed(1)), fov: camera.fov }; },
   // sync the rigs to the players in a play (creates rigs for new pids, hides pids that left the field)
   setPlayers(play, teamOf, kitOf) {
     const live = new Set();
@@ -442,7 +448,7 @@ const R = {
     const pitch = (10 + 72 * clamp01(S.height)) * Math.PI / 180;
     // frame by anchoring a player at a fixed spot on screen, whatever the height and zoom: fy = how far down the screen (behind view), fx = how far across (sideline view)
     const fov = portrait ? 64 : 50, tv = Math.tan(fov * Math.PI / 360), th = tv * (W / H);
-    const baseD = 62 * Math.pow(7 / 62, clamp01(S.zoom)) * (wide ? 1.12 : 0.88) * (portrait ? 1.12 : 1) * (opts.zoom || 1);
+    const ph = !!R3D.phone, baseD = 62 * Math.pow(7 / 62, clamp01(S.zoom)) * (wide ? 1.12 : 0.88) * (portrait ? 1.12 : 1) * (ph ? 0.92 : 1) * (opts.zoom || 1);
     const f = opts.focus, lx0 = lx, lz0 = lz;
     // the camera for a given zoom-out factor fk (auto-fit raises fk until everyone who matters is on screen)
     const place = fk => {
@@ -460,14 +466,14 @@ const R = {
       return { want: side ? new THREE.Vector3(lx * 0.55 - hd, 0.6 + up, lz) : new THREE.Vector3(lx * 0.85, 0.6 + up, lz - hd * dirZ), look: new THREE.Vector3(lx, 0.6, lz) };
     };
     // auto-fit: before the snap and while the QB holds it, every receiver stays on screen (even the one split out wide); on defense, the man you control does too
-    const pts = []; if (S.fit !== false && !play.ret && (play.phase === 'pre' || pocket) && play.O) for (const p of play.O) if (!p.ol && p.p) pts.push([p.p.x, 1, p.p.z, 0.03, 0.97, 0.1, 0.92]);
+    const pts = []; if (S.fit !== false && !play.ret && (play.phase === 'pre' || pocket) && play.O) for (const p of play.O) if (!p.ol && p.p) pts.push(ph ? [p.p.x, 1, p.p.z, -0.04, 1.04, 0.1, 0.92] : [p.p.x, 1, p.p.z, 0.03, 0.97, 0.1, 0.92]);     // phone: a wide man may sit on the edge (his tag is pinned there), players stay big
     if (f && f.p) pts.push([f.p.x, 1, f.p.z, 0.08, 0.8, 0.14, 0.8]);
     let need = 1;
     if (pts.length) {
       fitCam = fitCam || new THREE.PerspectiveCamera(); fitV = fitV || new THREE.Vector3();
       const fits = fk => { const P = place(fk); fitCam.fov = fov; fitCam.aspect = W / H; fitCam.near = camera.near; fitCam.far = camera.far; fitCam.position.copy(P.want); fitCam.lookAt(P.look); fitCam.updateProjectionMatrix(); fitCam.updateMatrixWorld();
         for (const q of pts) { fitV.set(q[0], q[1], q[2]).project(fitCam); const sx = fitV.x * 0.5 + 0.5, sy = -fitV.y * 0.5 + 0.5; if (fitV.z > 1 || sx < q[3] || sx > q[4] || sy < q[5] || sy > q[6]) return false; } return true; };
-      if (!fits(1)) { let lo = 1, hi = portrait ? 3.4 : 2.6; if (fits(hi)) { for (let i = 0; i < 7; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; } } need = hi; }
+      if (!fits(1)) { let lo = 1, hi = ph ? 1.6 : portrait ? 3.4 : 2.6; if (fits(hi)) { for (let i = 0; i < 7; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; } } need = hi; }
     }
     const snap = opts.snapCam || R3D.snapNext || !isFinite(camPos.x + camPos.y + camPos.z + camLook.x + camLook.z); R3D.snapNext = false;
     fitK = snap ? need : need > fitK ? fitK + (need - fitK) * (1 - Math.exp(-dt * 3.5)) : Math.max(need, fitK - dt * 0.35);

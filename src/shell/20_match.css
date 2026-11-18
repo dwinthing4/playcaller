@@ -182,3 +182,11 @@ body.ingame #app{display:none}
 #game.rot .sheet:not(:has(.picks)) .plist{grid-row:1/5}
 #game.rot .pc canvas{aspect-ratio:2/1}#game.rot .sh-top .sit{font-size:20px}#game.rot .coord p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:13px}
 #game.rot .campnl{width:330px}
+
+/* phone mode: smaller action buttons on the left (out of the way of the field and the throwing thumb), no fixed stick */
+body.phonemode #gui .acts{right:auto;left:calc(10px + var(--sal));bottom:calc(12px + var(--sab));gap:7px;justify-items:start;grid-template-columns:repeat(2,auto)}
+body.phonemode .acts .a{width:52px;height:52px;font-size:10px;padding:2px;border-width:1.5px;background:rgba(10,18,28,.66);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+body.phonemode .acts .a.big{width:66px;height:66px;font-size:14px;background:rgba(242,194,48,.92)}
+body.phonemode .acts .a.hot{background:rgba(194,69,58,.85)}
+body.phonemode .acts .a.wide{height:38px;border-radius:19px;padding:0 12px;font-size:11px}
+body.phonemode #gui .joy{display:none!important}

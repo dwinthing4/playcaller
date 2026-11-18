@@ -69,11 +69,12 @@ function open(o) {
     stage: 'load', play: null, speed: 1, time: 0, timers: [], pat: null, kickNext: null, freeKick: false, recvFirst: null, over: false, sim: null,
     diff: (L0 && L0.diff) || 'pro', playoffs: !!(L0 && L0.phase === 'playoffs'), seed: (Math.random() * 1e9) >>> 0, playN: 0, userSlot: 'LB1', flip: false,
     userSide: null, sheet: null, ready: false, lastEv: 0, bubT: 0, open: {} };
+  G.phone = phoneMode(); PHYS.setWidth(G.phone ? PHONE_W : 1); if (typeof R3D !== 'undefined') R3D.phone = G.phone; document.body.classList.toggle('phonemode', G.phone);
   document.body.classList.add('ingame'); el.game.hidden = false; setTimeout(applyRot, 0); el.ovl.className = 'ovl'; el.sheet.className = 'sheet on';
   G.auto = null; setSpeed(1); speedBar(G.mode === 'watch');
   paintScorebugStatic();
   if (G.mode === 'instant' || !ensureGL()) { G.sim = 'game'; G.ready = true; G.stage = 'kick'; simCard(); startGame(); loopStart(); return; }
-  R3D.resize(); R3D.setField(H, A, H, 25 * YDm, 35 * YDm, false);
+  R3D.resize(); if (R3D.applyWidth) R3D.applyWidth(); R3D.setField(H, A, H, 25 * YDm, 35 * YDm, false);
   const players = []; for (const T of [H, A]) for (const pid of (T.roster || [])) { const p = P(pid); if (p) players.push(p); }
   introCard(0);
   R3D.prepare(players, [G.kits[H.id], G.kits[A.id]].filter(Boolean), H, (f, building) => { if (G) introCard(f, building); }).then(() => { if (!G) return; G.ready = true; introCard(1); if (G.mode === 'watch') after(700, () => { closeOverlay(); G.stage = 'kick'; startGame(); }); })
@@ -82,7 +83,7 @@ function open(o) {
 }
 function teardown() { cancelAnimationFrame(raf); raf = 0; sling.id = null; sling.mode = null; closeCam(); speedBar(false); if (glOk) { R3D.overlay(null); R3D.aim(null); aimOn = false; R3D.clearPlayers(); R3D.camOverride = null; R3D.kickAim(null); } if (el.kbar) el.kbar.classList.remove("show", "on"); if (G) { G.kickAnim = null; G.kaim = null; } G = null; }
 function close(result) {
-  const o = G.o; teardown(); el.game.hidden = true; applyRot(); document.body.classList.remove('ingame'); el.sheet.classList.remove('show'); el.ovl.className = 'ovl'; el.ovl.innerHTML = ''; el.acts.innerHTML = ''; el.bub.innerHTML = ''; actKey = '';
+  const o = G.o; teardown(); el.game.hidden = true; applyRot(); PHYS.setWidth(1); document.body.classList.remove('phonemode'); document.body.classList.remove('ingame'); el.sheet.classList.remove('show'); el.ovl.className = 'ovl'; el.ovl.innerHTML = ''; el.acts.innerHTML = ''; el.bub.innerHTML = ''; actKey = '';
   try { if (o.onDone) o.onDone(result); } catch (e) { console.error(e); }
 }
 function quit() { for (const i of G.injuries) { const p = P(i.pid); if (p) p.inj = i.prev; } close({ quit: true }); }
@@ -614,6 +615,10 @@ let cam = loadCam();
 function loadCam() { let c = null; try { c = JSON.parse(localStorage.getItem('pc_cam_v1') || 'null'); } catch (e) { } return Object.assign({ preset: 'behind', view: 'behind', height: 0.32, zoom: 0.6, flipD: false, fit: true }, c && typeof c === 'object' ? c : {}); }
 function saveCam() { try { localStorage.setItem('pc_cam_v1', JSON.stringify(cam)); } catch (e) { } if (typeof R3D !== 'undefined') R3D.cam = cam; }
 function camView() { return G && G.userSide === 'D' && cam.flipD && cam.view !== 'side' ? -1 : 1; }      // field art faces the camera
+// phone mode: on a phone-sized touch screen (or when turned on in Settings). PC, laptop and tablet keep the full field.
+const PHONE_W = 0.62;
+function phoneMode() { let pref = 'auto'; try { pref = localStorage.getItem('pc_phone') || 'auto'; } catch (e) { } if (pref === 'on') return true; if (pref === 'off') return false;
+  return matchMedia('(pointer: coarse)').matches && Math.min(screen.width || innerWidth, screen.height || innerHeight) < 600; }
 function camRefresh() { if (G && G.fieldArgs && glOk) R3D.setField(...G.fieldArgs, camView()); applyRot(); }
 // sideline view on a phone held upright: turn the whole game sideways so the field runs across the long side of the screen (turn the phone to play)
 let rotOn = false;
@@ -675,7 +680,7 @@ const ACTS = {     // [buttons, hint with a mouse + keyboard, hint on a touch sc
 };
 const MOVE_CTX = { qb: 1, run: 1, d: 1, dAir: 1 };
 function actsFor(k) { if (k === actKey) return; actKey = k; const a = ACTS[k] || ACTS.none; el.acts.innerHTML = a[0]; el.hint.textContent = matchMedia('(pointer: fine)').matches ? a[1] : a[2];
-  el.touch.classList.toggle('on', k !== 'none' && k !== 'motion'); el.joy.classList.toggle('show', !!MOVE_CTX[k]); el.joy.classList.toggle('on', !!MOVE_CTX[k]);
+  el.touch.classList.toggle('on', k !== 'none' && k !== 'motion'); const js = !!MOVE_CTX[k] && !(G && G.phone); el.joy.classList.toggle('show', js); el.joy.classList.toggle('on', js);
   if (k === 'none') { stickUp({ pointerId: stick.id }); joyUp({ pointerId: joy.id }); slingEnd(false); }
   if (k !== 'qb' && sling.mode === 'aim') slingEnd(false); }
 function doAct(a) {
@@ -974,5 +979,5 @@ function finalCard(pog) {
   document.getElementById('mDone').onclick = () => close(G.result);
 }
 
-return { init, open, get _G() { return G; }, _: { processResult, describe, fieldGoal, punt, kickXP, ctl: () => ({ ctx: G ? ctxKey() : null, sling: Object.assign({}, sling), stick: Object.assign({}, stick), joy: Object.assign({}, joy), input: G && G.play ? Object.assign({}, G.play.input) : null }) } };
+return { init, open, phoneMode, get _G() { return G; }, _: { processResult, describe, fieldGoal, punt, kickXP, ctl: () => ({ ctx: G ? ctxKey() : null, sling: Object.assign({}, sling), stick: Object.assign({}, stick), joy: Object.assign({}, joy), input: G && G.play ? Object.assign({}, G.play.input) : null }) } };
 })();

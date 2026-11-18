@@ -3,7 +3,7 @@
 //  The offense always attacks +z. Line of scrimmage = losZ (meters from the offense's own goal line).
 // ============================================================
 (() => {
-const { G, DT, FIELD, v2, len2, cl, lp, smooth, sstep, V3, add3, sub3, mul3, dot3, norm3, wrapAng, physFrom, Player, slewHeading, locomote, startFall, balance, gait, hitBody, bodyDynamics, bodyOverlap, quickCaps, poseBody, poseArms } = PHYS._;
+const { G, DT, FIELD, latM, v2, len2, cl, lp, smooth, sstep, V3, add3, sub3, mul3, dot3, norm3, wrapAng, physFrom, Player, slewHeading, locomote, startFall, balance, gait, hitBody, bodyDynamics, bodyOverlap, quickCaps, poseBody, poseArms } = PHYS._;
 const OLS = { LT: 1, LG: 1, C: 1, RG: 1, RT: 1 };
 const DIFF = { rookie: { ai: -6, user: 6, react: 0.08, tk: -0.06 }, pro: { ai: 0, user: 0, react: 0, tk: 0 }, allpro: { ai: 4, user: 0, react: -0.03, tk: 0.04 }, legend: { ai: 8, user: -2, react: -0.06, tk: 0.08 } };
 
@@ -33,7 +33,7 @@ class Play {
     const fat = o.fatigue || {};
     const mk = (e, unit, bonus) => {
       const pr = physFrom(e.rp, bonus, fat[e.rp.id] ?? 1);
-      const dyM = (unit === 'O' ? flip : 1) * e.dy * YD;
+      const dyM = (unit === 'O' ? flip : 1) * latM(e.dy);
       const x = cl(bx - dyM, -FIELD.halfW + 0.8, FIELD.halfW - 0.8), z = los + e.dx * YD * (unit === 'O' ? 1 : 1);
       return new Player(Object.assign(pr, { id: unit + e.slot, pid: e.rp.id, rp: e.rp, unit, slot: e.slot, posName: e.rp.pos || e.pos, label: e.slot, num: e.rp.num, name: e.rp.ln, x, z: unit === 'O' ? Math.min(z, los - 0.7) : Math.max(z, los + 0.75), heading: unit === 'O' ? 0 : Math.PI }));
     };
@@ -114,7 +114,7 @@ class Play {
     const dp = this.dp, los = this.losZ, bx = this.ballX, cov = dp.cov || 'c3', cand = this.D.filter(d => d.job !== 'rush');
     const press = (this.o.def.style === 'Man Press' || dp.press);
     const recs = this.receivers.slice().sort((a, b) => Math.abs(b.p.x - bx) - Math.abs(a.p.x - bx));
-    const toZ = (depth, y) => ({ x: -(y - MID_YD) * YD, z: los + depth * YD, deep: depth >= 13 });
+    const toZ = (depth, y) => ({ x: -latM(y - MID_YD), z: los + depth * YD, deep: depth >= 13 });
     if (MAN_COVERAGES[cov]) {
       let pool = cand.slice();
       if (cov === 'c1') { const s = pool.filter(d => d.posName === 'S').sort((a, b) => b.p.z - a.p.z)[0] || pool[pool.length - 1]; if (s) { s.job = 'deep'; pool = pool.filter(x => x !== s); } }
@@ -122,13 +122,13 @@ class Play {
       const order = ['CB', 'S', 'LB'];
       for (const r of recs) {
         let best = null, bv = 1e9;
-        for (const d of pool) { const pr = order.indexOf(d.posName); const wide = Math.abs(r.p.x - bx) > 11; const v = (wide ? Math.max(0, pr) * 20 : (d.posName === 'CB' ? 15 : 0)) + Math.abs(d.p.x - r.p.x) * 0.6; if (v < bv) { bv = v; best = d; } }
+        for (const d of pool) { const pr = order.indexOf(d.posName); const wide = Math.abs(r.p.x - bx) > 11 * FIELD.wk; const v = (wide ? Math.max(0, pr) * 20 : (d.posName === 'CB' ? 15 : 0)) + Math.abs(d.p.x - r.p.x) * 0.6; if (v < bv) { bv = v; best = d; } }
         // out of cover men (a 6-man pressure): the closest non-lineman blitzer peels off and takes him; failing that, the free safety comes down
         if (!best) { const peel = this.D.filter(x => x.job === 'rush' && !x.dl && !x.cover).sort((a, b) => Math.abs(a.p.x - r.p.x) - Math.abs(b.p.x - r.p.x))[0] || this.D.find(x => x.job === 'deep');
           if (!peel) break; best = peel; best.rushMove = null; }
         best.job = 'man'; best.cover = r; pool = pool.filter(x => x !== best);
         best.p.x = r.p.x + (r.p.x > bx ? -0.7 : 0.7);
-        if (best.posName === 'CB' || Math.abs(r.p.x - bx) > 9) best.p.z = los + (press ? 1.3 : 4.2);
+        if (best.posName === 'CB' || Math.abs(r.p.x - bx) > 9 * FIELD.wk) best.p.z = los + (press ? 1.3 : 4.2);
         if (press && best.posName === 'CB') r.jam = cl(0.22 + (best.A.mcv + best.A.str * 0.3 - r.A.rte - r.A.str * 0.3) / 90, 0, 0.7);
         this.resetFeet(best);
       }
@@ -139,7 +139,7 @@ class Play {
         c.sort((a, b) => Math.hypot(a.p.x - zz.x, a.p.z - zz.z) - Math.hypot(b.p.x - zz.x, b.p.z - zz.z)); const d = c[0]; d.job = 'zone'; d.zone = zz; pool = pool.filter(x => x !== d); }
       for (const d of pool) d.job = 'spy';
       // corners line up over the widest receivers even in zone
-      for (const d of this.D.filter(x => x.posName === 'CB')) { const r = recs.filter(q => Math.sign(q.p.x - bx) === Math.sign(d.p.x - bx))[0]; if (r && Math.abs(r.p.x - bx) > 9) { d.p.x = r.p.x + (r.p.x > bx ? -1 : 1); this.resetFeet(d); } }
+      for (const d of this.D.filter(x => x.posName === 'CB')) { const r = recs.filter(q => Math.sign(q.p.x - bx) === Math.sign(d.p.x - bx))[0]; if (r && Math.abs(r.p.x - bx) > 9 * FIELD.wk) { d.p.x = r.p.x + (r.p.x > bx ? -1 : 1); this.resetFeet(d); } }
     }
   }
   // the defense has seen this play before (it ran it on them earlier): it reads it faster and keys on what hurt it, the side the run went or the receiver the ball went to
@@ -157,8 +157,8 @@ class Play {
   buildRoute(r) {
     const bx = this.ballX, inward = r.p.x > bx + 0.3 ? -1 : r.p.x < bx - 0.3 ? 1 : (r.slot === 'RB' ? 1 : -1), flip = this.op.flip ? -1 : 1;
     const cp = this.op.paths && this.op.paths[r.slot];
-    const pts = cp && cp.length ? cp.map(([f, l]) => v2(cl(r.p.x - flip * l * YD, -FIELD.halfW + 0.8, FIELD.halfW - 0.8), r.p.z + f * YD))
-      : (ROUTES[r.routeName] || []).map(([f, i]) => v2(cl(r.p.x + i * inward * YD, -FIELD.halfW + 0.8, FIELD.halfW - 0.8), r.p.z + f * YD));
+    const pts = cp && cp.length ? cp.map(([f, l]) => v2(cl(r.p.x - flip * l * YD * FIELD.wk, -FIELD.halfW + 0.8, FIELD.halfW - 0.8), r.p.z + f * YD))
+      : (ROUTES[r.routeName] || []).map(([f, i]) => v2(cl(r.p.x + i * inward * YD * FIELD.wk, -FIELD.halfW + 0.8, FIELD.halfW - 0.8), r.p.z + f * YD));
     r.route = pts; r.ri = 0; r.settle = !!SETTLE_ROUTES[r.routeName]; r.deepR = !!DEEP_ROUTES[r.routeName]; r.start = v2(r.p.x, r.p.z); r.startX = r.p.x;
   }
 
@@ -232,15 +232,15 @@ class Play {
     // the returner: deep, a few steps from where it will come down
     place(ret, land.x + this.gauss() * 1.2, land.z - 3 - this.r() * 2, 0); ret.role = 'returner';
     // the return team: a front line at the restraining line (kickoff) or the line of scrimmage (punt), backed by a second wave; each has a wall spot to get to
-    const blk = this.O.filter(p => p !== ret), fx = [-19, -10, -3.5, 3.5, 10, 19], frontZ = punt ? R.losZ - 0.8 : R.kickZ - 10 * YD;
+    const blk = this.O.filter(p => p !== ret), fx = [-19, -10, -3.5, 3.5, 10, 19].map(x => x * FIELD.wk), frontZ = punt ? R.losZ - 0.8 : R.kickZ - 10 * YD;
     blk.forEach((p, i) => { const front = i < 6, x = front ? fx[i] : [-7, 7, -2, 2][i - 6] || 0, z = front ? frontZ : (punt ? R.losZ - 6 - (i - 6) * 3 : R.kickZ - 22 * YD - (i - 6) * 4);
       place(p, x, z, punt ? 0 : Math.PI); p.wallX = x; p.wallD = (front ? 13 : 8) + (i % 3) * 1.6; p.wall = v2(lp(x, land.x, 0.35) * 0.8, land.z + p.wallD); });
     // the kicking team: spread across the field in lanes, running at the ball (punt: the gunners split wide and get a head start)
-    const lanes = [-22, -17, -12, -7, -2.5, 2.5, 7, 12, 17, 22], cov = this.D.slice().sort((a, b) => (a.posName === 'K' || a.posName === 'P') - (b.posName === 'K' || b.posName === 'P'));
+    const lanes = [-22, -17, -12, -7, -2.5, 2.5, 7, 12, 17, 22].map(x => x * FIELD.wk), cov = this.D.slice().sort((a, b) => (a.posName === 'K' || a.posName === 'P') - (b.posName === 'K' || b.posName === 'P'));
     cov.forEach((d, i) => { const kicker = i === 10, lx = kicker ? 0 : lanes[i], gun = punt && (i === 0 || i === 9);
       const z = kicker ? R.kickZ + (punt ? 0 : 1.5) : punt ? (gun ? R.losZ + 0.8 : R.losZ + 1 + (i % 2) * 1.2) : R.kickZ + 0.9;
       place(d, kicker ? R.kickX : lx, z, Math.PI, kicker ? 0 : -(punt ? (gun ? 3.5 : 1.5) : 5.5)); d.role = 'cover'; d.lane = lx; d.gunner = gun; d.kicker = kicker; d.dl = false;
-      d.safe = punt && (i === 4 || i === 5); d.fit = kicker || d.safe ? 'alley' : Math.abs(lx) >= 17 ? 'contain' : 'attack'; d.react = cl(0.3 - d.A.awr / 520, 0.08, 0.3); d.seenV = v2(); });
+      d.safe = punt && (i === 4 || i === 5); d.fit = kicker || d.safe ? 'alley' : Math.abs(lx) >= 17 * FIELD.wk ? 'contain' : 'attack'; d.react = cl(0.3 - d.A.awr / 520, 0.08, 0.3); d.seenV = v2(); });
     if (this.userSide === 'D') this.userD = cov[4] || this.D[0];
     { const bs = blk.slice().sort((a, b) => a.p.x - b.p.x), cs = cov.filter(d => !d.kicker).sort((a, b) => a.p.x - b.p.x); bs.forEach((b, i) => { b.assign = cs[i] || null; b.retMan = b.assign; }); }
     // your kick: everyone lines up and waits for the power meter (kickNow); otherwise the ball is in the air right away

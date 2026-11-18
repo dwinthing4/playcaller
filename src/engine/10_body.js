@@ -5,7 +5,9 @@
 const PHYS = { _: {} };
 (() => {
 const G = 9.81, DT = 1 / 120;
-const FIELD = { halfW: 26.667 * YD, goalZ: 100 * YD, hashX: 2.82 };
+const FIELD = { halfW: 26.667 * YD, goalZ: 100 * YD, hashX: 2.82, wk: 1 };
+// lateral distance (yards from the ball) -> meters on this field: the first 4 yards are kept (the line, the box), anything wider shrinks with the field
+const latM = dy => { const a = Math.abs(dy), s = dy < 0 ? -1 : 1; return s * (a <= 4 ? a : 4 + (a - 4) * FIELD.wk) * YD; };
 const v2 = (x = 0, z = 0) => ({ x, z });
 const len2 = a => Math.hypot(a.x, a.z);
 const cl = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -359,6 +361,7 @@ function poseArms(p, J, game) {
   }
   J.arms = arms; return J;
 }
-Object.assign(PHYS._, { G, DT, FIELD, v2, len2, cl, lp, frac, smooth, sstep, V3, add3, sub3, mul3, dot3, cross3, len3, norm3, wrapAng, physFrom, Player, slewHeading, locomote, startFall, balance, gait, hitBody, bodyDynamics, segSeg, bodyOverlap, pushOut, quickCaps, bodyCaps, ik2, BODY, rotAbout, poseBody, poseArms });
+PHYS.setWidth = k => { FIELD.wk = Math.max(0.5, Math.min(1, +k || 1)); FIELD.halfW = 26.667 * YD * FIELD.wk; };     // phone games use a narrower field
+Object.assign(PHYS._, { G, DT, FIELD, latM, v2, len2, cl, lp, frac, smooth, sstep, V3, add3, sub3, mul3, dot3, cross3, len3, norm3, wrapAng, physFrom, Player, slewHeading, locomote, startFall, balance, gait, hitBody, bodyDynamics, segSeg, bodyOverlap, pushOut, quickCaps, bodyCaps, ik2, BODY, rotAbout, poseBody, poseArms });
 Object.assign(PHYS, { G, DT, FIELD, physFrom, poseBody, poseArms, BODY });
 })();
