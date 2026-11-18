@@ -16,7 +16,7 @@ page.on('pageerror', e => errs.push('pageerror: ' + e.message + '\n' + (e.stack 
 page.on('console', m => { if (m.type() === 'error' && !/fonts\.g|ERR_|net::/.test(m.text())) errs.push('console: ' + m.text()); });
 await page.goto('file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/')); await page.waitForTimeout(500);
 await page.evaluate(() => { try { localStorage.removeItem('pc_cam_v1'); } catch (e) { } NG.slot = 1; NG.qlen = 60; createLeague(); pickTeam(L.teams[5].id); });
-const G = () => page.evaluate(() => { const g = MATCH._G; if (!g) return null; const pl = g.play; return { stage: g.stage, ready: g.ready, side: g.userSide, sheet: g.sheet ? g.sheet.side : null, phase: pl && pl.phase, liveT: pl && pl.liveT, thrown: pl && pl.thrown, air: pl && pl.ball && pl.ball.state, scramble: pl && pl.scramble, pass: pl && pl.pass, qbz: pl && pl.qb ? pl.qb.p.z : null, qbx: pl && pl.qb ? pl.qb.p.x : null, los: pl && pl.losZ, aim: !!(pl && pl.aimAt), kick: !!g.kickCb, over: g.over, carrierQB: pl && pl.carrier === pl.qb }; });
+const G = () => page.evaluate(() => { const g = MATCH._G; if (!g) return null; const pl = g.play; return { kbar: !!(g.kpow || g.kaim), stage: g.stage, ready: g.ready, side: g.userSide, sheet: g.sheet ? g.sheet.side : null, phase: pl && pl.phase, liveT: pl && pl.liveT, thrown: pl && pl.thrown, air: pl && pl.ball && pl.ball.state, scramble: pl && pl.scramble, pass: pl && pl.pass, qbz: pl && pl.qb ? pl.qb.p.z : null, qbx: pl && pl.qb ? pl.qb.p.x : null, los: pl && pl.losZ, aim: !!(pl && pl.aimAt), kick: !!g.kickCb, over: g.over, carrierQB: pl && pl.carrier === pl.qb }; });
 let n = 0; const shot = async name => page.screenshot({ path: path.join(shots, `${which}_${String(n++).padStart(2, '0')}_${name}.png`) });
 const wait = ms => page.waitForTimeout(ms);
 await page.evaluate(() => startUserGame('play'));
@@ -29,6 +29,7 @@ let did = { def: false, pass1: false, run1: false, joy: false, panel: false }, g
 while (guard++ < 400 && !(did.pass1 && did.run1 && did.joy && did.def && did.panel)) {
   const g = await G(); if (!g || g.over) break;
   if (g.kick) { await page.click('#mK').catch(() => { }); await wait(700); continue; }
+  if (g.kbar) { await page.keyboard.press('Space'); await wait(700); continue; }
   if (g.stage === 'call') {
     if (await page.$('[data-act="xp"]')) { await page.click('[data-act="xp"]'); await wait(300); continue; }
     if (g.sheet === 'O') { const four = await page.$('[data-act="punt"]'); if (four && (await G()).stage === 'call' && await page.evaluate(() => MATCH._G.down === 4)) { await page.click('[data-act="punt"]'); await wait(400); continue; } await callPlay('pass'); }

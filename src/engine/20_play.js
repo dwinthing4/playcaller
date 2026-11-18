@@ -7,6 +7,7 @@ const { G, DT, FIELD, v2, len2, cl, lp, smooth, sstep, V3, add3, sub3, mul3, dot
 const OLS = { LT: 1, LG: 1, C: 1, RG: 1, RT: 1 };
 const DIFF = { rookie: { ai: -6, user: 6, react: 0.08, tk: -0.06 }, pro: { ai: 0, user: 0, react: 0, tk: 0 }, allpro: { ai: 4, user: 0, react: -0.03, tk: 0.04 }, legend: { ai: 8, user: -2, react: -0.06, tk: 0.08 } };
 
+const R_TB = k => k === 'punt' ? 'Into the end zone: touchback' : 'He takes a knee: touchback';
 class Play {
   // o: { losZ, ballX, down, togo, op, dp, off:{tid,list:[{slot,pos,rp,dx,dy}],bonus,style}, def:{tid,list,bonus,style}, userSide:'O'|'D'|null, userSlot, diff, seed, weather, fatigue, lateTrail }
   constructor(o) {
@@ -17,7 +18,7 @@ class Play {
     this.diff = DIFF[o.diff || 'pro'] || DIFF.pro; this.userSide = o.userSide || null;
     this.input = { x: 0, z: 0 }; this.userTouched = false; this.contactZ = null; this.fpZ = null;
     this.env = (o.weather === 'rain' || o.weather === 'snow') ? { mu: 0.78, wet: true } : { mu: 1.2, wet: false };
-    this.setup();
+    this.setup(); if (o.ret) this.setupReturn(o.ret);
   }
   r() { return this.rand(); }
   gauss() { let u = 0, v = 0; while (!u) u = this.r(); while (!v) v = this.r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
@@ -88,7 +89,7 @@ class Play {
       d.recog += this.diff.react * (this.userSide === 'O' ? 1 : this.userSide === 'D' ? -1 : 0);
       d.react = cl(0.3 - awr / 520 + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.36);
     }
-    this.assignCoverage();
+    this.assignCoverage(); this.applyFilm();
     // receivers and corners line up in a staggered stance: the inside foot back
     for (const p of this.players) { if (p.posName !== 'WR' && p.posName !== 'CB') continue; const back = p.unit === 'O' ? -1 : 1, inX = Math.sign(this.ballX - p.p.x) || 1, r = p.right();
       const f = p.feet.slice().sort((a, b) => ((b.x - p.p.x) * inX) - ((a.x - p.p.x) * inX))[0]; if (f) f.z += back * 0.32; }
@@ -140,6 +141,17 @@ class Play {
       // corners line up over the widest receivers even in zone
       for (const d of this.D.filter(x => x.posName === 'CB')) { const r = recs.filter(q => Math.sign(q.p.x - bx) === Math.sign(d.p.x - bx))[0]; if (r && Math.abs(r.p.x - bx) > 9) { d.p.x = r.p.x + (r.p.x > bx ? -1 : 1); this.resetFeet(d); } }
     }
+  }
+  // the defense has seen this play before (it ran it on them earlier): it reads it faster and keys on what hurt it, the side the run went or the receiver the ball went to
+  applyFilm() {
+    const F = this.dp && this.dp.film, k = F ? cl(F.k || 0, 0, 0.9) : 0; this.filmK = k; if (!k) return;
+    for (const d of this.D) { d.recog = Math.max(0.03, d.recog - 0.22 * k); d.react = Math.max(0.06, d.react - 0.06 * k); }
+    if (F.type === 'run') { for (const d of this.D) if (!d.dl && (d.posName === 'LB' || d.posName === 'S') && d.job !== 'man' && d.job !== 'deep') { d.p.x = cl(d.p.x + this.sideX * 1.4 * k, -FIELD.halfW + 1, FIELD.halfW - 1); this.resetFeet(d); } return; }
+    const r = F.tgt && this.receivers.find(x => x.slot === F.tgt); if (!r) return;
+    const man = this.D.find(d => d.cover === r); if (man) { man.jump = k; return; }
+    const key = r.route && r.route[Math.min(1, r.route.length - 1)]; if (!key) return;
+    const z = this.D.filter(d => d.zone && !d.zone.deep).sort((a, b) => Math.hypot(a.zone.x - key.x, a.zone.z - key.z) - Math.hypot(b.zone.x - key.x, b.zone.z - key.z))[0];
+    if (z) { z.zone = { x: lp(z.zone.x, key.x, 0.45 * k), z: lp(z.zone.z, key.z, 0.45 * k), deep: false }; z.jump = k; }
   }
   resetFeet(p) { const r = p.right(); p.feet.forEach(f => { f.x = p.p.x + r.x * f.side * 0.15; f.z = p.p.z + r.z * f.side * 0.15; }); }
   buildRoute(r) {
@@ -209,8 +221,97 @@ class Play {
     if (m && m.go) for (const d of this.D) if (d.cover === m.p) { const tx = m.p.p.x + (m.p.p.x > this.ballX ? -0.8 : 0.8); locomote(d, v2(cl((tx - d.p.x) * 3, -7, 7), 0), dt, env); }
   }
 
+  // ---------------- kick returns: kickoffs and punts, played out ----------------
+  // (R_TB below: the touchback text)
+  // The receiving team is the offense (attacking +z, as always); the kicking team is the defense. R = { kind: 'kickoff'|'punt', kickX, kickZ, landX, landZ, hang, retSlot, losZ }
+  setupReturn(R) {
+    this.ret = R; this.kind = 'return'; this.pass = false; this.handed = true; this.qbRun = true; this.op = Object.assign({}, this.op, { type: 'run', name: R.kind === 'punt' ? 'Punt return' : 'Kick return' });
+    const ret = this.O.find(p => p.slot === R.retSlot) || this.O[0], punt = R.kind === 'punt', land = v2(cl(R.landX, -FIELD.halfW + 2, FIELD.halfW - 2), R.landZ);
+    this.qb = ret; this.returner = ret; this.receivers = []; this.losZ = -40; this.motion = null; this.phase = 'live'; this.liveT = 0; this.air = true; this.carrier = null;
+    const place = (p, x, z, h, vz) => { p.p = v2(cl(x, -FIELD.halfW + 1, FIELD.halfW - 1), z); p.heading = h; p.vel = v2(0, vz || 0); p.stance = false; p.stK = 0; p.crouch = p.crouchT = 0.12; p.role = 'block'; p.asg = { t: 'ret', d: 0 }; p.asgX = 0; p.ol = false; p.job = null; p.cover = null; p.zone = null; this.resetFeet(p); };
+    // the returner: deep, a few steps from where it will come down
+    place(ret, land.x + this.gauss() * 1.2, land.z - 3 - this.r() * 2, 0); ret.role = 'returner';
+    // the return team: a front line at the restraining line (kickoff) or the line of scrimmage (punt), backed by a second wave; each has a wall spot to get to
+    const blk = this.O.filter(p => p !== ret), fx = [-19, -10, -3.5, 3.5, 10, 19], frontZ = punt ? R.losZ - 0.8 : R.kickZ - 10 * YD;
+    blk.forEach((p, i) => { const front = i < 6, x = front ? fx[i] : [-7, 7, -2, 2][i - 6] || 0, z = front ? frontZ : (punt ? R.losZ - 6 - (i - 6) * 3 : R.kickZ - 22 * YD - (i - 6) * 4);
+      place(p, x, z, punt ? 0 : Math.PI); p.wallX = x; p.wallD = (front ? 13 : 8) + (i % 3) * 1.6; p.wall = v2(lp(x, land.x, 0.35) * 0.8, land.z + p.wallD); });
+    // the kicking team: spread across the field in lanes, running at the ball (punt: the gunners split wide and get a head start)
+    const lanes = [-22, -17, -12, -7, -2.5, 2.5, 7, 12, 17, 22], cov = this.D.slice().sort((a, b) => (a.posName === 'K' || a.posName === 'P') - (b.posName === 'K' || b.posName === 'P'));
+    cov.forEach((d, i) => { const kicker = i === 10, lx = kicker ? 0 : lanes[i], gun = punt && (i === 0 || i === 9);
+      const z = kicker ? R.kickZ + (punt ? 0 : 1.5) : punt ? (gun ? R.losZ + 0.8 : R.losZ + 1 + (i % 2) * 1.2) : R.kickZ + 0.9;
+      place(d, kicker ? R.kickX : lx, z, Math.PI, kicker ? 0 : -(punt ? (gun ? 3.5 : 1.5) : 5.5)); d.role = 'cover'; d.lane = lx; d.gunner = gun; d.kicker = kicker; d.dl = false;
+      d.safe = punt && (i === 4 || i === 5); d.fit = kicker || d.safe ? 'alley' : Math.abs(lx) >= 17 ? 'contain' : 'attack'; d.react = cl(0.3 - d.A.awr / 520, 0.08, 0.3); d.seenV = v2(); });
+    if (this.userSide === 'D') this.userD = cov[4] || this.D[0];
+    { const bs = blk.slice().sort((a, b) => a.p.x - b.p.x), cs = cov.filter(d => !d.kicker).sort((a, b) => a.p.x - b.p.x); bs.forEach((b, i) => { b.assign = cs[i] || null; b.retMan = b.assign; }); }
+    // your kick: everyone lines up and waits for the power meter (kickNow); otherwise the ball is in the air right away
+    if (R.wait) { this.phase = 'pre'; this.air = false; this.ball = { state: 'dead', p: V3(R.kickX, 0.3, R.kickZ), v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; }
+    else this.launchKick(R);
+    this.updatePoses();
+  }
+  launchKick(R) {
+    const land = v2(cl(R.landX, -FIELD.halfW + 2, FIELD.halfW - 2), cl(R.landZ, -9.5 * YD, FIELD.goalZ)), T = R.hang, x0 = R.kickX, z0 = R.kickZ, y0 = 0.3, yL = 1.3, ret = this.returner;
+    this.phase = 'live'; this.liveT = 0; this.air = true; this.carrier = null;
+    // deep in the end zone he takes a knee; a punt inside his 9 he lets bounce (it is downed where it stops)
+    this.kneel = R.kind === 'kickoff' ? land.z < -3 * YD : land.z < 0; this.letGo = R.kind === 'punt' && !this.kneel && land.z < 9 * YD;
+    for (const p of this.O) if (p.wallD != null) p.wall = v2(lp(p.wallX, land.x, 0.35) * 0.8, land.z + p.wallD);
+    if (R.wait) { ret.p = v2(cl(land.x + this.gauss() * 1.2, -FIELD.halfW + 1, FIELD.halfW - 1), Math.min(land.z - 3 - this.r() * 2, ret.p.z)); this.resetFeet(ret); }
+    this.ball = { state: 'air', p: V3(x0, y0, z0), v: V3((land.x - x0) / T, (yL - y0 + 0.5 * G * T * T) / T, (land.z - z0) / T), t: 0, T, land, target: ret, ret: true, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(x0, z0), fromZ: z0 };
+    this.fx.push({ kind: 'snap' });
+  }
+  kickNow(landX, landZ, hang) { if (!this.ret || this.phase !== 'pre') return false; Object.assign(this.ret, { landX, landZ, hang, wait: false }); this.ret.wait = true; this.launchKick(this.ret); this.ret.wait = false; return true; }
+  fairCatchCall() { if (this.ret && this.ret.kind === 'punt' && this.air && !this.fairCatch) { this.fairCatch = true; this.emit(`${this.returner.name} waves for a fair catch`, 'info'); return true; } return false; }
+  retCatch() {
+    const B = this.ball, r = this.returner, d = Math.hypot(r.p.x - B.p.x, r.p.z - B.p.z); this.air = false;
+    if (this.kneel) { this.carrier = r; this.ball = { state: 'held', p: B.p, v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; this.endPlay('touchback', R_TB(this.ret.kind), r, -1); return; }
+    if (this.letGo) { const z = B.land.z - (1 + this.r() * 5) * YD; this.ball = { state: 'dead', p: V3(B.land.x, 0.15, Math.max(z, -1)), v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; this.endPlay('downed', 'Downed', null, z < 0 ? -1 : z); return; }
+    if (this.fairCatch && r.upright()) { this.carrier = r; this.ball = { state: 'held', p: B.p, v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; this.endPlay('fair', 'Fair catch', r, r.p.z); return; }
+    const near = this.D.some(q => q.upright() && Math.hypot(q.p.x - r.p.x, q.p.z - r.p.z) < 2.2), muffP = cl(0.012 + (62 - r.A.cth) / 700 + (near ? 0.05 : 0) + (d > 1.8 ? 0.15 : 0), 0.004, 0.3);
+    if (!r.upright() || this.r() < muffP) { this.fumbler = r; this.emit(`${r.name} muffs the kick!`, 'bad'); this.ball = { state: 'loose', p: V3(r.p.x, 0.6, r.p.z), v: V3(this.gauss() * 1.5, 2, this.gauss() * 2), rot: V3(0, 0, 0), spin: V3(6, 2, 6), looseT: 0 }; return; }
+    this.carrier = r; this.catchT = this.t; r.role = 'carrier'; r.secureT = 0.2; r.propK = d > 1.2 ? 0.45 : 0.75; r.ballSide = r.p.x > 0 ? 1 : -1;
+    this.ball = { state: 'held', p: B.p, v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) };
+    for (const q of this.D) q.runRead = this.t; this.emit(`${r.name} fields it`, 'info');
+  }
+  retAI(dt, env) {
+    const c = this.carrier, B = this.ball, uc = this.controlled(), inF = this.air && B.state === 'air', R = this.ret, ret = this.returner, L = B.land || v2(ret.p.x, ret.p.z);
+    for (const p of this.O) {
+      if (p === uc && this.userDriven(p)) { this.userMove(p, dt, env); continue; }
+      if (p === ret && inF && this.letGo) { const tx = L.x - p.p.x, tz = L.z + 8 - p.p.z, m = Math.hypot(tx, tz) || 1, sp = Math.min(p.vmax * 0.8, m * 2); locomote(p, m > 0.4 ? v2(tx / m * sp, tz / m * sp) : v2(), dt, env); slewHeading(p, Math.atan2(B.p.x - p.p.x, B.p.z - p.p.z), 6, dt); continue; }    // too close to the goal line: let it bounce
+      if (p === ret && inF) {      // get under it, eyes up
+        const tl = Math.max(0.05, B.T - B.t), tx = L.x - p.p.x, tz = L.z - 0.5 - p.p.z, m = Math.hypot(tx, tz), sp = Math.min(p.vmax, m / Math.max(0.25, tl - 0.25) + (m > 0.5 ? 0.8 : 0));
+        locomote(p, m > 0.12 ? v2(tx / m * sp, tz / m * sp) : v2(), dt, env); slewHeading(p, Math.atan2(B.p.x - p.p.x, B.p.z - p.p.z), 6, dt); p.crouchT = 0.08;
+        if (R.kind === 'punt' && !this.fairCatch && !this.fairDecided && this.userSide !== 'O' && tl < 0.8) { this.fairDecided = true; const g = Math.min(...this.D.map(d => Math.hypot(d.p.x - L.x, d.p.z - L.z))); if (this.r() < (g < 7 ? 0.95 : g < 17 ? (17 - g) / 10 : 0.04)) this.fairCatchCall(); }     // a gunner bearing down: wave it off
+        continue; }
+      if (c === p && B.state === 'held') { this.runnerAI(p, dt, env); continue; }
+      if (B.state === 'loose') { const dx = B.p.x - p.p.x, dz = B.p.z - p.p.z, m = Math.hypot(dx, dz) || 1; locomote(p, v2(dx / m * p.vmax, dz / m * p.vmax), dt, env); continue; }
+      if (inF && p.retMan && p.retMan.upright() && !p.bond) {      // go get your man: get between him and the ball, square up, and take him on
+        const d = p.retMan, gx = L.x - d.p.x, gz = L.z - d.p.z, gm = Math.hypot(gx, gz) || 1, far = Math.hypot(d.p.x - p.p.x, d.p.z - p.p.z) > 22 && R.kind !== 'punt';
+        const tx = far ? p.wall.x : d.p.x + gx / gm * 1.1, tz = far ? p.wall.z : d.p.z + gz / gm * 1.1, mx = tx - p.p.x, mz = tz - p.p.z, mm = Math.hypot(mx, mz) || 1, sp = Math.min(p.vmax * 0.95, mm * 2.6);
+        locomote(p, v2(mx / mm * sp, mz / mm * sp), dt, env); slewHeading(p, Math.atan2(d.p.x - p.p.x, d.p.z - p.p.z), 6, dt); p.crouchT = mm < 3 ? 0.42 : 0.15; continue; }
+      if (inF) {                   // drop to the wall, turn and find a man coming down
+        const thr = this.D.filter(d => d.upright() && !d.bondBy).sort((a, b) => Math.hypot(a.p.x - p.p.x, a.p.z - p.p.z) - Math.hypot(b.p.x - p.p.x, b.p.z - p.p.z))[0], dd = thr ? Math.hypot(thr.p.x - p.p.x, thr.p.z - p.p.z) : 99;
+        if (thr && dd < 5) { const ax = thr.p.x - p.p.x, az = thr.p.z - p.p.z, am = dd || 1; locomote(p, v2(ax / am * 3, az / am * 3), dt, env); slewHeading(p, Math.atan2(ax, az), 7, dt); p.crouchT = 0.4; }
+        else { const w = p.wall, wx = w.x - p.p.x, wz = w.z - p.p.z, wm = Math.hypot(wx, wz), sp = Math.min(p.vmax * 0.92, wm * 2.2); locomote(p, wm > 0.3 ? v2(wx / wm * sp, wz / wm * sp) : v2(), dt, env); slewHeading(p, wm > 2.5 ? Math.atan2(wx, wz) : 0, 5, dt); p.crouchT = 0.15; }
+        continue; }
+      this.blockerAI(p, dt, env);
+    }
+    for (const d of this.D) {
+      if (d === uc && this.userDriven(d)) { this.userMove(d, dt, env); continue; }
+      if (c === d && B.state === 'held') { this.runnerAI(d, dt, env); continue; }
+      if (B.state === 'loose') { const dx = B.p.x - d.p.x, dz = B.p.z - d.p.z, m = Math.hypot(dx, dz) || 1; locomote(d, v2(dx / m * d.vmax, dz / m * d.vmax), dt, env); continue; }
+      if (inF && R.kind === 'punt' && !d.gunner && !d.kicker && this.liveT < 0.3) { locomote(d, v2(), dt, env); continue; }     // protect the punter first
+      if (inF) {                   // down the lane, squeezing toward the ball as he gets close; the kicker hangs back as the last man
+        const prog = cl(1 - (d.p.z - L.z) / Math.max(10, R.kickZ - L.z), 0, 1), tx = d.kicker ? lp(d.p.x, L.x, 0.3) : lp(d.lane, L.x, 0.2 + 0.65 * prog), tz = d.kicker ? Math.max(L.z + 22, d.p.z - 4) : d.safe ? Math.max(L.z + 11, d.p.z - 6) : L.z + (d.gunner ? 1.5 : 3);
+        const mx = tx - d.p.x, mz = tz - d.p.z, mm = Math.hypot(mx, mz) || 1, sp = d.kicker ? Math.min(d.vmax * 0.6, mm * 2) : d.vmax * (d.gunner ? 0.96 : 0.92);
+        if (d.bondBy) { this.pursueAI(d, dt, env, d.fit); continue; }
+        locomote(d, v2(mx / mm * sp, mz / mm * sp), dt, env); slewHeading(d, Math.atan2(mx, mz), 6, dt); d.crouchT = 0.05; continue; }
+      if (!c) { locomote(d, v2(), dt, env); continue; }
+      this.pursueAI(d, dt, env, d.fit || 'attack');
+    }
+  }
+
   // ---------------- AI dispatch ----------------
   ai(dt, env) {
+    if (this.ret) return this.retAI(dt, env);
     const c = this.carrier, uc = this.controlled(), inp = this.input;
     if (this.qb.windup) this.windupStep(this.qb, dt);
     if (this.userD && inp.tackle) { inp.tackle = false; const p = this.userD, cc = this.carrier; if (cc && cc.unit === 'O' && p.upright() && p.cooldown <= 0 && !p.engaged && this.facing(p, cc) > -0.6) { const dd = Math.hypot(cc.p.x - p.p.x, cc.p.z - p.p.z); if (dd < 3.4) this.startLunge(p, cc, dd > 2.1); } }
@@ -500,12 +601,13 @@ class Play {
     const a = b.asg || { t: 'drive', d: 0 }, sX = b.asgX || 0, rc = this.carrier || this.qb; let best = null, bv = 1e9;
     for (const d of this.D) {
       if (!d.upright() || d.bondBy || d.wrapped || (d.shedCd > 0 && d.lastShedBy === b)) continue;
-      const lat = d.p.x - b.p.x, fw = d.p.z - b.p.z; if (fw < -2.2 || fw > (a.t === 'stalk' || a.t === 'lead' ? 25 : 9)) continue;
+      const lat = d.p.x - b.p.x, fw = d.p.z - b.p.z; if (fw < (a.t === 'ret' ? -4 : -2.2) || fw > (a.t === 'stalk' || a.t === 'lead' || a.t === 'ret' ? 25 : 9)) continue;
       let ok = true, sc = Math.hypot(lat, fw);
       if (a.t === 'drive') ok = Math.abs(lat) < 2.2 || !d.dl;
       else if (a.t === 'zone' || a.t === 'reach') { ok = lat * sX > -0.8 && lat * sX < 3.2; sc += lat * sX < 0 ? 2 : 0; }
       else if (a.t === 'down') ok = lat * sX > 0.2 && lat * sX < 3.6;
       else if (a.t === 'climb') { ok = !d.dl; sc = Math.abs(lat) + fw * 0.3; }
+      else if (a.t === 'ret') { ok = true; sc = Math.hypot(lat, fw) + Math.hypot(d.p.x - rc.p.x, d.p.z - rc.p.z) * 0.25; }
       else if (a.t === 'stalk') { ok = d.posName === 'CB' || d.posName === 'S' || d.job === 'man' || d.job === 'zone'; sc = Math.hypot(lat, fw) + Math.hypot(d.p.x - rc.p.x, d.p.z - rc.p.z) * 0.15; }
       else if (a.t === 'lead' || a.t === 'pull') { sc = Math.hypot(d.p.x - this.holeX, d.p.z - this.losZ) * 1.2 + Math.hypot(lat, fw) * 0.4; ok = !d.dl || Math.abs(d.p.x - this.holeX) < 3; }
       if (!ok) continue; if (d.p.z > this.losZ + 3.5 && a.t !== 'climb' && a.t !== 'stalk' && a.t !== 'lead') sc += 3;
@@ -621,7 +723,7 @@ class Play {
     else if (d.job === 'man' && d.cover) {
       const r = d.cover, v = lagged(r), inside = r.p.x > this.ballX ? -0.55 : 0.55, depth = r.p.z - los;
       if (d.cush === undefined) d.cush = cl(d.p.z - r.p.z, 1, 5);
-      const tight = (d.A.mcv - r.A.rte) / 40 + (d.tr.includes('shutdown') ? 0.3 : 0) - (r.tr.includes('deep') && r.vel.z > 6 ? 0.3 : 0);
+      const tight = (d.A.mcv - r.A.rte) / 40 + (d.jump || 0) * 0.4 + (d.tr.includes('shutdown') ? 0.3 : 0) - (r.tr.includes('deep') && r.vel.z > 6 ? 0.3 : 0);
       // the cushion is respect for the vertical: a receiver who is not threatening downfield (screen, flat, swing, under the line) gets closed on
       const vert = !this.pass || (this.op.pa && this.liveT < 0.9) || (v.z > 2.2 && depth > -0.5), cush = vert ? cl(d.cush - Math.max(0, depth) * 0.5 - tight * 0.45, 0.7, d.cush) : cl(1.4 - tight * 0.3, 0.8, 1.6);
       tx = r.p.x + v.x * 0.3 + (vert ? inside : 0); tz = vert ? Math.max(r.p.z + cush, r.p.z + v.z * 0.3 + 0.9) : Math.max(r.p.z + cush, Math.min(this.losZ + 0.6, r.p.z + 3)); track = r;
@@ -649,7 +751,7 @@ class Play {
     const tx2 = L.x - d.p.x, tz2 = L.z + 0.9 - d.p.z, m2 = Math.hypot(tx2, tz2) || 1, sp = m2 > 1.2 ? d.vmax : Math.min(d.vmax, m2 * 3);
     locomote(d, v2(tx2 / m2 * sp, tz2 / m2 * sp), dt, env); slewHeading(d, Math.atan2(dx, dz), 8, dt); d.crouchT = 0.05;
     // at the catch point: get a hand on it (and go up for it if the receiver does)
-    if (eta < 0.34 && m < 1.7 && !d.swatTry && d.upright()) { d.swatTry = true; if (this.r() < 0.5 + ((d.A.mcv + d.A.zcv) / 2 - 65) / 120) { d.swatT = 0.38; if (this.ball.high || this.r() < 0.35) this.jump(d); } }
+    if (eta < 0.34 && m < 1.7 && !d.swatTry && d.upright()) { d.swatTry = true; if (this.r() < 0.5 + ((d.A.mcv + d.A.zcv) / 2 - 65) / 120 + (d.jump || 0) * 0.25) { d.swatT = 0.38; if (this.ball.high || this.r() < 0.35) this.jump(d); } }
   }
   // a jump: airborne for half a second, height from his jumping rating
   jump(p) { if (p.jumpT > 0 || !p.upright()) return; p.jumpT = 0.52; p.jumpH = cl(0.28 + ((p.A.jmp || 60) - 50) / 220, 0.2, 0.55); }
@@ -688,16 +790,20 @@ class Play {
     tI = Math.min(tI, 4.2) * (mode === 'cutback' ? 1.15 : 1) * cl(0.6 + (d.A.pur || 60) / 220, 0.75, 1.04);     // pursuit rating: a poor one under-leads and ends up chasing      // far pursuers take the true angle (to where they can meet him), not a chase
     let ax = c.p.x + V.x * tI, az = c.p.z + V.z * tI;
     const out = Math.sign(c.p.x) || 1;      // toward the nearer sideline
-    if (mode === 'contain' && (c.p.z - d.p.z) * dirZ < 2) { ax = out > 0 ? Math.max(ax, c.p.x + 1.4) : Math.min(ax, c.p.x - 1.4); }
-    else if (mode === 'cutback') ax = c.p.x - out * 1.0 + V.x * tI * 0.8;
+    if (mode === 'contain' && dist > 3.5 && (d.p.z - c.p.z) * dirZ > 1) { ax = out > 0 ? Math.max(ax, c.p.x + 1.4) : Math.min(ax, c.p.x - 1.4); }
+    else if (mode === 'cutback' && dist > 4) ax = c.p.x - out * 1.0 + V.x * tI * 0.8;
     else if (mode === 'alley' && dist > 6) az = c.p.z + dirZ * Math.max(2.5, (az - c.p.z) * dirZ);
     else if (mode === 'fill' && c.unit === 'O' && c.p.z < this.losZ + 0.5 && dist > 4) { ax = lp(this.holeX, c.p.x, 0.4); az = this.losZ + 0.9; }
     ax = cl(ax, -FIELD.halfW + 0.3, FIELD.halfW + 0.3);
     let fx = ax - d.p.x, fz = az - d.p.z; const fm = Math.hypot(fx, fz) || 1; fx = fx / fm * d.vmax; fz = fz / fm * d.vmax;
     // close quarters: constant-bearing pursuit. Match his sideways motion so the angle holds, spend what speed is left closing in.
     const lead = 0.3, na = norm3(V3(toC.x + V.x * lead, 0, toC.z + V.z * lead)), close = cl(dist * 1.3, 2.2, 4.5);
-    const Vpar = V.x * na.x + V.z * na.z, pX = V.x - Vpar * na.x, pZ = V.z - Vpar * na.z, pM = Math.hypot(pX, pZ), budget = Math.sqrt(Math.max(0, d.vmax * d.vmax - pM * pM)), sAl = Math.min(budget, Math.max(0, Vpar) + close);
-    let cx = pX + na.x * sAl, cz = pZ + na.z * sAl;
+    const Vpar = V.x * na.x + V.z * na.z, pX = V.x - Vpar * na.x, pZ = V.z - Vpar * na.z, pM = Math.hypot(pX, pZ), budget = Math.sqrt(Math.max(0, d.vmax * d.vmax - pM * pM));
+    let sAl = Math.min(budget, Math.max(0, Vpar) + close), kP = 1;
+    // up close he must actually close: running level with the carrier, matching his speed would leave nothing to close with (the shadowing bug), so give up some of the matching
+    const minC = dist < 4.5 ? cl(2.6 - dist * 0.3, 1.2, 2.4) : 0, needA = Math.min(d.vmax, Math.max(0, Vpar) + minC);
+    if (minC && sAl < needA && pM > 1e-3) { kP = Math.sqrt(Math.max(0, d.vmax * d.vmax - needA * needA)) / pM; kP = Math.min(1, kP); sAl = needA; }
+    let cx = pX * kP + na.x * sAl, cz = pZ * kP + na.z * sAl;
     const w = sstep(2.2, 5.5, dist);
     let dx = lp(cx, fx, w), dz = lp(cz, fz, w);
     // don't stack on a teammate's line; slip around blockers in the way
@@ -817,6 +923,7 @@ class Play {
     }
   }
   catchPoint() {
+    if (this.ret) return this.retCatch();
     const B = this.ball, at = v2(B.p.x, B.p.z);
     if (B.away) { this.air = false; this.ball = { state: 'dead', p: B.p, v: mul3(B.v, 0.3), rot: V3(0, 0, 0), spin: V3(4, 2, 4) }; this.endPlay('inc', 'Thrown away', null, this.losZ); return; }
     const near = (list, base) => { let best = null, bd = 1e9; for (const p of list) { if (!p.upright() && !p.diving) continue; const J = this.poses[p.id], c = J ? J.chest : V3(p.p.x, 1.3, p.p.z); const reach = (p.size - 1) * 0.6 + (p.A.jmp - 60) / 200 + (p.swatT > 0 ? 0.35 : 0) + (p.jumpY > 0.08 ? 0.22 : 0); const d = Math.hypot(c.x - at.x, c.z - at.z) - reach - 0.1; if (d < base && d < bd) { bd = d; best = p; } } return best ? { p: best, d: bd } : null; };
@@ -907,7 +1014,7 @@ class Play {
       }
       const ov = bodyOverlap(caps[A.id], caps[B.id]);
       const bl = A.unit === 'O' && B.unit === 'D' ? A : B.unit === 'O' && A.unit === 'D' ? B : null, df = bl === A ? B : bl === B ? A : null;
-      const canBlock = bl && live && this.canBlock(bl) && c && c.unit === 'O';
+      const canBlock = bl && live && this.canBlock(bl) && (c ? c.unit === 'O' : !!this.ret);
       const armLen = canBlock ? Math.hypot(A.p.x - B.p.x, A.p.z - B.p.z) < 1.05 : false;
       if (!ov && !armLen) continue;
       // after a catch the other receivers need a beat to turn into blockers (they were running routes)
@@ -948,7 +1055,7 @@ class Play {
         adv = (Ab.rbk * 0.7 + Ab.str * 0.3 + (b.tr.includes('mauler') ? 6 : 0)) / (Ad.bsh * 0.7 + Ad.str * 0.3) * massK;
         if (!d.dl) adv *= 1.1; if (!b.ol) adv *= (b.posName === 'TE' || b.posName === 'FB') ? 0.95 : 0.85;
         // an even run block holds past ~2.5 s about two times in three; a dominant tackle wins early more often
-        d.shedNeed = (1.45 + 2.8 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9);
+        d.shedNeed = (1.45 + 2.8 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9) * (this.ret ? (this.ret.kind === 'punt' ? 1.0 : 1.2) : 1);     // return blocks are open-field shields: harder to shed in time
         if (!b.ol && this.catchT) d.shedNeed *= 0.5;      // a skill player blocking in space is a stalk, not a drive block: it holds a second or so
       }
       if (d === this.userD) d.shedNeed *= 0.75;      // user can fight off a block faster by working the stick
@@ -1139,7 +1246,7 @@ class Play {
     this.result = res; this.fx.push({ kind: type === 'td' || type === 'deftd' ? 'td' : 'whistle' });
   }
   creditYards(c, yards, td) {
-    if (!c) return; const y = Math.round(yards);
+    if (!c) return; if (this.ret) { if (td) this.note(c, true, "Return touchdown"); else if (yards >= 25) this.note(c, true, "Long return"); return; } const y = Math.round(yards);
     if (this.catcher && c === this.catcher) { this.add(this.passer, 'py', y); this.add(c, 'recy', y); if (td) { this.add(this.passer, 'ptd'); this.add(c, 'rectd'); this.note(c, true, 'Touchdown catch'); this.note(this.passer, true, 'Touchdown pass'); } }
     else { this.add(c, 'ra'); this.add(c, 'ry', y); if (td) { this.add(c, 'rtd'); this.note(c, true, 'Rushing touchdown'); } if (y >= 10) this.note(c, true, `${y}-yard run`); }
   }

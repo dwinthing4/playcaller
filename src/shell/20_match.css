@@ -156,3 +156,29 @@ body.ingame #app{display:none}
 /* key matchups on the play sheet */
 .sheet .mups{display:flex;flex-direction:column;gap:4px;margin:6px 0 8px}.sheet .mu{font:500 12.5px/1.3 var(--body);color:#dfe6ee;background:rgba(255,255,255,.05);border-left:3px solid rgba(255,255,255,.3);border-radius:4px;padding:4px 8px}
 .sheet .mu.good{border-left-color:#3ecf8e;background:rgba(62,207,142,.08)}.sheet .mu.bad{border-left-color:#ff8a7a;background:rgba(255,138,122,.08)}
+
+/* plays the defense has seen */
+.pc .seen{position:absolute;top:6px;right:6px;z-index:2;font:800 10px/1 var(--cond);letter-spacing:.05em;color:#fff;background:#b8452f;border-radius:6px;padding:3px 5px;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+
+/* field goal aim bar */
+#gui .kbar{z-index:8}
+.kbar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--sab));display:none;align-items:center;gap:14px;background:rgba(8,14,22,.88);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:10px 12px 10px 16px;max-width:calc(100% - 24px);box-shadow:0 6px 24px rgba(0,0,0,.45)}
+.kbar.show{display:flex}.kbar .kt{display:flex;flex-direction:column;gap:2px;min-width:0}.kbar .kt b{font:700 17px var(--cond);color:#fff;letter-spacing:.03em}
+.kbar .kt span{font:500 12px var(--body);color:rgba(255,255,255,.72)}.kbar .kt em{color:#ff9b6b;font-style:normal;font-weight:700}
+.kbar .kh{font:600 12px var(--cond);color:#7dffb5;letter-spacing:.05em;text-transform:uppercase;max-width:110px;line-height:1.2}
+.kbar button{min-width:96px}
+@media (max-width:520px){.kbar{flex-wrap:wrap;justify-content:center;gap:8px;padding:10px}.kbar .kt{width:100%;text-align:center}.kbar .kh{max-width:none}}
+
+/* kickoff / punt power needle */
+.kbar .kpow{position:relative;width:min(240px,46vw);height:22px;border-radius:11px;background:linear-gradient(90deg,#2a3646,#d39a19 60%,#2f9e57 76%,#2f9e57 88%,#c2453a);border:2px solid rgba(255,255,255,.3)}
+.kbar .kpow i{position:absolute;top:-5px;width:6px;height:28px;margin-left:-3px;background:#fff;border-radius:3px;box-shadow:0 0 8px #000}
+
+/* sideline view on an upright phone: the game is turned sideways (see applyRot) and lays out as landscape */
+#game.rot{right:auto;bottom:auto;transform-origin:0 0}
+#game.rot .sb{max-width:calc(100% - 104px)}
+#game.rot .sheet{display:grid;grid-template-columns:minmax(230px,38%) 1fr;grid-template-rows:auto auto auto 1fr;column-gap:12px;max-height:calc(100% - 62px);padding-bottom:8px}
+#game.rot .sheet .sh-top{grid-column:1;grid-row:1}#game.rot .sheet .coord{grid-column:1;grid-row:2;margin:6px 0}#game.rot .sheet .chips{grid-column:1;grid-row:3;min-width:0;min-height:34px}#game.rot .sheet .sh-acts{grid-column:1;grid-row:4;align-self:end}
+#game.rot .sheet .picks{grid-column:2;grid-row:1/5;align-self:start;margin:0 0 6px}#game.rot .sheet .plist{grid-column:2;grid-row:2/5;min-height:0;overflow-y:auto;grid-template-columns:repeat(4,1fr)}
+#game.rot .sheet:not(:has(.picks)) .plist{grid-row:1/5}
+#game.rot .pc canvas{aspect-ratio:2/1}#game.rot .sh-top .sit{font-size:20px}#game.rot .coord p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:13px}
+#game.rot .campnl{width:330px}

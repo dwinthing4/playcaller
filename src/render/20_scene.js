@@ -332,7 +332,7 @@ function drawOverlay(play, side) {
 }
 // ---------------- public API ----------------
 const camPos = new THREE.Vector3(0, 6, 10), camLook = new THREE.Vector3(0, 1, 20), _ax = new THREE.Vector3(), _z1 = new THREE.Vector3(0, 0, 1), _q = new THREE.Quaternion(); let shake = 0, lastField = '', estT = 0;
-const CAM0 = { view: 'behind', height: 0.32, zoom: 0.6, flipD: false }, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), AIMN = 26, AIMR = 49; let fitK = 1, aimDots = null, aimRing = null, aimRingMat = null, aimRange = null;
+const CAM0 = { view: 'behind', height: 0.32, zoom: 0.6, flipD: false }, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), AIMN = 26, AIMR = 49; let fitK = 1, fitCam = null, fitV = null, aimDots = null, aimRing = null, aimRingMat = null, aimRange = null, kaTri = null, kaE1 = null, kaE2 = null, kaNeedle = null;
 const R = {
   init(canvas) {
     coarse = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 700;
@@ -439,32 +439,44 @@ const R = {
     else if (b.state === 'loose' || !J) { lx = b.p.x; lz = b.p.z; }
     else { lx = J.pelvis.x; lz = J.pelvis.z; }
     const wide = pocket || b.state === 'air' || play.phase === 'pre';
-    const dist = 46 * Math.pow(7 / 46, clamp01(S.zoom)) * (wide ? 1.12 : 0.88) * (portrait ? 1.12 : 1) * fitK * (opts.zoom || 1);
-    const pitch = (10 + 72 * clamp01(S.height)) * Math.PI / 180, hd = dist * Math.cos(pitch), up = dist * Math.sin(pitch);
+    const pitch = (10 + 72 * clamp01(S.height)) * Math.PI / 180;
     // frame by anchoring a player at a fixed spot on screen, whatever the height and zoom: fy = how far down the screen (behind view), fx = how far across (sideline view)
-    const fov = portrait ? 60 : 50, tv = Math.tan(fov * Math.PI / 360), th = tv * (W / H);
-    const atY = (z, fy) => z + dirZ * (hd - up / Math.tan(Math.max(0.035, Math.min(1.55, pitch + Math.atan((fy - 0.5) * 2 * tv))))), atX = (z, fx) => z + (0.5 - fx) * 2 * dist * th;
-    const anchor = (z, fy, fx) => (side ? atX(z, fx) : atY(z, fy));
-    if (play.phase === 'pre') { lx = play.ballX * 0.6; const L0 = dirZ > 0 ? play.O : play.D, deep = L0.length ? (dirZ > 0 ? Math.min(...L0.map(p => p.p.z)) : Math.max(...L0.map(p => p.p.z))) : play.losZ - 4 * dirZ; lz = side ? atX(play.losZ, 0.45) : atY(deep, onD ? 0.88 : 0.84); }
-    else if (pocket) { lx *= 0.55; lz = anchor(c.p.z, onD ? 0.8 : 0.76, 0.3); }
-    else if (c && b.state === 'held') { lx += c.vel.x * 0.3; const fw = c.unit === 'O' ? 1 : -1; lz = anchor(c.p.z + c.vel.z * 0.25, fw * dirZ > 0 ? 0.64 : 0.4, fw > 0 ? 0.38 : 0.62); }
-    // keep the player you control on screen (defense): lean the view toward him
-    const f = opts.focus; if (f && f.p) { const w = play.phase === 'pre' ? 0.2 : 0.35; lx = lerp3(lx, f.p.x, w); lz = lerp3(lz, f.p.z, w); }
-    lx = Math.max(-FIELD.halfW - 2, Math.min(FIELD.halfW + 2, lx));
-    const want = side ? new THREE.Vector3(lx * 0.55 - hd, 0.6 + up, lz) : new THREE.Vector3(lx * 0.85, 0.6 + up, lz - hd * dirZ);
-    const look = new THREE.Vector3(lx, 0.6, lz);
-    if (!isFinite(want.x + want.y + want.z + look.x + look.z)) return;          // never let a bad frame poison the camera
+    const fov = portrait ? 64 : 50, tv = Math.tan(fov * Math.PI / 360), th = tv * (W / H);
+    const baseD = 62 * Math.pow(7 / 62, clamp01(S.zoom)) * (wide ? 1.12 : 0.88) * (portrait ? 1.12 : 1) * (opts.zoom || 1);
+    const f = opts.focus, lx0 = lx, lz0 = lz;
+    // the camera for a given zoom-out factor fk (auto-fit raises fk until everyone who matters is on screen)
+    const place = fk => {
+      const dist = baseD * fk, hd = dist * Math.cos(pitch), up = dist * Math.sin(pitch); let lx = lx0, lz = lz0;
+      const atY = (z, fy) => z + dirZ * (hd - up / Math.tan(Math.max(0.035, Math.min(1.55, pitch + Math.atan((fy - 0.5) * 2 * tv))))), atX = (z, fx) => z + (0.5 - fx) * 2 * dist * th;
+      const anchor = (z, fy, fx) => (side ? atX(z, fx) : atY(z, fy));
+      if (play.ret && play.phase === 'pre') { lx = play.ret.kickX * 0.5; lz = anchor(play.ret.kickZ, 0.3, 0.7); }
+      else if (play.ret && b.state === 'air' && b.land) { lx = b.land.x * 0.7; lz = anchor(b.land.z, 0.64, 0.32); }
+      else if (play.phase === 'pre') { lx = play.ballX * 0.6; const L0 = dirZ > 0 ? play.O : play.D, deep = L0.length ? (dirZ > 0 ? Math.min(...L0.map(p => p.p.z)) : Math.max(...L0.map(p => p.p.z))) : play.losZ - 4 * dirZ; lz = side ? atX(play.losZ, 0.45) : atY(deep, onD ? 0.88 : 0.84); }
+      else if (pocket) { lx *= 0.55; lz = anchor(c.p.z, onD ? 0.8 : 0.76, 0.3); }
+      else if (c && b.state === 'held') { lx += c.vel.x * 0.3; const fw = c.unit === 'O' ? 1 : -1; lz = anchor(c.p.z + c.vel.z * 0.25, fw * dirZ > 0 ? 0.64 : 0.4, fw > 0 ? 0.38 : 0.62); }
+      // keep the player you control on screen (defense): lean the view toward him
+      if (f && f.p) { const w = play.phase === 'pre' ? 0.2 : 0.35; lx = lerp3(lx, f.p.x, w); lz = lerp3(lz, f.p.z, w); }
+      lx = Math.max(-FIELD.halfW - 2, Math.min(FIELD.halfW + 2, lx));
+      return { want: side ? new THREE.Vector3(lx * 0.55 - hd, 0.6 + up, lz) : new THREE.Vector3(lx * 0.85, 0.6 + up, lz - hd * dirZ), look: new THREE.Vector3(lx, 0.6, lz) };
+    };
+    // auto-fit: before the snap and while the QB holds it, every receiver stays on screen (even the one split out wide); on defense, the man you control does too
+    const pts = []; if (S.fit !== false && !play.ret && (play.phase === 'pre' || pocket) && play.O) for (const p of play.O) if (!p.ol && p.p) pts.push([p.p.x, 1, p.p.z, 0.03, 0.97, 0.1, 0.92]);
+    if (f && f.p) pts.push([f.p.x, 1, f.p.z, 0.08, 0.8, 0.14, 0.8]);
+    let need = 1;
+    if (pts.length) {
+      fitCam = fitCam || new THREE.PerspectiveCamera(); fitV = fitV || new THREE.Vector3();
+      const fits = fk => { const P = place(fk); fitCam.fov = fov; fitCam.aspect = W / H; fitCam.near = camera.near; fitCam.far = camera.far; fitCam.position.copy(P.want); fitCam.lookAt(P.look); fitCam.updateProjectionMatrix(); fitCam.updateMatrixWorld();
+        for (const q of pts) { fitV.set(q[0], q[1], q[2]).project(fitCam); const sx = fitV.x * 0.5 + 0.5, sy = -fitV.y * 0.5 + 0.5; if (fitV.z > 1 || sx < q[3] || sx > q[4] || sy < q[5] || sy > q[6]) return false; } return true; };
+      if (!fits(1)) { let lo = 1, hi = portrait ? 3.4 : 2.6; if (fits(hi)) { for (let i = 0; i < 7; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; } } need = hi; }
+    }
     const snap = opts.snapCam || R3D.snapNext || !isFinite(camPos.x + camPos.y + camPos.z + camLook.x + camLook.z); R3D.snapNext = false;
+    fitK = snap ? need : need > fitK ? fitK + (need - fitK) * (1 - Math.exp(-dt * 3.5)) : Math.max(need, fitK - dt * 0.35);
+    const { want, look } = place(fitK);
+    if (!isFinite(want.x + want.y + want.z + look.x + look.z)) return;          // never let a bad frame poison the camera
     const k = snap ? 1 : 1 - Math.exp(-dt * 4.5);
     camPos.lerp(want, k); camLook.lerp(look, snap ? 1 : 1 - Math.exp(-dt * 6));
     camera.position.copy(camPos); camera.lookAt(camLook);
     camera.fov = fov; camera.updateProjectionMatrix();
-    // auto-fit: if your player is drifting off screen (or under the buttons), widen out a little; come back in when there is room
-    if (opts.snapCam) fitK = 1;
-    if (f && f.p) { const v = new THREE.Vector3(f.p.x, 1, f.p.z).project(camera), sx = v.x * 0.5 + 0.5, sy = -v.y * 0.5 + 0.5;
-      const out = v.z > 1 || sx < 0.08 || sx > 0.8 || sy < 0.14 || sy > 0.8, inner = sx > 0.2 && sx < 0.68 && sy > 0.26 && sy < 0.68;
-      fitK = out ? Math.min(1.8, fitK + dt * 0.9) : inner ? Math.max(1, fitK - dt * 0.25) : fitK; }
-    else fitK = Math.max(1, fitK - dt * 0.4);
     if (R3D.camOverride) { const d = R3D.camOverride; camera.position.set(...d.pos); camera.lookAt(...d.look); camera.fov = d.fov || 40; camera.updateProjectionMatrix(); return; }   // QA close-ups
     if (shake > 0.002) { camera.position.x += (Math.random() - 0.5) * shake * 0.35; camera.position.y += (Math.random() - 0.5) * shake * 0.25; shake *= Math.exp(-dt * 7); }
   },
@@ -482,6 +494,20 @@ const R = {
     if (aimRange && a.max && a.q) { const R = aimRange.geometry.attributes.position.array, c0 = Math.atan2(a.L.x - a.q.x, a.L.z - a.q.z);
       for (let i = 0; i < AIMR; i++) { const th = c0 + (i / (AIMR - 1) - 0.5) * 1.6; R[i * 3] = a.q.x + Math.sin(th) * a.max; R[i * 3 + 1] = 0.05; R[i * 3 + 2] = a.q.z + Math.cos(th) * a.max; }
       aimRange.geometry.attributes.position.needsUpdate = true; aimRange.visible = true; aimRange.material.color.set(a.capped ? 0xff9a3c : 0xffffff); aimRange.material.opacity = a.capped ? 0.85 : 0.4; }
+  },
+  // field goal aim: the make-zone triangle on the grass from the ball to the two uprights (long and thin from far out) and the sweeping needle
+  kickAim(a) {
+    if (!a) { if (kaTri) kaTri.visible = kaE1.visible = kaE2.visible = kaNeedle.visible = false; return; }
+    if (!kaTri) {
+      const mk = (col, op, ro) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3)); g.setIndex([0, 1, 2, 2, 1, 3]); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthTest: false, depthWrite: false, side: THREE.DoubleSide })); m.frustumCulled = false; m.renderOrder = ro; scene.add(m); return m; };
+      kaTri = mk(0x3ecf8e, 0.3, 17); kaE1 = mk(0x7dffb5, 0.9, 18); kaE2 = mk(0x7dffb5, 0.9, 18); kaNeedle = mk(0xffffff, 0.95, 19);
+    }
+    const y = 0.06, quad = (m, x0, z0, x1, z1, w0, w1) => { const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L, P = m.geometry.attributes.position.array;
+      P.set([x0 + nx * w0, y, z0 + nz * w0, x0 - nx * w0, y, z0 - nz * w0, x1 + nx * w1, y, z1 + nz * w1, x1 - nx * w1, y, z1 - nz * w1]); m.geometry.attributes.position.needsUpdate = true; m.geometry.computeBoundingSphere(); m.visible = true; };
+    { const P = kaTri.geometry.attributes.position.array; P.set([a.ax, y, a.az, a.ax, y, a.az, -a.px, y, a.pz, a.px, y, a.pz]); kaTri.geometry.attributes.position.needsUpdate = true; kaTri.geometry.computeBoundingSphere(); kaTri.visible = true; }
+    quad(kaE1, a.ax, a.az, -a.px, a.pz, 0.05, 0.12); quad(kaE2, a.ax, a.az, a.px, a.pz, 0.05, 0.12);
+    const L = (a.pz + 10 - a.az) / Math.max(0.2, Math.cos(a.theta)); quad(kaNeedle, a.ax, a.az, a.ax + Math.sin(a.theta) * L, a.az + Math.cos(a.theta) * L, 0.04, 0.22);
+    kaNeedle.material.color.set(a.inside ? 0xffe066 : 0xffffff); kaTri.material.opacity = a.inside ? 0.42 : 0.26;
   },
   // camera forward/right on the ground plane (for screen-relative stick input)
   basis() { const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, 1); f.normalize(); return { fx: f.x, fz: f.z, rx: -f.z, rz: f.x }; },

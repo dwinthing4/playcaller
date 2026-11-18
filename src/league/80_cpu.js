@@ -74,6 +74,17 @@ function cpuCall(tid, side, ctx) {
   const man = R() < st.man; c2 = c.filter(p => !!MAN_COVERAGES[p.cov] === man); if (c2.length) c = c2;
   if (ps === 'adaptive' && ctx.oppTid === L.user) { const t = tend(); const pr = (t.pass + 1) / (t.run + t.pass + 2); const third = down === 3 ? (t.third.pass + 1) / (t.third.run + t.third.pass + 2) : pr;
     if (third > 0.68 && R() < 0.5) { const z = c.filter(p => ['c2', 'c4', 'c2t', 'c3'].includes(p.cov)); if (z.length) c = z; } else if (pr < 0.4 && R() < 0.5) { const z = c.filter(p => p.form === '4-3' || p.form === '3-4'); if (z.length) c = z; } }
+  // in-game film: whatever has been beating them from this formation, every coordinator adjusts to it (most of the time, so he is not predictable either)
+  const fl = ctx.film || []; if (fl.length) {
+    const w = { run: 0, deep: 0, short: 0 }; for (const e of fl) w[e.type === 'run' ? 'run' : e.deep ? 'deep' : 'short'] += e.w;
+    const tot = w.run + w.deep + w.short, top = Object.keys(w).sort((a, b) => w[b] - w[a])[0], share = tot ? w[top] / tot : 0, adj = clamp(0.35 + tot / 60, 0.35, 0.85) * (share > 0.45 ? 1 : 0.6);
+    if (R() < adj) {
+      const fits = top === 'run' ? (p => (p.form === '4-3' || p.form === '3-4' || p.form === 'Goal Line D') && (p.blitz.length > 0 || ['c1', 'c3', 'c0'].includes(p.cov)))
+        : top === 'deep' ? (p => ['c2', 'c4', 'c2t', 'c2m', 'c6'].includes(p.cov) && p.blitz.length <= 1)
+        : (p => !!MAN_COVERAGES[p.cov] || p.blitz.length > 0 || p.cov === 'c3');
+      const pool2 = pool.filter(p => p.form !== 'Goal Line D' || yl >= 96).filter(fits); if (pool2.length) return pick(pool2).id;
+    }
+  }
   return pick(c).id;
 }
 function fgProb(T, yl) { const k = L.P[depthPick(T, 'K', 0, new Set())]; if (!k) return { p: 0.3, d: 100 - yl + 17 }; const d = 100 - yl + 17; const rng = 40 + k.a.kpw * 0.2; if (d > rng + 3) return { p: 0.02, d }; let p = 0.99 - Math.max(0, d - 22) * 0.011 * (1 + (80 - k.a.kac) / 60); if (d > rng) p *= 0.4; return { p: clamp(p, 0.02, 0.995), d }; }
