@@ -279,15 +279,16 @@ function atmoOf(T, v) {
 // The stands, as four walls round the field (x-/x+/z-/z+ positions and rim heights), shade the sun for every lit surface: the grass,
 // the crowd, the players, the ball. It is worked out per pixel in the light loop, so a late-afternoon shadow line lies across the
 // field and a player who runs into it goes dark too. The uniforms are plain objects shared by reference with every lit material.
-const VSH = { a: { x: -200, y: 200, z: -200, w: 300 }, b: { x: 0, y: 0, z: 0, w: 0 }, c: { x: 0, y: 1, z: 0, w: 0 } };
+const VSH = { a: { x: -200, y: 200, z: -200, w: 300 }, b: { x: 0, y: 0, z: 0, w: 0 }, c: { x: 0, y: 1, z: 0, w: 0 }, d: { x: -999, y: 999, z: 999, w: 0 } };   // d: how far the side stands run (z) and the end stands reach (|x|)
 function patchShaders() {
   const C = THREE.ShaderChunk; if (C.__venue) return; C.__venue = true;
-  for (const k of ['standard', 'physical']) Object.assign(THREE.ShaderLib[k].uniforms, { venA: { value: VSH.a }, venB: { value: VSH.b }, venC: { value: VSH.c } });
+  for (const k of ['standard', 'physical']) Object.assign(THREE.ShaderLib[k].uniforms, { venA: { value: VSH.a }, venB: { value: VSH.b }, venC: { value: VSH.c }, venD: { value: VSH.d } });
   C.lights_physical_pars_fragment += `
 #define VENUE_SHADOW
 uniform vec4 venA;
 uniform vec4 venB;
 uniform vec4 venC;
+uniform vec4 venD;
 float venueShadow( vec3 pv ) {
   if ( venC.w <= 0.0 ) return 1.0;
   vec3 q = pv - viewMatrix[ 3 ].xyz;
@@ -297,7 +298,9 @@ float venueShadow( vec3 pv ) {
   float tz = l.z > 0.001 ? ( venA.w - p.z ) / l.z : ( l.z < -0.001 ? ( venA.z - p.z ) / l.z : 1e6 );
   float t = min( tx, tz );
   if ( t <= 0.0 ) return 1.0;
-  float h = tx < tz ? ( l.x > 0.0 ? venB.y : venB.x ) : ( l.z > 0.0 ? venB.w : venB.z );
+  float h;
+  if ( tx < tz ) { float za = p.z + tx * l.z; h = za < venD.x || za > venD.y ? -9.0 : ( l.x > 0.0 ? venB.y : venB.x ); }
+  else { float xa = p.x + tz * l.x; h = abs( xa ) > venD.z ? -9.0 : ( l.z > 0.0 ? venB.w : venB.z ); }
   float s = 0.5 + 0.018 * t;
   return mix( 1.0, smoothstep( h - s, h + s, p.y + t * l.y ), venC.w );
 }
@@ -308,16 +311,16 @@ float venueShadow( vec3 pv ) {
 const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 function venueShadowAt(x, y, z) {     // the same test in JS (choosing the sun)
   const A = VSH.a, B = VSH.b, l = VSH.c, tx = l.x > 0.001 ? (A.y - x) / l.x : l.x < -0.001 ? (A.x - x) / l.x : 1e6, tz = l.z > 0.001 ? (A.w - z) / l.z : l.z < -0.001 ? (A.z - z) / l.z : 1e6, t = Math.min(tx, tz);
-  if (t <= 0) return 1; const h = tx < tz ? (l.x > 0 ? B.y : B.x) : (l.z > 0 ? B.w : B.z), s = 0.5 + 0.018 * t; return sstep(h - s, h + s, y + t * l.y);
+  if (t <= 0) return 1; const D = VSH.d, za = z + tx * l.z, xa = x + tz * l.x, h = tx < tz ? (za < D.x || za > D.y ? -9 : l.x > 0 ? B.y : B.x) : (Math.abs(xa) > D.z ? -9 : l.z > 0 ? B.w : B.z), s = 0.5 + 0.018 * t; return sstep(h - s, h + s, y + t * l.y);
 }
 const colX = v => (v.track ? 48.3 : XS);
 function venueBox(v) {
   const S = v.stadium;
-  if (S === 'bowl') return [-(XS + 14), XS + 14, ZA - 38, ZB + 38, 37, 37, 30.5, 30.5];
-  if (S === 'horseshoe') { const o1 = v.open === 'z1'; return [-(XS + 33), XS + 33, ZA - 33, ZB + 33, 26, 26, o1 ? 26 : 0, o1 ? 0 : 26]; }
-  if (S === 'retro') return [-(XS + 8), XS + 8, ZA - 22, ZB + 22, 30.5, 30.5, 12, 12];
-  if (S === 'college') { const xb = colX(v); return [-(xb + 18), xb + 12, ZA - 80, ZB + 80, 14.5, 6.5, 0, 0]; }
-  return [-300, 300, -300, 400, 0, 0, 0, 0];
+  if (S === 'bowl') return [-(XS + 14), XS + 14, ZA - 38, ZB + 38, 37, 37, 30.5, 30.5, ZA - 14, ZB + 14, 60];
+  if (S === 'horseshoe') { const o1 = v.open === 'z1'; return [-(XS + 33), XS + 33, ZA - 33, ZB + 33, 26, 26, o1 ? 26 : 0, o1 ? 0 : 26, o1 ? ZA - 33 : ZA + 5, o1 ? ZB - 5 : ZB + 33, 70]; }
+  if (S === 'retro') return [-(XS + 8), XS + 8, ZA - 22, ZB + 22, 30.5, 30.5, 12, 12, ZA + 4, ZB - 4, XS - 6];
+  if (S === 'college') { const xb = colX(v); return [-(xb + 18), xb + 12, ZA - 80, ZB + 80, 14.5, 6.5, 0, 0, CZ - 50, CZ + 50, 0]; }
+  return [-300, 300, -300, 400, 0, 0, 0, 0, -999, 999, 999];
 }
 // pick the sun: a direction in the preset's elevation band whose stand shadow covers about the share of the field this game wants
 function pickSun(at, P) {
@@ -433,7 +436,7 @@ function fieldTexture(home, view) {
     if (v.logo === 'ring') { p.lineWidth = 7 * s; p.strokeStyle = ink; p.beginPath(); p.arc(0, 0, sz * 0.72, 0, 7); p.stroke(); }
     p.globalAlpha = turf ? 0.96 : 0.84; p.drawImage(lc, -sz / 2, -sz / 2, sz, sz); p.restore(); } catch (e) { } }
   // 3) grass shows through the paint: blades knock tiny holes in it, and heavy traffic wears it thin between the hashes
-  if (!turf) { p.save(); p.globalCompositeOperation = 'destination-out'; p.globalAlpha = 0.5; p.fillStyle = p.createPattern(speckle(), 'repeat'); p.fillRect(0, 0, Wt, Ht); p.globalAlpha = 1;
+  if (!turf) { p.save(); p.globalCompositeOperation = 'destination-out'; p.globalAlpha = 0.38; p.fillStyle = p.createPattern(speckle(), 'repeat'); p.fillRect(0, 0, Wt, Ht); p.globalAlpha = 1;
     for (let i = 0; i < 70 * wear; i++) { const yd = 2 + r() * 96, x = Wt / 2 + (r() - 0.5) * hashW * 1.5, y = ydY(yd), rad = (12 + r() * 34) * s, gr = p.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(0,0,0,${(0.35 * Math.min(1, wear)).toFixed(2)})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); p.fillStyle = gr; p.fillRect(x - rad, y - rad, 2 * rad, 2 * rad); }
     p.restore(); }
   g.save(); if (!turf) g.filter = 'blur(0.55px)'; g.drawImage(pc, 0, 0); g.restore();
@@ -510,7 +513,7 @@ function cloudTex(at, P, seed) {
   const puff = (px, py, pr, a, lit) => { for (const ox of [0, -Wc, Wc]) { if (px + ox < -pr || px + ox > Wc + pr) continue; const gr = x.createRadialGradient(px + ox, py - pr * 0.3, 0, px + ox, py, pr); const L1 = Math.round(255 * lit), L2 = Math.round(255 * lit * 0.55);
     gr.addColorStop(0, `rgba(${L1},0,0,${a})`); gr.addColorStop(0.6, `rgba(${L2},0,0,${a * 0.55})`); gr.addColorStop(1, `rgba(${L2},0,0,0)`); x.fillStyle = gr; x.fillRect(px + ox - pr, py - pr, 2 * pr, 2 * pr); } };
   if (over) { x.fillStyle = 'rgba(140,0,0,0.9)'; x.fillRect(0, 0, Wc, Hc);              // a lid of stratus: darker rolls and paler breaks, flattened toward the horizon
-    for (let i = 0; i < 520; i++) { const el = Math.pow(r(), 0.85), y = Hc * (1 - el * 0.97), w = (0.02 + r() * 0.07) * Wc * (0.35 + el), dk = r() < 0.6; x.save(); x.translate(0, y); x.scale(1, 0.22 + 0.5 * el); puff(r() * Wc, 0, w, dk ? 0.45 : 0.32, dk ? 0.12 + r() * 0.2 : 0.8 + r() * 0.2); x.restore(); } }
+    for (let i = 0; i < 520; i++) { const el = Math.pow(r(), 0.85), y = Hc * (1 - el * 0.97), w = (0.02 + r() * 0.07) * Wc * (0.35 + el), dk = r() < 0.6; x.save(); x.translate(0, y); x.scale(1, 0.22 + 0.5 * el); puff(r() * Wc, 0, w, dk ? 0.6 : 0.4, dk ? 0.05 + r() * 0.18 : 0.85 + r() * 0.15); x.restore(); } }
   else if (at.tod === 'night') { for (let i = 0; i < 700; i++) { const el = 0.12 + r() * 0.88, sx = r() * Wc, sy = Hc * (1 - el), a = 0.25 + r() * 0.75; x.fillStyle = `rgba(255,0,0,${a.toFixed(2)})`; x.fillRect(sx, sy, r() < 0.1 ? 2 : 1, r() < 0.1 ? 2 : 1); }
     for (let i = 0; i < 18; i++) { const el = Math.pow(r(), 2) * 0.3, cx = r() * Wc, y = Hc * (1 - el); for (let k = 0; k < 10; k++) puff(cx + (r() - 0.5) * 220, y - r() * 20, (20 + r() * 50) * (Wc / 2048), 0.5, 0.15); } }
   else { const n = Math.round(70 * P.clouds * (0.5 + r()));
@@ -758,6 +761,16 @@ function paintBoard(force) {
 //  dome      - roofed: three tiers under a ribbed roof, a centre-hung board, rings of lights, artificial turf
 //  college   - metal bleachers (often round a running track), a press box, light poles, trees, an old-style scoreboard
 //  retro     - concrete grandstands with an upper deck on columns under a flat roof, open corners, lattice light towers
+// Cutaway: when the camera has backed out beyond the stand fronts (low behind its own goal line, or the sideline view zoomed out), the
+// stand between it and the field would fill the screen. Stadium materials drop every fragment nearer the camera than it is outside.
+const CUT = { value: 0 };
+function cutaway(m) {
+  m.onBeforeCompile = sh => { sh.uniforms.uCut = CUT;
+    sh.vertexShader = 'varying float vCutD;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tvCutD = -mvPosition.z;');
+    sh.fragmentShader = 'uniform float uCut;\nvarying float vCutD;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n\tif ( vCutD < uCut ) discard;'); };
+  m.customProgramCacheKey = () => 'cutaway'; return m;
+}
+function updateCut() { const c = camera.position, xs = VEN && VEN.v.stadium === 'college' ? colX(VEN.v) : XS, d = Math.hypot(Math.max(0, Math.abs(c.x) - xs), Math.max(0, ZA - c.z, c.z - ZB)); CUT.value = d > 0 ? d + 8 : 0; }
 function disposeTree(o) { const seen = new Set(); o.traverse(n => { if (n.geometry && !seen.has(n.geometry)) { seen.add(n.geometry); n.geometry.dispose(); } const ms = n.material ? (Array.isArray(n.material) ? n.material : [n.material]) : []; for (const m of ms) { if (seen.has(m)) continue; seen.add(m); for (const k of ['map', 'emissiveMap']) if (m[k] && !seen.has(m[k])) { seen.add(m[k]); m[k].dispose(); } m.dispose(); } }); }
 function buildStadium(home, away) {
   const v = VEN.v, at = VEN.at, P = VEN.P, r = rngOf(v.seed), S = v.stadium, grp = new THREE.Group(); grp.name = 'stadium'; FW.sprops.length = 0;
@@ -766,7 +779,8 @@ function buildStadium(home, away) {
   const glows = [], T = { conc: lin3('#b7b4ac'), dark: lin3('#4a4d52'), roof: lin3('#2b2e34'), facade: lin3('#8e8b85'), steel: lin3(S === 'retro' ? '#6c7770' : '#9aa1a8'), team: lin3(c1), team2: lin3(c2), black: lin3('#1d1f23'), red: lin3('#d2361f') };
   const kindB = { pad: B.pad, conc: B.st, dark: B.st, roof: B.st, facade: B.st, steel: B.st, team: B.st, seat: B.seat, seat2: B.seat2, bleach: B.seat, bleach2: B.seat2, rib: B.rib, suite: B.suite };
   const roofed = S === 'bowl' || S === 'dome' || S === 'retro', tile = { seat: [16.6, 13.6], seat2: [16.6, 13.6], bleach: [16.6, 13.6], bleach2: [16.6, 13.6], rib: [150, 'fit'], pad: [44, 'fit'], suite: [26, 'fit'], conc: [8, 8], dark: [8, 8], roof: [12, 12], facade: [8, 8], steel: [8, 8], team: [8, 8] };
-  const tint = (kind, e) => kind.startsWith('seat') || kind.startsWith('bleach') ? (roofed && kind === 'seat2' ? [1 - 0.35 * e, 1 - 0.35 * e, 1 - 0.33 * e] : [1 - 0.12 * e, 1 - 0.12 * e, 1 - 0.12 * e]) : (T[kind] || WHITE3);
+  const spill = at.tod === 'night' ? 0.68 : at.tod === 'dome' ? 0.85 : 1;   // under lights the stands only get the spill
+  const tint = (kind, e) => { if (!(kind.startsWith('seat') || kind.startsWith('bleach'))) return T[kind] || WHITE3; const k = spill * (roofed && kind === 'seat2' ? 1 - 0.35 * e : 1 - 0.12 * e) * (night ? 1 - 0.25 * e : 1); return [k, k, k * 1.01]; };
   const stand = (path, prof) => sweep(path, prof, k => kindB[k], tile, tint);
   const caps = (path, prof) => { const a = path[0], b = path[1], z = path[path.length - 1], y = path[path.length - 2], ta = Math.hypot(b.x - a.x, b.z - a.z) || 1, tz = Math.hypot(z.x - y.x, z.z - y.z) || 1;
     capEnd(B.st, a, -(b.x - a.x) / ta, -(b.z - a.z) / ta, prof, T.conc); capEnd(B.st, z, (z.x - y.x) / tz, (z.z - y.z) / tz, prof, T.conc); };
@@ -851,7 +865,7 @@ function buildStadium(home, away) {
   // ---- materials, meshes ----
   const concT = concreteTex(r), seatOpt = { tread: S === 'college' ? '#5d6166' : '#34373c', dens: S === 'college' ? 0.72 : S === 'retro' ? 0.86 : 0.94, bleach: S === 'college', away: S === 'college' ? 3 : 7 };
   const seatT = crowdTex(v, home, away, seatOpt, v.seed + 11), seatT2 = crowdTex(v, home, away, Object.assign({}, seatOpt, { dens: seatOpt.dens - 0.05 }), v.seed + 12);
-  const add = (b, m, name, sh) => { const ms = b.mesh(m, name); if (ms) { ms.receiveShadow = !!sh; grp.add(ms); } return ms; };
+  const add = (b, m, name, sh) => { if (name !== 'trees' && name !== 'posts') cutaway(m); const ms = b.mesh(m, name); if (ms) { ms.receiveShadow = !!sh; grp.add(ms); } return ms; };
   add(B.st, new THREE.MeshStandardMaterial({ map: concT, vertexColors: true, roughness: 0.92, side: THREE.DoubleSide }), 'structure');
   add(B.seat, new THREE.MeshStandardMaterial({ map: seatT, vertexColors: true, roughness: 1, side: THREE.DoubleSide }), 'crowd');
   add(B.seat2, new THREE.MeshStandardMaterial({ map: seatT2, vertexColors: true, roughness: 1, side: THREE.DoubleSide }), 'crowd2');
@@ -938,7 +952,7 @@ function useVenue(home) {   // the look of this home team's ground today (cheap;
   const v = venueOf(home), at = atmoOf(home, v), sig = v.sig + '|' + at.tod + '|' + at.weather + '|' + at.wk;
   if (VEN && VEN.sig === sig && VEN.tid === home.id) return VEN;
   const prevAway = VEN ? VEN.away : null; VEN = { tid: home.id, v, at, sig, P: TOD[at.tod] || TOD.night, away: prevAway, box: venueBox(v) };
-  const bx = VEN.box; Object.assign(VSH.a, { x: bx[0], y: bx[1], z: bx[2], w: bx[3] }); Object.assign(VSH.b, { x: bx[4], y: bx[5], z: bx[6], w: bx[7] });
+  const bx = VEN.box; Object.assign(VSH.a, { x: bx[0], y: bx[1], z: bx[2], w: bx[3] }); Object.assign(VSH.d, { x: bx[8], y: bx[9], z: bx[10] }); Object.assign(VSH.b, { x: bx[4], y: bx[5], z: bx[6], w: bx[7] });
   sunDir.copy(pickSun(at, VEN.P)); applyAtmo(); applyGround(home); lastField = '';
   return VEN;
 }
@@ -1112,7 +1126,7 @@ const R = {
     stepParticles(dt); stepWeather(dt);
     sun.target.position.copy(camLook); sun.position.copy(camLook).addScaledVector(sunDir, 80); sun.target.updateMatrixWorld();   // the shadow box follows the play
     if (board && (boardT += dt) > 0.5) { boardT = 0; paintBoard(false); }
-    if (skyMesh) skyMesh.position.copy(camera.position);
+    if (skyMesh) skyMesh.position.copy(camera.position); updateCut();
     renderer.render(scene, camera);
   },
   // the user's camera: view ('behind' the offense or 'side'line), height 0..1 (camera pitch), zoom 0..1 (distance), flipD (sit behind your defense when defending)

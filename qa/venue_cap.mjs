@@ -31,6 +31,9 @@ await cam([0, 9, -38], [0, 2, 20], 55); await still('stadium_end');
 await cam([30, 14, 46], [-20, 8, 46], 60, true); await still('sideline_far');
 await cam([2, 1.7, -7], [0, 1.0, 2], 40); await still('ground_close');
 await page.evaluate(() => { R3D.camOverride = null; MATCH._G.paused = false; }); await page.waitForTimeout(2600); await shot('live');
+// the game's own camera at its extremes (it can back out beyond the stands: they must cut away, not fill the screen)
+await page.evaluate(() => { Object.assign(R3D.cam, { view: 'side', zoom: 0.02, height: 0.12 }); R3D.snapNext = true; }); await page.waitForTimeout(1500); await shot('cam_side_far');
+await page.evaluate(() => { Object.assign(R3D.cam, { view: 'behind', zoom: 0, height: 0 }); R3D.snapNext = true; }); await page.waitForTimeout(1500); await shot('cam_behind_low_far');
 const st = await page.evaluate(() => R3D.stats());
 console.log(JSON.stringify({ info, venue: v, stats: st }));
 console.log(errs.length ? 'ERRORS\n' + errs.join('\n') : 'no console errors', out); await browser.close();
