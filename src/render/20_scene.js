@@ -979,10 +979,10 @@ function applyGround(home) {
   fieldMat.roughness = at.weather === 'rain' ? 0.56 : turf ? 0.8 : 0.95; fieldMat.envMapIntensity = at.weather === 'rain' ? 1.15 : turf ? 0.35 : 0.5;
   if (apronMat.map) apronMat.map.dispose(); apronMat.map = apronTex(v, rngOf(v.seed + 3), at.weather === 'snow'); apronMat.needsUpdate = true; apronMat.roughness = fieldMat.roughness;
   const bc = v.border === 'color' ? shadeC(home.c1 || '#1d3478', -0.1) : '#e9e9e0'; borderMat.color.copy(col(bc)); for (const m of FW.sides.concat(FW.ends)) m.visible = v.border !== 'line';
-  if (sideMat) { if (sideMat.map) sideMat.map.dispose(); sideMat.map = bandTex(home, v, -1); sideMat.needsUpdate = true; }
+  if (sideMat) { if (sideMat.map) sideMat.map.dispose(); sideMat.map = bandTex(home, v, -1); sideMat.color.setScalar(0.9); sideMat.needsUpdate = true; }
   const pc = pGeo && pGeo.attributes.color; if (pc) { const a = col(turf ? '#1b1b1c' : '#4d3d29'), b = col(turf ? '#3d6a3c' : '#4a6a32'); for (let i = 0; i < PN; i++) { const c = i % 3 ? a : b; pc.setXYZ(i, c.r, c.g, c.b); } pc.needsUpdate = true; }
 }
-function setAwayBand(away) { if (!VEN || !away || VEN.away === away.id) return; VEN.away = away.id; if (bandMat2.map) bandMat2.map.dispose(); bandMat2.map = bandTex(away, VEN.v, 1); bandMat2.needsUpdate = true; }
+function setAwayBand(away) { if (!VEN || !away || VEN.away === away.id) return; VEN.away = away.id; if (bandMat2.map) bandMat2.map.dispose(); bandMat2.map = bandTex(away, VEN.v, 1); bandMat2.color.setScalar(0.9); bandMat2.needsUpdate = true; }
 function buildVenue(home) {
   useVenue(home); const G0 = typeof MATCH !== 'undefined' && MATCH._G, away = G0 && G0.A && G0.A.id !== home.id ? G0.A : null;
   const old = scene.getObjectByName('stadium'); if (old) { scene.remove(old); disposeTree(old); } board = null;
