@@ -2,7 +2,7 @@
 // run: node tools/build.mjs && node qa/vis3_cap.mjs [desk|phone] [tag]   (screenshots in qa/shots/vis3/<tag>_<size>)
 import { chromium } from 'playwright-core';
 import fs from 'fs'; import path from 'path'; import os from 'os';
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^/([A-Za-z]:)/, '$1')), '..').replace(/\/g, '/'), which = process.argv[2] || 'desk', tag = process.argv[3] || 'now', team = +(process.argv[4] || 7);
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..').replace(/\\/g, '/'), which = process.argv[2] || 'desk', tag = process.argv[3] || 'now', team = +(process.argv[4] || 7);
 const out = path.join(root, 'qa', 'shots', 'vis3', tag + '_' + which); fs.mkdirSync(out, { recursive: true });
 const exe = path.join(os.homedir(), 'AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe');
 const [vw, vh, dpr] = which === 'phone' ? [390, 844, 2] : [1280, 800, 1];
