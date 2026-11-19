@@ -439,7 +439,7 @@ const POS_MASK3 = { QB: 'opo', RB: 'ropo', FB: 'ropo', WR: 'bullet', TE: 'cage',
 function lookOf(rp) { return (typeof ensureLook === 'function' && rp ? ensureLook(rp) : rp && rp.lk) || {}; }
 function maskStyle(rp) { const lk = lookOf(rp), M2 = typeof LK_MASKS !== 'undefined' ? LK_MASKS : null; return (M2 && lk.fm != null && M2[lk.fm]) || POS_MASK3[rp && rp.pos] || 'opo'; }
 // fabric whites are never paper white (they read as plastic): pull very light colours toward a warm, slightly grey off-white
-function fabric(h) { const l = hexLum(h); return l > 0.8 ? hexMix(h, '#d9d4c9', cl((l - 0.8) / 0.2, 0, 1) * 0.55) : h; }
+function fabric(h) { const l = hexLum(h); return l > 0.8 ? hexMix(h, '#d6d1c5', cl((l - 0.8) / 0.2, 0, 1) * 0.66) : h; }
 // kit design options (the league defines the lists and per-team defaults; these fallbacks keep old saves and bare kits working)
 const KSTY0 = { jstyle: ['stripes', 'triple', 'loops', 'yoke', 'panel', 'plain'], pstyle: ['solid', 'double', 'tri', 'outline', 'thin', 'none'], hstyle: ['single', 'double', 'tri', 'wide', 'none'],
   hfinish: ['gloss', 'matte', 'metal', 'satin'], sstyle: ['solid', 'stripes', 'hoops', 'twotone'], nfont: ['block', 'pro', 'italic', 'slab'], nstyle: ['outline', 'double', 'plain', 'shadow'], tvnum: ['none', 'sleeve'] };
