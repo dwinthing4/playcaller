@@ -1,5 +1,6 @@
 // Home hub, inbox, owner meetings, offseason steps, playing a game.
-const FROM = { gm: ['GM', '💼'], owner: ['Owner', '🏛'], scout: ['Scouts', '🔭'], coach: ['Coaches', '📈'], player: ['Locker room', '🏈'], league: ['League', '📣'], oc: ['OC', '📋'], dc: ['DC', '🛡'] };
+// sender label + the short code shown in the inbox badge (plain text, no emoji)
+const FROM = { gm: ['GM', 'GM'], owner: ['Owner', 'OWN'], scout: ['Scouts', 'SCT'], coach: ['Coaches', 'STF'], player: ['Locker room', 'LKR'], league: ['League', 'LG'], oc: ['OC', 'OC'], dc: ['DC', 'DC'] };
 function startUserGame(mode) {
   const g = currentUserGame(); if (!g) return; const T = UT();
   if (T.roster.filter(available).length < 45) { toast('You need at least 45 healthy players.'); return; }
@@ -20,10 +21,10 @@ function weekRibbon() {
 function starRow(v) { const n = Math.round(clamp((v - 55) / 6.5, 0.5, 5) * 2) / 2; return `<span class="srating" title="${n} of 5"><span class="s0">★★★★★</span><span class="s1" style="width:${n / 5 * 100}%">★★★★★</span></span>`; }
 function matchHero(g) {
   const away = L.teams[g.a], home = L.teams[g.h];
-  const side = t => { const pw = teamPower(t); return `<div class="mside">${logoC(t, 84)}<b>${esc(t.name)}</b><span class="small">${t.w}-${t.l}${t.tie ? '-' + t.tie : ''} · ${ovrTag(teamOvr(t))}</span><div class="srow"><span>OFF</span>${starRow(pw.off)}</div><div class="srow"><span>DEF</span>${starRow(pw.def)}</div></div>`; };
+  const side = t => { const pw = teamPower(t); return `<div class="mside" style="--c:${t.c1};--ct:${hubInk(t.c1)}">${logoC(t, 84)}<span class="mplate"><b>${esc(t.name)}</b><i>${t.w}-${t.l}${t.tie ? '-' + t.tie : ''} · OVR ${teamOvr(t)}</i></span><div class="srow"><span>OFF</span>${starRow(pw.off)}</div><div class="srow"><span>DEF</span>${starRow(pw.def)}</div></div>`; };
   const opp = g.h === L.user ? away : home; const riv = isRival(UT(), opp);
   const art = JSON.stringify({ c1: home.c1, c2: home.c2, left: away.c1, right: home.c1, seed: home.id * 7 + 3, floor: 0.6 });
-  return `<section class="hero mhero art"><canvas class="heroart" data-stadium='${art}'></canvas><div class="small heroLab">${L.phase === 'playoffs' ? ROUND_NAMES[L.playoff.round] : 'Week ' + (L.week + 1) + ' of 17'}${riv ? ' · 🔥 Rivalry' : ''}</div>
+  return `<section class="hero mhero art"><canvas class="heroart" data-stadium='${art}'></canvas><div class="small heroLab">${L.phase === 'playoffs' ? ROUND_NAMES[L.playoff.round] : 'Week ' + (L.week + 1) + ' of 17'}${riv ? '<span class="rvl">Rivalry</span>' : ''}</div>
    <div class="match2">${side(away)}<div class="vs">@</div>${side(home)}</div>
    <div class="row playrow"><button class="pri big" onclick="startUserGame('play')">Play</button><button onclick="startUserGame('watch')">Watch</button><button onclick="startUserGame('instant')">Instant</button>${L.phase === 'regular' ? '<button class="sm ghost" onclick="if(confirm(\'Sim the rest of the regular season?\')){simToPlayoffs();saveGame();render();}">Sim to playoffs</button>' : ''}</div></section>`;
 }
@@ -34,7 +35,7 @@ function briefingCard() {
    <div class="say">${lookC(T.dc.lk, 44)}<p><b>${esc(T.dc.fn)} ${esc(T.dc.ln)}, DC:</b> ${esc(P.intro.D)}</p></div></div>`;
 }
 function inboxItem(m, short) {
-  const f = FROM[m.from] || ['League', '📣'];
+  const f = FROM[m.from] || ['League', 'LG'];
   return `<div class="msg ${m.read ? '' : 'unread'}" onclick="markRead(${m.id})"><div class="mi">${f[1]}</div><div class="sp"><div class="row"><b>${esc(m.title)}</b><span class="sp"></span><span class="mute small">${f[0]} · ${m.y === L.year ? 'wk ' + (m.w + 1) : m.y}</span></div>
    <div class="mb ${short ? 'clip' : ''}">${m.html ? m.body : esc(m.body)}</div>${(m.actions || []).length ? `<div class="row" style="margin-top:6px">${m.actions.map(a => `<button class="sm" onclick="event.stopPropagation();markRead(${m.id},true);doAct('${a.act}',${esc(JSON.stringify(a.arg))})">${esc(a.label)}</button>`).join('')}</div>` : ''}</div></div>`;
 }
@@ -53,7 +54,7 @@ VIEWS.home = function () {
   return `${hubBar(lay)}${offers}${body}`;
 };
 // ---------- hub: switchable home layouts (Dashboard / Broadcast / Locker room) built from one card library ----------
-const HUB_LAYOUTS = [['dash', 'Dashboard'], ['cast', 'Broadcast'], ['locker', 'Locker room']];
+const HUB_LAYOUTS = [['dash', 'Dashboard'], ['cast', 'Pregame show'], ['locker', 'Locker room']];
 const HUB_SVG = {
   dash: NAV_SVG('<rect x="3" y="3" width="8" height="10" rx="1.6"/><rect x="13" y="3" width="8" height="6" rx="1.6"/><rect x="13" y="11" width="8" height="10" rx="1.6"/><rect x="3" y="15" width="8" height="6" rx="1.6"/>'),
   cast: NAV_SVG('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M8 21h8M8.5 2.5 12 5l3.5-2.5M6 14.5h7"/>'),
@@ -151,7 +152,7 @@ function hubLeaders(n) { const D = hubLeadData(n || 4);
     return `<div class="hb-lt ${p.tid === L.user ? 'mine' : ''}" style="--c:${hubLite(t.c1)}"><div class="hb-ltk">${d.lab}</div><button class="hb-ltp" onclick="showPlayer(${p.id})">${bustC(p, 50)}<div class="hb-ltn"><b>${esc(p.fn[0])}. ${esc(p.ln)}</b><span>${p.pos} · ${esc(t.abbr)}</span></div><em>${p.st[d.k]}</em></button>${d.top.slice(1).map((q, i) => `<div class="hb-lr click ${q.tid === L.user ? 'mine' : ''}" onclick="showPlayer(${q.id})"><span>${i + 2}</span><span class="sp">${esc(q.ln)} <i>${esc(L.teams[q.tid].abbr)}</i></span><b>${q.st[d.k]}</b></div>`).join('')}</div>`; }).join('')}</div></section>`; }
 function hubNews(n, title) { const N = (L.news || []).slice(0, n || 8);
   return `<section class="hb-card hb-news">${hubHead(title || 'League wire')}<ul class="hb-feed">${N.map(x => { const [tg, k] = hubNewsTag(x.s); return `<li><span class="hb-ntag n-${k}">${tg}</span><span class="sp">${esc(x.s)}</span><span class="hb-nw">${x.y !== L.year ? x.y : x.w < 17 ? 'WK ' + (x.w + 1) : 'POST'}</span></li>`; }).join('') || '<li class="mute">Quiet around the league.</li>'}</ul></section>`; }
-function hubMsgRow(m) { const f = FROM[m.from] || ['League', '📣'], a = (m.actions || [])[0];
+function hubMsgRow(m) { const f = FROM[m.from] || ['League', 'LG'], a = (m.actions || [])[0];
   return `<div class="hb-mrow ${m.read ? '' : 'unread'}" onclick="markRead(${m.id},true);go('inbox')"><span class="mi">${f[1]}</span><span class="hb-mt">${esc(m.title)}</span><span class="hb-mf">${f[0]}</span>${a ? `<button class="sm" onclick="event.stopPropagation();markRead(${m.id},true);doAct('${a.act}',${esc(JSON.stringify(a.arg))})">${esc(a.label)}</button>` : ''}</div>`; }
 function hubInbox(c, n, compact) { const all = L.inbox || [], un = all.filter(m => !m.read), list = compact ? (un.length ? un : all).slice(0, n) : un.slice(0, n);
   return `<section class="hb-card hb-inbox">${hubHead(`Inbox${un.length ? ` <i class="badge">${un.length}</i>` : ''}`, `<button class="sm" onclick="go('inbox')">All (${all.length})</button>`)}${list.map(m => compact ? hubMsgRow(m) : inboxItem(m, true)).join('') || '<p class="mute small">You are all caught up.</p>'}</section>`; }
@@ -185,7 +186,7 @@ function castHeader(c) { const T = c.T, g = c.g;
   const art = JSON.stringify({ c1: home.c1, c2: home.c2, left: away.c1, right: home.c1, seed: home.id * 11 + 5, floor: 0.85 });
   const side = t => `<div class="hb-ct${t.id === T.id ? ' me' : ''}" style="--c:${t.c1};--c2:${hubLite(t.c2)};--ct:${hubInk(t.c1)}">${logoC(t, 96)}<div class="hb-ctn"><span>${esc(t.city)}</span><b>${esc(t.name)}</b><i>${hubRec(t)} · OVR ${teamOvr(t)}</i></div></div>`;
   return `<section class="hb-cast-hd"><canvas class="heroart" data-stadium='${art}'></canvas>
-   <div class="hb-bug"><span class="hb-live">● Live</span><span class="hb-ckick">${L.phase === 'playoffs' ? esc(ROUND_NAMES[L.playoff.round]) : 'Week ' + (L.week + 1)} · ${g.neutral ? 'Neutral site' : esc(home.city)}${isRival(T, c.opp) ? ' · Rivalry' : ''}</span><span class="hb-net">PCN</span></div>
+   <div class="hb-bug"><span class="hb-live"><i></i>Live</span><span class="hb-ckick">${L.phase === 'playoffs' ? esc(ROUND_NAMES[L.playoff.round]) : 'Week ' + (L.week + 1)} · ${g.neutral ? 'Neutral site' : esc(home.city)}${isRival(T, c.opp) ? ' · Rivalry' : ''}</span><span class="hb-net">PCN</span></div>
    <div class="hb-cvs">${side(away)}<div class="hb-cat">@</div>${side(home)}</div>
    <div class="hb-wp"><span>${esc(away.abbr)} ${100 - wp}%</span><div class="hb-wpb"><i style="width:${100 - wp}%;background:${hubLite(away.c1)}"></i><i style="width:${wp}%;background:${hubLite(home.c1)}"></i></div><span>${wp}% ${esc(home.abbr)}</span></div>
    <div class="hb-wpl">Win probability</div>${hubPlayBtns()}</section>`; }
@@ -220,7 +221,7 @@ function hubCast(c) {
 // ---------- layout 3: Locker room (dense lists + quick actions) ----------
 function lockerHeader(c) { const T = c.T, g = c.g, o = c.opp;
   return `<section class="hb-lk-hd" style="--c:${T.c1};--c2:${hubLite(T.c2)}"><div class="hb-lkdoors"></div><div class="hb-lk-in">${logoC(T, 56)}<div class="sp"><span class="pos">${T.name !== T.city ? esc(T.city) + " · " : ""}${L.year}</span><b>${esc(T.name)}</b>
-    <div class="hb-lkk"><span>${hubRec(T)}</span><span>${hubStreak(T)}</span><span>OVR ${teamOvr(T)}</span><span>#${c.pr} power</span><span>${moodIcon(teamMorale(T))} ${teamMorale(T)}</span></div></div></div>
+    <div class="hb-lkk"><span>${hubRec(T)}</span><span>${hubStreak(T)}</span><span>OVR ${teamOvr(T)}</span><span>#${c.pr} power</span><span>Morale ${teamMorale(T)} ${moodTag(teamMorale(T))}</span></div></div></div>
    ${g ? `<div class="hb-lk-next">${logoC(o, 36)}<div class="sp"><span class="pos">${L.phase === 'playoffs' ? esc(ROUND_NAMES[L.playoff.round]) : 'Week ' + (L.week + 1)} · ${c.home ? 'Home' : 'Away'}${isRival(T, o) ? ' · Rivalry' : ''}</span><b>${c.home ? 'vs' : '@'} ${esc(teamName(o))}</b><span class="small mute"> ${hubRec(o)} · OVR ${teamOvr(o)}</span></div>
     <div class="hb-lk-btns"><button class="pri" onclick="startUserGame('play')">Play</button><button onclick="startUserGame('watch')">Watch</button><button onclick="startUserGame('instant')">Instant</button></div></div>` : ''}</section>`; }
 function lockerQuick(c) { const T = c.T, P = c.g ? ensurePlan() : null, inj = c.ros.filter(p => p.inj > 0).length, ur = unreadCount(), pp = L.practicePlan || {};
@@ -230,7 +231,7 @@ function lockerQuick(c) { const T = c.T, P = c.g ? ensurePlan() : null, inj = c.
   return `<div class="hb-qa">${A.map(([k, n, ic, sub, warn]) => `<button class="hb-q ${warn ? 'alert' : ''}" onclick="go('${k}')">${ic}<b>${n}</b><small>${esc(String(sub))}</small></button>`).join('')}${L.phase === 'regular' ? `<button class="hb-q" onclick="if(confirm('Sim the rest of the regular season?')){simToPlayoffs();saveGame();render();}">${HUB_QI.sim}<b>Sim season</b><small>To playoffs</small></button>` : ''}</div>`; }
 function lockerReport(c) { const T = c.T, n = T.w + T.l + T.tie, [js] = jobSecurity();
   const kv = [['Record', hubRec(T)], ['Streak', hubStreak(T)], ['Division', hubOrd(divRank(T)) + ' ' + esc(T.div)], ['Conference', '#' + c.cr], ['Power rank', '#' + c.pr], ['Team OVR', teamOvr(T)], ['Points / g', n ? (T.pf / n).toFixed(1) : '—'], ['Allowed / g', n ? (T.pa / n).toFixed(1) : '—'],
-    ['Morale', `${moodIcon(teamMorale(T))} ${teamMorale(T)}`], ['Owner', Math.round(T.ownerSup) + '%'], ['Fans', Math.round(T.fanSup) + '%'], ['Cap room', money(capRoom(T))], ['Job security', esc(js)], ['Credits', '🪙 ' + T.coach.pts]];
+    ['Morale', `${teamMorale(T)} ${moodTag(teamMorale(T))}`], ['Owner', Math.round(T.ownerSup) + '%'], ['Fans', Math.round(T.fanSup) + '%'], ['Cap room', money(capRoom(T))], ['Job security', esc(js)], ['Credits', T.coach.pts]];
   return `<section class="hb-card hb-rep">${hubHead('Team report')}<div class="hb-dl">${kv.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div></section>`; }
 function lockerInj(c) { const ps = c.ros.filter(p => p.inj > 0 || p.holdout).sort((a, b) => b.ovr - a.ovr);
   return `<section class="hb-card hb-injr">${hubHead(`Injury report${ps.length ? ` <i class="badge">${ps.length}</i>` : ''}`, hubMore('Depth', 'depth'))}${ps.length ? ps.slice(0, 8).map(p => `<div class="hb-pr" onclick="showPlayer(${p.id})"><span class="hb-pp">${p.pos}</span><span class="sp">${esc(pname(p))}</span><span class="${p.holdout ? 'hb-warn' : 'hb-bad'}">${p.holdout ? 'Holdout' : esc(p.injType || 'Injured') + ' · ' + p.inj + ' wk'}</span>${ovrTag(p.ovr)}</div>`).join('') : '<p class="mute small">Everyone is healthy.</p>'}</section>`; }
@@ -240,7 +241,7 @@ function lockerLeaders() { const D = hubLeadData(6);
   return `<section class="hb-card hb-llist">${hubHead('League leaders', hubMore('All', 'leaders'))}${D.some(d => d.top.length) ? D.map(d => { const p = d.top[0]; if (!p) return ''; return `<div class="hb-pr ${p.tid === L.user ? 'mine' : ''}" onclick="showPlayer(${p.id})"><span class="hb-lk">${d.lab}</span><span class="sp">${esc(p.fn[0])}. ${esc(p.ln)} <span class="mute">${esc(L.teams[p.tid].abbr)}</span></span><b>${p.st[d.k]}</b></div>`; }).join('') : '<p class="mute small">No games played yet.</p>'}</section>`; }
 function lockerSched(c) { const T = c.T; if (L.phase === 'offseason') return ''; const rows = [];
   L.sched.forEach((wk, i) => { const g = wk.find(x => x.h === T.id || x.a === T.id); if (!g) return; if (g.done ? i < L.week - 3 : i > L.week + 3) return; const o = L.teams[g.h === T.id ? g.a : g.h], my = g.h === T.id ? g.hs : g.as, th = g.h === T.id ? g.as : g.hs;
-    rows.push(`<div class="hb-pr ${i === L.week && L.phase === 'regular' ? 'mine' : ''}"><span class="hb-pp">WK ${i + 1}</span>${logoC(o, 22)}<span class="sp">${g.h === T.id ? 'vs' : '@'} ${esc(o.name)}${isRival(T, o) ? ' 🔥' : ''}</span>${g.done ? `<b class="${my > th ? 'hb-pl' : my < th ? 'hb-mn' : ''}">${my > th ? 'W' : my < th ? 'L' : 'T'} ${my}-${th}</b>` : `<span class="mute small">${hubRec(o)}</span>`}</div>`); });
+    rows.push(`<div class="hb-pr ${i === L.week && L.phase === 'regular' ? 'mine' : ''}"><span class="hb-pp">WK ${i + 1}</span>${logoC(o, 22)}<span class="sp">${g.h === T.id ? 'vs' : '@'} ${esc(o.name)}${isRival(T, o) ? '<span class="rvl">Rival</span>' : ''}</span>${g.done ? `<b class="${my > th ? 'hb-pl' : my < th ? 'hb-mn' : ''}">${my > th ? 'W' : my < th ? 'L' : 'T'} ${my}-${th}</b>` : `<span class="mute small">${hubRec(o)}</span>`}</div>`); });
   return `<section class="hb-card hb-sch">${hubHead('Schedule', hubMore('Full', 'schedule'))}${rows.join('')}</section>`; }
 function hubLocker(c) {
   return `<div class="hb-locker">${lockerHeader(c)}${c.g ? '' : hubNoGame()}${lockerQuick(c)}
@@ -263,7 +264,7 @@ function offseasonPanel() {
 }
 function showRecap() { const R2 = L.recap; if (!R2) return; R2.seen = true; const ps = (R2.top || []).map(id => L.P[id]).filter(Boolean); const m = L.P[R2.mvp];
   modal(`<span class="pos">SEASON RECAP</span><h1>${R2.y}: ${R2.w}-${R2.l}${R2.t ? '-' + R2.t : ''}</h1><h3>${esc(R2.result)}${R2.champ ? ` · Champion: ${esc(R2.champ)}` : ''}</h3>
-   <div class="grid g2"><div class="panel tight"><b>Owner goals</b>${R2.goals.map(g => `<div class="small">${g.ok ? '✅' : '❌'} ${esc(g.lab)}</div>`).join('')}<div class="small mute">+${R2.creditGoals} coach credits</div></div>
+   <div class="grid g2"><div class="panel tight"><b>Owner goals</b>${R2.goals.map(g => `<div class="small"><i class="ck ${g.ok ? 'ok' : 'no'}"></i>${esc(g.lab)}</div>`).join('')}<div class="small mute">+${R2.creditGoals} coach credits</div></div>
    <div class="panel tight"><b>League MVP</b><div class="small">${m ? esc(pname(m)) + ' (' + (L.teams[m.tid] ? L.teams[m.tid].abbr : '') + ')' : '—'}</div></div></div>
    <h3 style="margin-top:10px">Your standouts</h3><div class="perfs">${ps.map(p => { const h = (p.hist || [])[p.hist.length - 1]; return `<div class="perf">${bustC(p, 40)}<div><b>${esc(pname(p))}</b> <span class="mute small">${p.pos}</span><div class="small">${statLine(h, p.pos)}</div></div></div>`; }).join('')}</div>
    <div class="row" style="margin-top:12px"><button class="pri" onclick="closeModal();saveGame();render()">On to the offseason</button></div>`); }

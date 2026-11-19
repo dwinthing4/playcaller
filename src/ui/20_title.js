@@ -3,10 +3,12 @@ let NG = { diff: 'pro', qlen: 120, coach: '', slot: null, real: false };
 function renderTitle() {
   const m = slotMeta(); const slots = []; for (let n = 1; n <= NSLOTS; n++) slots.push([n, m[n]]);
   if (NG.slot) { renderNewCareer(); return; }
+  const ds = document.documentElement.style; for (const k of ['--tc', '--tc2', '--tca', '--tcon', '--tcd', '--tcink', '--tc2ink']) ds.removeProperty(k);
   app.innerHTML = `<div class="wrap title-wrap">
-   <section class="hero titlehero art"><canvas class="heroart" data-stadium='{"c1":"#1f6b35","c2":"#f2c230","floor":0.75,"seed":11}'></canvas><div class="hero-inner"><p class="title">PLAY<br><span>CALLER</span></p><p class="tagline">Run the franchise. Call the plays. Feel every hit.</p></div></section>
-   <div class="row" style="margin:14px 0"><button class="pri" onclick="quickExhibition()">⚡ Quick game</button><input type="file" accept=".json,application/json" id="impf" hidden onchange="importLeagueFile(this)"><button onclick="document.getElementById('impf').click()">Import league file</button></div>
-   <div class="slots">${slots.map(([n, s]) => s ? `<div class="slot" style="--sc:${s.c1 || '#335'}"><span class="pos">SLOT ${n}</span><b>${esc(s.team)}</b><span>Coach ${esc(s.coach)}</span><span class="mute small">${s.year} · ${esc(s.rec)}${s.titles ? ' · ' + '🏆'.repeat(Math.min(5, s.titles)) : ''}</span>
+   <section class="hero titlehero art"><canvas class="heroart" data-stadium='{"c1":"#1f6b35","c2":"#f2c230","floor":0.75,"seed":11}'></canvas><div class="hero-inner"><p class="tkick"><span class="tk-broadcast">Live · Football night</span><span class="tk-program">Official game program · Vol. 26</span><span class="tk-varsity">Varsity football · Est. 1926</span><span class="tk-night">Under the lights</span></p><p class="title"><span class="t1">Play</span><br><span class="t2">Caller</span></p><p class="tagline">Run the franchise. Call the plays. Feel every hit.</p></div></section>
+   <div class="tbar"><button class="pri" onclick="quickExhibition()">Quick game</button><input type="file" accept=".json,application/json" id="impf" hidden onchange="importLeagueFile(this)"><button onclick="document.getElementById('impf').click()">Import league file</button><span class="sp"></span>${stylePicker()}</div>
+   <h3 class="slots-h">Careers</h3>
+   <div class="slots">${slots.map(([n, s]) => s ? `<div class="slot" style="--sc:${s.c1 || '#335'}"><span class="pos">SLOT ${n}</span><b>${esc(s.team)}</b><span>Coach ${esc(s.coach)}</span><span class="mute small">${s.year} · ${esc(s.rec)}${s.titles ? ` · ${s.titles} title${s.titles > 1 ? 's' : ''}` : ''}</span>
       <div class="row"><button class="pri" onclick="continueSlot(${n})">Continue</button><button class="sm" onclick="if(confirm('Delete this career? This cannot be undone.'))deleteSlot(${n}).then(renderTitle)">Delete</button></div></div>`
     : `<div class="slot empty"><span class="pos">SLOT ${n}</span><b>Empty</b><span class="mute small">Start a new coaching career</span><div class="row"><button class="go" onclick="NG.slot=${n};renderTitle()">New career</button></div></div>`).join('')}</div></div>`;
   if (typeof paintArt === 'function') requestAnimationFrame(() => paintArt(app));
@@ -14,7 +16,7 @@ function renderTitle() {
 async function continueSlot(n) { try { await loadSlot(n); TAB = 'home'; render(); } catch (e) { toast('That save could not be loaded.'); } }
 function renderNewCareer() {
   const opt = (k, arr, cur) => `<div class="seg">${arr.map(([v, n]) => `<button class="${cur === v ? 'on' : ''}" onclick="NG.${k}=${typeof v === 'string' ? `'${v}'` : v};renderNewCareer()">${n}</button>`).join('')}</div>`;
-  app.innerHTML = `<div class="wrap" style="max-width:720px"><button class="sm" onclick="NG.slot=null;renderTitle()">← Back</button>
+  app.innerHTML = `<div class="wrap" style="max-width:720px"><button class="sm" onclick="NG.slot=null;renderTitle()">‹ Back</button>
    <div class="panel" style="margin-top:12px"><h2>New career · slot ${NG.slot}</h2>
    <h3>League</h3><div class="lgpick"><button class="${NG.real ? "" : "on"}" onclick="NG.real=false;renderNewCareer()"><b>Made-up league</b><span>32 invented teams: new cities, names, logos and players.</span></button><button class="${NG.real ? "on" : ""}" onclick="NG.real=true;renderNewCareer()"><b>Real cities</b><span>The 32 real markets in their real conferences and divisions, in their real team colors, with strength based on recent seasons. Team nicknames, logos and players are not built in (they belong to the league and the players): teams go by their city with an original emblem, and you can rename any team or player, or paste in a roster, in League › Editor.</span></button></div>
    <h3 style="margin-top:12px">Difficulty</h3>${opt('diff', Object.entries(DIFFS).map(([k, d]) => [k, d.n]), NG.diff)}
@@ -37,7 +39,7 @@ function quickExhibition() {
 }
 function exhPick(id) {
   if (window._exh == null) { window._exh = id; L.user = id; toast('Now pick the opponent'); return; }
-  if (id === window._exh) return; closeModal(); const g = { h: id, a: window._exh, done: false };
+  if (id === window._exh) return; closeModal(); const g = { h: id, a: window._exh, done: false }; setTeamTokens(L.teams[window._exh]);
   if (typeof MATCH !== 'undefined') MATCH.open({ g, home: L.teams[g.h], away: L.teams[g.a], userTid: L.user, mode: 'play', onDone: () => { L = null; render(); } });
   else { toast('The match engine is not loaded.'); L = null; render(); }
 }

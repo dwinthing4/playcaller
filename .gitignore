@@ -6,3 +6,4 @@ qa/tester/**/out_*.json
 *.log
 .DS_Store
 Thumbs.db
+.claude/
