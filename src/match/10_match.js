@@ -612,7 +612,7 @@ function buzz(ms) { try { const L0 = Lst(); if ((!L0 || !L0.settings || L0.setti
 // ------------------------------------------------------------ camera (your settings, saved on this device)
 const CAMP = { behind: { view: 'behind', height: 0.32, zoom: 0.6 }, side: { view: 'side', height: 0.3, zoom: 0.5 }, sky: { view: 'behind', height: 0.84, zoom: 0.4 } }, CAMORD = ['behind', 'side', 'sky'];
 let cam = loadCam();
-function loadCam() { let c = null; try { c = JSON.parse(localStorage.getItem('pc_cam_v1') || 'null'); } catch (e) { } return Object.assign({ preset: 'behind', view: 'behind', height: 0.32, zoom: 0.6, flipD: false, fit: true }, c && typeof c === 'object' ? c : {}); }
+function loadCam() { let c = null; try { c = JSON.parse(localStorage.getItem('pc_cam_v1') || 'null'); } catch (e) { } return Object.assign({ preset: 'behind', view: 'behind', height: 0.32, zoom: 0.6, flipD: false, fit: true, pan: true }, c && typeof c === 'object' ? c : {}); }
 function saveCam() { try { localStorage.setItem('pc_cam_v1', JSON.stringify(cam)); } catch (e) { } if (typeof R3D !== 'undefined') R3D.cam = cam; }
 function camView() { return G && G.userSide === 'D' && cam.flipD && cam.view !== 'side' ? -1 : 1; }      // field art faces the camera
 // phone mode: on a phone-sized touch screen (or when turned on in Settings). PC, laptop and tablet keep the full field.
@@ -644,12 +644,13 @@ function camPanel() {
     <label>Zoom<input class="on" type="range" min="0" max="100" data-cs="zoom"></label>
     <label class="tg on"><input class="on" type="checkbox" data-cs="flipD"${cam.flipD ? ' checked' : ''}><span>On defense, turn the camera around to sit behind my defense</span></label>
     <label class="tg on"><input class="on" type="checkbox" data-cs="fit"${cam.fit !== false ? " checked" : ""}><span>Zoom out by itself to keep every receiver on screen</span></label>
+    <label class="tg on"><input class="on" type="checkbox" data-cs="pan"${cam.pan !== false ? " checked" : ""}><span>Pan toward where I'm aiming a pass (see more of that side)</span></label>
     <div class="kk">Mouse wheel or − / = zoom · PgUp / PgDn height · C changes the view</div>
     <button class="pri on" data-cx="1">Done</button>`;
   el.cam.classList.add('show', 'on'); camSync();
 }
 function closeCam() { if (!el.cam.classList.contains('show')) return; el.cam.classList.remove('show', 'on'); el.cam.innerHTML = ''; if (G && !G.camWasPaused) { G.paused = false; lastT = performance.now(); } }
-function onCamInput(e) { const t = e.target, k = t && t.dataset && t.dataset.cs; if (!k) return; if (k === 'flipD' || k === 'fit') { cam[k] = !!t.checked; saveCam(); camRefresh(); return; } cam[k] = clamp(+t.value / 100, 0, 1); cam.preset = 'custom'; saveCam(); camSync(); }
+function onCamInput(e) { const t = e.target, k = t && t.dataset && t.dataset.cs; if (!k) return; if (k === 'flipD' || k === 'fit' || k === 'pan') { cam[k] = !!t.checked; saveCam(); camRefresh(); return; } cam[k] = clamp(+t.value / 100, 0, 1); cam.preset = 'custom'; saveCam(); camSync(); }
 function onCamClick(e) { const b = e.target.closest('[data-cv],[data-cx]'); if (!b) return; if (b.dataset.cx) return closeCam(); setPreset(b.dataset.cv); }
 function onWheel(e) { if (!G || el.game.hidden || e.target.closest('.sheet,.ovl,.campnl')) return; e.preventDefault(); nudgeCam('zoom', -Math.sign(e.deltaY) * Math.min(0.08, Math.abs(e.deltaY) * 0.0007)); }
 
@@ -777,19 +778,19 @@ function applyInput(pl) {
   const b = R3D.basis(); pl.input.x = b.rx * sx - b.fx * sy; pl.input.z = b.rz * sx - b.fz * sy;
 }
 function recvOrder(pl) { return pl.receivers.slice().sort((a, b) => b.p.x - a.p.x); }
-// receiver tags: who is open (green), tight (yellow), covered (red). Read-only: you throw with the sling (or keys 1-5)
+// receiver name tags before the snap (last name, OVR; on a keyboard, the 1-5 throw key). Gone once the ball is snapped so they never block the play.
 function bubbles() {
-  const k = ctxKey(), pl = G.play, show = k === 'qb' || k === 'preO';
+  const k = ctxKey(), pl = G.play, show = k === 'preO';
   if (!show) { if (bubKey) { el.bub.innerHTML = ''; bubKey = ''; } return; }
   const rs = recvOrder(pl), sig = k + rs.map(r => r.id).join(',');
-  if (sig !== bubKey) { bubKey = sig; el.bub.innerHTML = rs.map((r, i) => `<div class="rb ${k === 'preO' ? 'pre' : 'live'}" data-r="${r.id}">${esc(r.slot)}<small>${i + 1}</small>${r.rp && r.rp.ovr ? `<em>${r.rp.ovr}</em>` : ""}</div>`).join(''); }
+  if (sig !== bubKey) { bubKey = sig; const keys = matchMedia('(pointer: fine)').matches; el.bub.innerHTML = rs.map((r, i) => `<div class="rb pre" data-r="${r.id}">${esc((r.rp && r.rp.ln) || r.slot)}${keys ? `<small>${i + 1}</small>` : ''}${r.rp && r.rp.ovr ? `<em>${r.rp.ovr}</em>` : ""}</div>`).join(''); }
   const nodes = el.bub.children, upd = G.time - G.bubT > 0.12; if (upd) G.bubT = G.time;
   const W = el.game.clientWidth || innerWidth, H = el.game.clientHeight || innerHeight;
   // receivers split out wide can be off screen: pin their tag to the edge
-  const P2 = rs.map(r => { const J = pl.poses[r.id], y = J ? J.head.y + 0.85 : 2.7, s = R3D.project(J ? J.head.x : r.p.x, y, J ? J.head.z : r.p.z), x = clamp(s.behind ? (s.x < W / 2 ? 0 : W) : s.x, 26, W - 26), yy = clamp(s.y, 120, H - 150); return { x, y: yy, edge: x !== s.x || yy !== s.y }; });
+  const P2 = rs.map((r, i) => { const n = nodes[i], w = n ? (n._w || (n._w = n.offsetWidth || 60)) : 60, J = pl.poses[r.id], y = J ? J.head.y + 0.85 : 2.7, s = R3D.project(J ? J.head.x : r.p.x, y, J ? J.head.z : r.p.z), x = clamp(s.behind ? (s.x < W / 2 ? 0 : W) : s.x, w / 2 + 6, W - w / 2 - 6), yy = clamp(s.y, 120, H - 150); return { x, y: yy, w, edge: x !== s.x || yy !== s.y }; });
   for (let it = 0; it < 4; it++) for (let i = 0; i < P2.length; i++) for (let j = i + 1; j < P2.length; j++) {     // keep tags from stacking on each other
-    const a = P2[i], b = P2[j], dx = b.x - a.x, dy = b.y - a.y; if (Math.abs(dx) >= 40 || Math.abs(dy) >= 36) continue;
-    const push = (36 - Math.abs(dy)) / 2 * (dy >= 0 ? 1 : -1); a.y = clamp(a.y - push, 110, H - 140); b.y = clamp(b.y + push, 110, H - 140); }
+    const a = P2[i], b = P2[j], dx = b.x - a.x, dy = b.y - a.y; if (Math.abs(dx) >= (a.w + b.w) / 2 + 4 || Math.abs(dy) >= 30) continue;
+    const push = (30 - Math.abs(dy)) / 2 * (dy >= 0 ? 1 : -1); a.y = clamp(a.y - push, 110, H - 140); b.y = clamp(b.y + push, 110, H - 140); }
   rs.forEach((r, i) => { const n = nodes[i]; if (!n) return; const p = P2[i]; if (n._x == null || Math.abs(n._x - p.x) > 260) { n._x = p.x; n._y = p.y; } else { n._x += (p.x - n._x) * 0.35; n._y += (p.y - n._y) * 0.35; }   // glide, don't jump
     n.style.left = n._x + 'px'; n.style.top = n._y + 'px'; n.classList.toggle('edge', p.edge); n.classList.toggle('tg', k === 'qb' && G.aimTgt === r.id);
     if (upd && k === 'qb') { const o = pl.openness(pl.qb, r).open; n.classList.toggle('y', o <= 0.6 && o > -1.0); n.classList.toggle('r', o <= -1.0); } });     // window: green open, yellow tight, red covered

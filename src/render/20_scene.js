@@ -336,7 +336,7 @@ function drawOverlay(play, side) {
 }
 // ---------------- public API ----------------
 const camPos = new THREE.Vector3(0, 6, 10), camLook = new THREE.Vector3(0, 1, 20), _ax = new THREE.Vector3(), _z1 = new THREE.Vector3(0, 0, 1), _q = new THREE.Quaternion(); let shake = 0, lastField = '', estT = 0;
-const CAM0 = { view: 'behind', height: 0.32, zoom: 0.6, flipD: false }, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), AIMN = 26, AIMR = 49; let fitK = 1, fitCam = null, fitV = null, aimDots = null, aimRing = null, aimRingMat = null, aimRange = null, kaTri = null, kaE1 = null, kaE2 = null, kaNeedle = null;
+const CAM0 = { view: 'behind', height: 0.32, zoom: 0.6, flipD: false }, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), AIMN = 26, AIMR = 49; let fitK = 1, panX = 0, panZ = 0, aimNow = null, fitCam = null, fitV = null, aimDots = null, aimRing = null, aimRingMat = null, aimRange = null, kaTri = null, kaE1 = null, kaE2 = null, kaNeedle = null;
 const R = {
   init(canvas) {
     coarse = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 700;
@@ -450,8 +450,13 @@ const R = {
     const fov = portrait ? 64 : 50, tv = Math.tan(fov * Math.PI / 360), th = tv * (W / H);
     const ph = !!R3D.phone, baseD = 62 * Math.pow(7 / 62, clamp01(S.zoom)) * (wide ? 1.12 : 0.88) * (portrait ? 1.12 : 1) * (ph ? 0.92 : 1) * (opts.zoom || 1);
     const f = opts.focus, lx0 = lx, lz0 = lz;
+    // aim pan (camera setting): while you aim a pass, the camera slides toward where you're aiming so you see more of that side.
+    // It slides and never turns, so the aim (worked out from the camera's facing) stays put under your finger.
+    const A = S.pan !== false && pocket && aimNow && aimNow.L && play.qb ? aimNow : null, reach = baseD * fitK * th, cl = (v, a, b) => Math.max(a, Math.min(b, v));
+    let tpx = 0, tpz = 0;
+    if (A) { if (side) tpz = cl((A.L.z - play.qb.p.z) * 0.4, -reach * 0.15, reach * 0.42); else tpx = cl((A.L.x - play.qb.p.x) * 0.62, -reach * 0.5, reach * 0.5); }
     // the camera for a given zoom-out factor fk (auto-fit raises fk until everyone who matters is on screen)
-    const place = fk => {
+    const place = (fk, wp) => {
       const dist = baseD * fk, hd = dist * Math.cos(pitch), up = dist * Math.sin(pitch); let lx = lx0, lz = lz0;
       const atY = (z, fy) => z + dirZ * (hd - up / Math.tan(Math.max(0.035, Math.min(1.55, pitch + Math.atan((fy - 0.5) * 2 * tv))))), atX = (z, fx) => z + (0.5 - fx) * 2 * dist * th;
       const anchor = (z, fy, fx) => (side ? atX(z, fx) : atY(z, fy));
@@ -463,31 +468,34 @@ const R = {
       // keep the player you control on screen (defense): lean the view toward him
       if (f && f.p) { const w = play.phase === 'pre' ? 0.2 : 0.35; lx = lerp3(lx, f.p.x, w); lz = lerp3(lz, f.p.z, w); }
       lx = Math.max(-FIELD.halfW - 2, Math.min(FIELD.halfW + 2, lx));
-      return { want: side ? new THREE.Vector3(lx * 0.55 - hd, 0.6 + up, lz) : new THREE.Vector3(lx * 0.85, 0.6 + up, lz - hd * dirZ), look: new THREE.Vector3(lx, 0.6, lz) };
+      const ox = wp ? panX : 0, oz = wp ? panZ : 0;
+      return { want: side ? new THREE.Vector3(lx * 0.55 - hd + ox, 0.6 + up, lz + oz) : new THREE.Vector3(lx * 0.85 + ox, 0.6 + up, lz - hd * dirZ + oz), look: new THREE.Vector3(lx + ox, 0.6, lz + oz) };
     };
     // auto-fit: before the snap and while the QB holds it, every receiver stays on screen (even the one split out wide); on defense, the man you control does too
-    const pts = []; if (S.fit !== false && !play.ret && (play.phase === 'pre' || pocket) && play.O) for (const p of play.O) if (!p.ol && p.p) pts.push(ph ? [p.p.x, 1, p.p.z, -0.04, 1.04, 0.1, 0.92] : [p.p.x, 1, p.p.z, 0.03, 0.97, 0.1, 0.92]);     // phone: a wide man may sit on the edge (his tag is pinned there), players stay big
+    const pts = []; if (S.fit !== false && !play.ret && (play.phase === 'pre' || pocket) && play.O) for (const p of play.O) if (!p.ol && p.p && !(Math.abs(panX) > 1 && play.qb && (p.p.x - play.qb.p.x) * Math.sign(panX) < -3)) pts.push(ph ? [p.p.x, 1, p.p.z, -0.04, 1.04, 0.1, 0.92] : [p.p.x, 1, p.p.z, 0.03, 0.97, 0.1, 0.92]);     // phone: a wide man may sit on the edge (his tag is pinned there), players stay big
     if (f && f.p) pts.push([f.p.x, 1, f.p.z, 0.08, 0.8, 0.14, 0.8]);
     let need = 1;
     if (pts.length) {
       fitCam = fitCam || new THREE.PerspectiveCamera(); fitV = fitV || new THREE.Vector3();
-      const fits = fk => { const P = place(fk); fitCam.fov = fov; fitCam.aspect = W / H; fitCam.near = camera.near; fitCam.far = camera.far; fitCam.position.copy(P.want); fitCam.lookAt(P.look); fitCam.updateProjectionMatrix(); fitCam.updateMatrixWorld();
+      const fits = fk => { const P = place(fk, true); fitCam.fov = fov; fitCam.aspect = W / H; fitCam.near = camera.near; fitCam.far = camera.far; fitCam.position.copy(P.want); fitCam.lookAt(P.look); fitCam.updateProjectionMatrix(); fitCam.updateMatrixWorld();
         for (const q of pts) { fitV.set(q[0], q[1], q[2]).project(fitCam); const sx = fitV.x * 0.5 + 0.5, sy = -fitV.y * 0.5 + 0.5; if (fitV.z > 1 || sx < q[3] || sx > q[4] || sy < q[5] || sy > q[6]) return false; } return true; };
       if (!fits(1)) { let lo = 1, hi = ph ? 1.6 : portrait ? 3.4 : 2.6; if (fits(hi)) { for (let i = 0; i < 7; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; } } need = hi; }
     }
     const snap = opts.snapCam || R3D.snapNext || !isFinite(camPos.x + camPos.y + camPos.z + camLook.x + camLook.z); R3D.snapNext = false;
+    { const kp = snap ? 1 : 1 - Math.exp(-dt * 3); panX += (tpx - panX) * kp; panZ += (tpz - panZ) * kp; }
     fitK = snap ? need : need > fitK ? fitK + (need - fitK) * (1 - Math.exp(-dt * 3.5)) : Math.max(need, fitK - dt * 0.35);
     const { want, look } = place(fitK);
     if (!isFinite(want.x + want.y + want.z + look.x + look.z)) return;          // never let a bad frame poison the camera
     const k = snap ? 1 : 1 - Math.exp(-dt * 4.5);
     camPos.lerp(want, k); camLook.lerp(look, snap ? 1 : 1 - Math.exp(-dt * 6));
-    camera.position.copy(camPos); camera.lookAt(camLook);
+    camera.position.set(camPos.x + panX, camPos.y, camPos.z + panZ); camera.lookAt(camLook.x + panX, camLook.y, camLook.z + panZ);
     camera.fov = fov; camera.updateProjectionMatrix();
     if (R3D.camOverride) { const d = R3D.camOverride; camera.position.set(...d.pos); camera.lookAt(...d.look); camera.fov = d.fov || 40; camera.updateProjectionMatrix(); return; }   // QA close-ups
     if (shake > 0.002) { camera.position.x += (Math.random() - 0.5) * shake * 0.35; camera.position.y += (Math.random() - 0.5) * shake * 0.25; shake *= Math.exp(-dt * 7); }
   },
   // the passing aim line: a dotted arc along the real flight, and a ring where it comes down (green if a receiver can get there)
   aim(a) {
+    aimNow = a || null;
     if (!aimDots) return;
     if (!a) { aimDots.visible = false; aimRing.visible = false; if (aimRange) aimRange.visible = false; return; }
     const P = aimDots.geometry.attributes.position.array, n = AIMN, ph = (performance.now() / 600) % 1;

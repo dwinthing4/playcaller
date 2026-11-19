@@ -190,3 +190,6 @@ body.phonemode .acts .a.big{width:66px;height:66px;font-size:14px;background:rgb
 body.phonemode .acts .a.hot{background:rgba(194,69,58,.85)}
 body.phonemode .acts .a.wide{height:38px;border-radius:19px;padding:0 12px;font-size:11px}
 body.phonemode #gui .joy{display:none!important}
+
+/* pre-snap name tags: last name (and OVR), never wider than a short name */
+.rb.pre{max-width:110px;white-space:nowrap;overflow:visible;text-overflow:clip;letter-spacing:.02em}
