@@ -679,7 +679,7 @@ const ACTS = {     // [buttons, hint with a mouse + keyboard, hint on a touch sc
   dAir: [`<button class="a on" data-a="switch">Switch<span class="key">E</span></button><button class="a big on" data-a="swat">SWAT<span class="key">F</span></button>`, 'Swat or jump the route', ''],
 };
 const MOVE_CTX = { qb: 1, run: 1, d: 1, dAir: 1 };
-function actsFor(k) { if (k === actKey) return; actKey = k; const a = ACTS[k] || ACTS.none; el.acts.innerHTML = a[0]; el.hint.textContent = matchMedia('(pointer: fine)').matches ? a[1] : a[2];
+function actsFor(k) { if (k === actKey) return; actKey = k; const a = ACTS[k] || ACTS.none; el.acts.innerHTML = a[0]; el.hint.textContent = matchMedia('(pointer: fine)').matches ? a[1] : G && G.phone ? a[2].replace(/ · (the )?stick [^·]*/g, '') : a[2];
   el.touch.classList.toggle('on', k !== 'none' && k !== 'motion'); const js = !!MOVE_CTX[k] && !(G && G.phone); el.joy.classList.toggle('show', js); el.joy.classList.toggle('on', js);
   if (k === 'none') { stickUp({ pointerId: stick.id }); joyUp({ pointerId: joy.id }); slingEnd(false); }
   if (k !== 'qb' && sling.mode === 'aim') slingEnd(false); }

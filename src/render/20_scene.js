@@ -288,10 +288,10 @@ function buildStadium(home) {
   const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,244,220,1)'); gr.addColorStop(0.35, 'rgba(255,236,200,.45)'); gr.addColorStop(1, 'rgba(255,230,190,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
   const glowMat = new THREE.SpriteMaterial({ map: glowTex, transparent: true, opacity: 0.35, depthWrite: false, fog: false, blending: THREE.AdditiveBlending });
   const glow = (x, y, z, s) => { const sp = new THREE.Sprite(glowMat); sp.position.set(x, y, z); sp.scale.set(s, s * 0.6, 1); grp.add(sp); };
-  for (const s of [-1, 1]) { const st = new THREE.Mesh(shade(new THREE.BoxGeometry(34, 0.6, 150), 0, 17, s), mk(3.4, 15)); st.rotation.z = s * 0.42; st.position.set(s * (FIELD.halfW + 6 + 15.5), 8.5, 50 * YDm); grp.add(st);
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.6, 150), new THREE.MeshStandardMaterial({ color: col(home.c1), roughness: 0.8 })); wall.position.set(s * (FIELD.halfW + 5.8), 0.8, 50 * YDm); wall.receiveShadow = true; grp.add(wall);
-    const lip = new THREE.Mesh(new THREE.BoxGeometry(2, 2.5, 150), roof); lip.position.set(s * (FIELD.halfW + 6 + 31.5), 16.4, 50 * YDm); grp.add(lip);
-    for (let z = -6; z < 100; z += 9) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 5), bank); b.position.set(s * (FIELD.halfW + 6 + 30.4), 17.6, z); grp.add(b); glow(s * (FIELD.halfW + 6 + 30), 17.6, z, 7); } }
+  for (const s of [-1, 1]) { const st = new THREE.Mesh(shade(new THREE.BoxGeometry(34, 0.6, 150), 0, 17, s), mk(3.4, 15)); st.rotation.z = s * 0.42; st.position.set(s * (FW.half0 + 6 + 15.5), 8.5, 50 * YDm); grp.add(st);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.6, 150), new THREE.MeshStandardMaterial({ color: col(home.c1), roughness: 0.8 })); wall.position.set(s * (FW.half0 + 5.8), 0.8, 50 * YDm); wall.receiveShadow = true; grp.add(wall);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(2, 2.5, 150), roof); lip.position.set(s * (FW.half0 + 6 + 31.5), 16.4, 50 * YDm); grp.add(lip);
+    for (let z = -6; z < 100; z += 9) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 5), bank); b.position.set(s * (FW.half0 + 6 + 30.4), 17.6, z); grp.add(b); glow(s * (FW.half0 + 6 + 30), 17.6, z, 7); } }
   for (const [z, rx] of [[FIELD.goalZ + 10 * YDm + 20, -0.42], [-10 * YDm - 20, 0.42]]) { const far = new THREE.Mesh(shade(new THREE.BoxGeometry(100, 0.6, 30), 2, 15, rx < 0 ? 1 : -1), mk(10, 3)); far.rotation.x = rx; far.position.set(0, 7.5, z); grp.add(far);
     const out = z > 0 ? 1 : -1, lip = new THREE.Mesh(new THREE.BoxGeometry(100, 2.5, 2), roof); lip.position.set(0, 15.4, z + out * 14.5); grp.add(lip);
     for (let x = -42; x <= 42; x += 7) { const b = new THREE.Mesh(new THREE.BoxGeometry(5, 0.8, 0.4), bank); b.position.set(x, 16.6, z + out * 13.4); grp.add(b); glow(x, 16.6, z + out * 13, 7); } }
@@ -349,7 +349,7 @@ const R = {
     sun = new THREE.DirectionalLight(0xfff1dc, 1.75); sun.castShadow = true; sun.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048); Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 90 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.025; scene.add(sun, sun.target);
     const fill = new THREE.DirectionalLight(0xcfe0ff, 0.5); fill.position.set(20, 25, 60); scene.add(fill);
     const c = document.createElement('canvas'); c.width = c.height = 4; BLANK = new THREE.CanvasTexture(c);
-    fieldMat = new THREE.MeshStandardMaterial({ roughness: 0.93, metalness: 0 }); fieldMesh = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW, 120 * YDm), fieldMat); fieldMesh.rotation.x = -Math.PI / 2; fieldMesh.position.set(0, 0, 50 * YDm); fieldMesh.receiveShadow = true; scene.add(fieldMesh);
+    fieldMat = new THREE.MeshStandardMaterial({ roughness: 0.93, metalness: 0 }); fieldMesh = new THREE.Mesh(new THREE.PlaneGeometry(2 * FW.half0, 120 * YDm), fieldMat); fieldMesh.rotation.x = -Math.PI / 2; fieldMesh.position.set(0, 0, 50 * YDm); fieldMesh.receiveShadow = true; scene.add(fieldMesh);
     { const det = grassDetail();
       const addDetail = (m, rx, ry) => { m.onBeforeCompile = sh => { sh.uniforms.tDetail = { value: det };
         sh.fragmentShader = 'uniform sampler2D tDetail;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n#ifdef USE_MAP\n  vec2 dUv = vUv * vec2(' + rx.toFixed(1) + ', ' + ry.toFixed(1) + '); float gb = texture2D(tDetail, dUv).r, gp = texture2D(tDetail, dUv * 0.17).g;\n  diffuseColor.rgb *= (0.86 + 0.26 * gb) * (0.9 + 0.2 * gp);\n#endif\n'); };
@@ -361,11 +361,11 @@ const R = {
       const apron = new THREE.Mesh(new THREE.PlaneGeometry(220, 320), apMat); apron.rotation.x = -Math.PI / 2; apron.position.set(0, -0.01, 50 * YDm); apron.receiveShadow = true; scene.add(apron);
       const white = new THREE.MeshStandardMaterial({ color: col('#eeeee6'), roughness: 0.9 }), bw = 1.83, L0 = 120 * YDm + 2 * bw;
       for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(bw, L0), white); m.rotation.x = -Math.PI / 2; m.position.set(sx * (FIELD.halfW + bw / 2), 0.004, 50 * YDm); m.receiveShadow = true; FW.sides.push(m); scene.add(m); }
-      for (const z of [-10 * YDm - bw / 2, 110 * YDm + bw / 2]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW + 2 * bw, bw), white); FW.ends.push(m); m.rotation.x = -Math.PI / 2; m.position.set(0, 0.004, z); m.receiveShadow = true; scene.add(m); }
+      for (const z of [-10 * YDm - bw / 2, 110 * YDm + bw / 2]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2 * FW.half0 + 2 * bw, bw), white); FW.ends.push(m); m.rotation.x = -Math.PI / 2; m.position.set(0, 0.004, z); m.receiveShadow = true; scene.add(m); }
       sideMat = new THREE.MeshStandardMaterial({ color: col('#1d4f8a'), roughness: 0.85 });
       for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 50 * YDm), sideMat); m.rotation.x = -Math.PI / 2; m.position.set(sx * (FIELD.halfW + bw + 4.2), 0.003, 50 * YDm); m.receiveShadow = true; FW.bands.push(m); scene.add(m); } }
-    losLine = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW, 0.13), new THREE.MeshBasicMaterial({ color: 0x5fa8ff, transparent: true, opacity: 0.85 })); losLine.rotation.x = -Math.PI / 2; losLine.position.y = 0.012; scene.add(losLine);
-    fdLine = new THREE.Mesh(new THREE.PlaneGeometry(2 * FIELD.halfW, 0.15), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.9 })); fdLine.rotation.x = -Math.PI / 2; fdLine.position.y = 0.014; scene.add(fdLine);
+    losLine = new THREE.Mesh(new THREE.PlaneGeometry(2 * FW.half0, 0.13), new THREE.MeshBasicMaterial({ color: 0x5fa8ff, transparent: true, opacity: 0.85 })); losLine.rotation.x = -Math.PI / 2; losLine.position.y = 0.012; scene.add(losLine);
+    fdLine = new THREE.Mesh(new THREE.PlaneGeometry(2 * FW.half0, 0.15), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.9 })); fdLine.rotation.x = -Math.PI / 2; fdLine.position.y = 0.014; scene.add(fdLine);
     // ball
     const pts = []; for (let i = 0; i <= 16; i++) { const t = i / 16; pts.push(new THREE.Vector2(0.086 * Math.pow(Math.sin(Math.PI * t), 0.8), 0.28 * (t - 0.5))); }
     const bgeo = new THREE.LatheGeometry(pts, 20); bgeo.rotateX(Math.PI / 2); bgeo.computeVertexNormals(); ballG = new THREE.Group(); const bm = new THREE.Mesh(bgeo, new THREE.MeshStandardMaterial({ color: col('#7a3b1a'), roughness: 0.5 })); bm.castShadow = true; ballG.add(bm);
