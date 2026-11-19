@@ -1,44 +1,94 @@
-/* Design tokens + base components shared by every screen. Night-game look: deep navy, chalk text, flag-yellow accent. */
+/* ============ Design tokens + base components ============
+   Four selectable styles, set on <html data-style>: broadcast (default: TV sports graphics), program (printed game-day
+   program), varsity (letterman felt on a chalkboard), night (matte night-game dark). Signature touches live in ui/90_styles.css.
+   Components never hard-code colours. They read CONTEXT tokens (--surf --ink --ink2 --rule --fill --acc --btn ...) which are
+   re-pointed for each kind of surface: page (--p-*), card (--c-*), plates over art / the field (--h-*) and HUD sheets (--s-*). */
 :root{
-  --bg:#0a1320;--bg2:#0f1c2c;--panel:#132338;--panel2:#1b3050;--line:rgba(238,241,234,.12);--line2:rgba(238,241,234,.22);
-  --text:#eef1ea;--mute:#9fb0bd;--gold:#f2c230;--flag:#f2c230;--red:#ef5b5b;--green:#5fd38a;--amber:#f29c3b;--blue:#5fa8ff;--tc:#f2c230;
-  --good:#5fd38a;--bad:#ef5b5b;
-  --disp:"Teko","Barlow Condensed","Arial Narrow",Impact,sans-serif;--cond:"Barlow Condensed","Arial Narrow",sans-serif;--body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;--num:"Graduate","Arial Black",Impact,serif;
+  /* team colours, written by render(): c1, c2, accent readable on dark, ink on that accent, c1 dark enough for paper, ink on c1/c2 */
+  --tc:#1d4f91;--tc2:#f2c230;--tca:#f2c230;--tcon:#1b1606;--tcd:#1d4f91;--tcink:#ffffff;--tc2ink:#111111;
   --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);
+  /* ---- type ---- */
+  --disp:"Big Shoulders Display","Barlow Condensed",Impact,"Arial Narrow",sans-serif;--disp-w:800;--disp-tt:uppercase;--disp-ls:.01em;--disp-pt:0px;
+  --head:"Big Shoulders Display","Barlow Condensed",Impact,sans-serif;--head-w:800;--head-tt:uppercase;--head-ls:.05em;--head-fs:15px;
+  --cond:"Barlow Condensed","Arial Narrow",sans-serif;--cond-w:700;--cond-tt:uppercase;--cond-ls:.05em;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --num:"Big Shoulders Display","Barlow Condensed",Impact,sans-serif;--num-w:800;
+  /* ---- shape ---- */
+  --r:0px;--r2:0px;--cut:9px;--shadow:none;--hard:0 0 0 transparent;
+  /* ---- status + ratings ---- */
+  --rt5:#2fbf6a;--rt4:#9ad23b;--rt3:#ffcf3f;--rt2:#ff9a3c;--rt1:#ff5a4e;--rtink:#0b0d10;
+  /* ---- page ---- */
+  --p-bg:#15171b;--p-img:repeating-linear-gradient(135deg,rgba(255,255,255,.028) 0 1px,transparent 1px 9px);
+  --p-ink:#f4f4f0;--p-ink2:#a9adb4;--p-rule:rgba(255,255,255,.13);--p-rule2:rgba(255,255,255,.28);--p-fill:#25282e;--p-fill2:#30343b;
+  --p-acc:var(--tca);--p-accink:var(--tcon);--p-on:#f4f4f0;--p-onink:#111316;--p-btn:#2a2d33;--p-btnink:#f4f4f0;--p-btnrule:transparent;
+  --p-good:#45d27e;--p-bad:#ff6b5e;--p-warn:#ffae42;--p-hi:#ffcf3f;
+  /* ---- cards (white broadcast panels) ---- */
+  --c-bg:#f5f4f0;--c-img:none;--c-ink:#111316;--c-ink2:#5d6168;--c-rule:#d8d7d1;--c-rule2:#b4b3ad;--c-fill:#e7e6e1;--c-fill2:#dbdad4;
+  --c-acc:var(--tcd);--c-accink:#ffffff;--c-on:#111316;--c-onink:#ffffff;--c-btn:#e2e1dc;--c-btnink:#111316;--c-btnrule:transparent;
+  --c-good:#12823f;--c-bad:#cc2a1e;--c-warn:#b35c00;--c-hi:#8a6400;
+  --c-edge:0 0 0 0 transparent;
+  /* ---- plates over stadium art and over the field ---- */
+  --h-bg:#0e0f12;--h-bga:rgba(10,11,14,.88);--h-ink:#ffffff;--h-ink2:#b7bbc2;--h-rule:rgba(255,255,255,.16);--h-rule2:rgba(255,255,255,.32);--h-fill:#24272c;--h-fill2:#30343a;
+  --h-acc:var(--tca);--h-accink:var(--tcon);--h-on:#ffffff;--h-onink:#111316;--h-btn:#24272c;--h-btnink:#ffffff;--h-btnrule:transparent;
+  --h-good:#45d27e;--h-bad:#ff6b5e;--h-warn:#ffae42;--h-hi:#ffcf3f;
+  /* ---- HUD sheets (play-call sheet, game cards, camera) default to the card look ---- */
+  --s-bg:var(--c-bg);--s-img:var(--c-img);--s-ink:var(--c-ink);--s-ink2:var(--c-ink2);--s-rule:var(--c-rule);--s-rule2:var(--c-rule2);--s-fill:var(--c-fill);--s-fill2:var(--c-fill2);
+  --s-acc:var(--c-acc);--s-accink:var(--c-accink);--s-on:var(--c-on);--s-onink:var(--c-onink);--s-btn:var(--c-btn);--s-btnink:var(--c-btnink);--s-btnrule:var(--c-btnrule);
+  --s-good:var(--c-good);--s-bad:var(--c-bad);--s-warn:var(--c-warn);--s-hi:var(--c-hi);
+  /* ---- chrome: top bar, section tabs, bottom bar / side rail ---- */
+  --bar-bg:var(--tc);--bar-ink:var(--tcink);--sub-bg:#0b0c0e;--sub-ink:#c9ccd1;--sub-on:var(--tca);--sub-onink:var(--tcon);
+  --nav-bg:#0b0c0e;--nav-ink:#8f949b;--nav-onink:#ffffff;--nav-mark:var(--tca);
+  /* solid action colours (white text on both) and the native-control scheme of each surface */
+  --go-bg:#13803f;--bad-bg:#c42b20;
+  --p-scheme:dark;--c-scheme:light;--h-scheme:dark;--s-scheme:var(--c-scheme);
   color-scheme:dark;
 }
+/* the four contexts: every component below reads only these names */
+:root{--surf:var(--p-bg);--ink:var(--p-ink);--ink2:var(--p-ink2);--rule:var(--p-rule);--rule2:var(--p-rule2);--fill:var(--p-fill);--fill2:var(--p-fill2);--acc:var(--p-acc);--accink:var(--p-accink);--on:var(--p-on);--onink:var(--p-onink);--btn:var(--p-btn);--btnink:var(--p-btnink);--btnrule:var(--p-btnrule);--good:var(--p-good);--bad:var(--p-bad);--amber:var(--p-warn);--gold:var(--p-hi);--mute:var(--ink2);--text:var(--ink)}
+.cx-card,.panel,.hb-card,.modal .box,.slot,.teamcard,.pcardr,.ri,.pcard,.lgpick button,.hb-sc,.hb-q,.toast,.hb-off>.panel,.hb-bye{--surf:var(--c-bg);--ink:var(--c-ink);--ink2:var(--c-ink2);--rule:var(--c-rule);--rule2:var(--c-rule2);--fill:var(--c-fill);--fill2:var(--c-fill2);--acc:var(--c-acc);--accink:var(--c-accink);--on:var(--c-on);--onink:var(--c-onink);--btn:var(--c-btn);--btnink:var(--c-btnink);--btnrule:var(--c-btnrule);--good:var(--c-good);--bad:var(--c-bad);--amber:var(--c-warn);--gold:var(--c-hi);--mute:var(--ink2);--text:var(--ink);color:var(--ink);color-scheme:var(--c-scheme)}
+.cx-plate,.hero.art,.hb-cast-hd,.hb-lk-hd,#game .tick,#game .hint,#game .pchip,#game .csay,#game .spdbar,#game .mbtn,#game .ban,#game .bub,#game .kbar,#game .acts{--surf:var(--h-bg);--ink:var(--h-ink);--ink2:var(--h-ink2);--rule:var(--h-rule);--rule2:var(--h-rule2);--fill:var(--h-fill);--fill2:var(--h-fill2);--acc:var(--h-acc);--accink:var(--h-accink);--on:var(--h-on);--onink:var(--h-onink);--btn:var(--h-btn);--btnink:var(--h-btnink);--btnrule:var(--h-btnrule);--good:var(--h-good);--bad:var(--h-bad);--amber:var(--h-warn);--gold:var(--h-hi);--mute:var(--ink2);--text:var(--ink);color:var(--ink);color-scheme:var(--h-scheme)}
+.cx-sheet,#game .sheet,#game .ovl .card,#game .campnl{--surf:var(--s-bg);--ink:var(--s-ink);--ink2:var(--s-ink2);--rule:var(--s-rule);--rule2:var(--s-rule2);--fill:var(--s-fill);--fill2:var(--s-fill2);--acc:var(--s-acc);--accink:var(--s-accink);--on:var(--s-on);--onink:var(--s-onink);--btn:var(--s-btn);--btnink:var(--s-btnink);--btnrule:var(--s-btnrule);--good:var(--s-good);--bad:var(--s-bad);--amber:var(--s-warn);--gold:var(--s-hi);--mute:var(--ink2);--text:var(--ink);color:var(--ink);color-scheme:var(--s-scheme)}
+
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--text);font:15px/1.45 var(--body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;
-  background-image:radial-gradient(1100px 520px at 50% -220px,color-mix(in srgb,var(--tc) 18%,transparent),transparent)}
+body{color-scheme:var(--p-scheme);background-color:var(--p-bg);background-image:var(--p-img);background-attachment:fixed;color:var(--ink);font:15px/1.45 var(--body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
 [hidden]{display:none!important}
-h1,h2,h3{font-family:var(--cond);font-weight:700;margin:0 0 .35em;line-height:1.05;letter-spacing:.01em}
-h1{font:600 2.4rem/.95 var(--disp);letter-spacing:.02em}h2{font-size:1.4rem}h3{font-size:1.06rem}
+h1,h2,h3{margin:0 0 .35em;line-height:1.05;color:var(--ink)}
+h1{font:var(--disp-w) 2.5rem/.95 var(--disp);text-transform:var(--disp-tt);letter-spacing:var(--disp-ls);padding-top:var(--disp-pt)}
+h2{font:var(--disp-w) 1.55rem/1 var(--disp);text-transform:var(--disp-tt);letter-spacing:var(--disp-ls);padding-top:var(--disp-pt)}
+h3{font:var(--head-w) var(--head-fs)/1.1 var(--head);text-transform:var(--head-tt);letter-spacing:var(--head-ls)}
+b,strong{font-weight:700}
 button,input,select,textarea{font:inherit;color:inherit}
-button{font:700 15px var(--cond);letter-spacing:.04em;cursor:pointer;border:1px solid var(--line2);border-radius:8px;padding:.55em 1em;background:var(--panel2);color:var(--text);text-transform:uppercase;transition:transform .08s,filter .12s;touch-action:manipulation}
-button:active{transform:scale(.97)}button:hover{filter:brightness(1.08)}
-button:disabled{opacity:.45;cursor:default;filter:none;transform:none}
-button.pri{background:var(--gold);color:#1b1606;border-color:transparent}
-button.go{background:var(--green);color:#04210f;border-color:transparent}
-button.bad{background:var(--red);color:#fff;border-color:transparent}
-button.sm{padding:.32em .65em;font-size:13px}
-button.big{font-size:18px;padding:.7em 1.3em}
-button.ghost{background:transparent}
-:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-select,input,textarea{background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:.42em .6em}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;position:relative;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 22px rgba(0,0,0,.18)}
-.panel.tight{padding:9px 11px}
+button{font:var(--cond-w) 15px/1.1 var(--cond);letter-spacing:var(--cond-ls);text-transform:var(--cond-tt);cursor:pointer;border:2px solid var(--btnrule);border-radius:var(--r);padding:.6em 1.05em .55em;background:var(--btn);color:var(--btnink);transition:transform .08s,filter .12s,background-color .12s;touch-action:manipulation}
+button:active{transform:translateY(1px)}button:hover{filter:brightness(1.07)}
+button:disabled{opacity:.42;cursor:default;filter:none;transform:none}
+button.pri{background:var(--acc);color:var(--accink);border-color:transparent;clip-path:polygon(0 0,100% 0,calc(100% - var(--cut)) 100%,0 100%);padding-right:calc(1.05em + var(--cut) * .6)}
+button.go{background:var(--go-bg);color:#fff;border-color:transparent}
+button.bad{background:var(--bad-bg);color:#fff;border-color:transparent}
+button.sm{padding:.42em .7em .38em;font-size:13px}
+button.big{font-size:19px;padding:.68em 1.4em .62em}
+button.pri.big{padding-right:calc(1.4em + var(--cut))}
+button.ghost{background:transparent;border-color:var(--rule2);color:var(--ink)}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+select,input,textarea{background:var(--fill);border:2px solid var(--rule);border-radius:var(--r);padding:.45em .6em;color:var(--ink)}
+select option{background:var(--surf);color:var(--ink)}
+input[type=checkbox],input[type=range]{accent-color:var(--acc)}
+input[type=range]{padding:0;border:0;background:none}
+.panel{background-color:var(--c-bg);background-image:var(--c-img);border-radius:var(--r2);padding:14px;position:relative;box-shadow:var(--c-edge)}
+.panel.tight{padding:10px 12px}
+.panel .panel{background:var(--fill);background-image:none;box-shadow:none}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sp{flex:1}
 .grid{display:grid;gap:12px}
 @media (min-width:760px){.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}}
-.mute{color:var(--mute)}.small{font-size:13px}
-.tag{display:inline-block;font:600 12px var(--cond);padding:2px 8px;background:var(--panel2);border-radius:4px;margin:2px 3px 2px 0;letter-spacing:.02em}
-.tag.t{background:var(--gold);color:#1b1606}
-.meter{height:10px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
-.meter>i{display:block;height:100%;background:var(--green);border-radius:6px}
-.ovr{display:inline-block;min-width:34px;text-align:center;font:600 20px/1 var(--disp);padding:4px 5px 1px;color:#08130c;border-radius:4px;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
-.toastbox{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--sab));z-index:900;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
-.toast{background:var(--gold);color:#1b1606;padding:9px 16px;border-radius:8px;font:700 15px var(--cond);box-shadow:0 6px 18px rgba(0,0,0,.4);max-width:90vw;animation:toastIn .25s ease}
+.mute{color:var(--ink2)}.small{font-size:13px}
+.tag{display:inline-block;font:var(--cond-w) 12px/1.2 var(--cond);text-transform:var(--cond-tt);padding:3px 8px 2px;background:var(--fill);color:var(--ink);border-radius:var(--r);margin:2px 3px 2px 0;letter-spacing:.03em}
+.tag.t{background:var(--acc);color:var(--accink)}
+.meter{height:10px;background:var(--fill);border-radius:var(--r);overflow:hidden}
+.meter>i{display:block;height:100%;background:var(--good)}
+.ovr{display:inline-block;min-width:36px;text-align:center;font:var(--num-w) 20px/1 var(--num);padding:4px 7px 3px;color:var(--rtink);border-radius:var(--r);clip-path:polygon(var(--cut) 0,100% 0,calc(100% - var(--cut)) 100%,0 100%);letter-spacing:0}
+.toast{background:var(--c-bg);color:var(--ink);padding:10px 16px;border-radius:var(--r);font:var(--cond-w) 15px var(--cond);letter-spacing:.03em;box-shadow:inset 5px 0 0 var(--acc),0 6px 18px rgba(0,0,0,.35);max-width:90vw;animation:toastIn .22s ease}
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 #toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + var(--sab));z-index:900;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+/* phones: every tap target at least 40px tall */
+@media (pointer:coarse){button,select{min-height:40px}button.sm{min-height:40px;min-width:40px;padding-top:.5em;padding-bottom:.45em}input[type=checkbox]{width:22px;height:22px}}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}

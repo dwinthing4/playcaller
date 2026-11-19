@@ -336,7 +336,7 @@ function rollInjury(res) {
   const cand = [res.carrier].concat(res.tacklers || []).filter(pid => pid != null && P(pid) && !G.injuries.some(i => i.pid === pid)); if (!cand.length) return;
   const pid = R() < 0.65 ? cand[0] : pick(cand), p = P(pid), r = R(), weeks = r < 0.5 ? 1 : r < 0.82 ? ri(2, 3) : ri(4, 8), type = pick(INJ);
   G.injuries.push({ pid, weeks, type, prev: p.inj || 0 }); p.inj = Math.max(p.inj || 0, weeks);
-  G.pbp.push(`Injury: ${p.pos} ${pnm(pid)} (${type})`); after(1700, () => tick(`🚑 ${p.pos} ${pnm(pid)} is hurt (${type})`));
+  G.pbp.push(`Injury: ${p.pos} ${pnm(pid)} (${type})`); after(1700, () => tick(`Injury: ${p.pos} ${pnm(pid)} is hurt (${type})`));
 }
 
 // ------------------------------------------------------------ kicks
@@ -558,7 +558,7 @@ function leader(tid, key, fmt) { const ids = new Set(TM(tid).roster || []); let 
 
 // ------------------------------------------------------------ HUD
 function paintScorebugStatic() {
-  for (const [box, T] of [[el.tA, G.A], [el.tH, G.H]]) { box.querySelector('b').textContent = T.abbr; const cv = box.querySelector('canvas'), x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height); if (typeof drawLogo === 'function') { try { drawLogo(x, T, cv.width); } catch (e) { } } box.style.background = `linear-gradient(90deg, ${T.c1}, ${shadeHex(T.c1, -0.35)})`; }
+  for (const [box, T] of [[el.tA, G.A], [el.tH, G.H]]) { box.querySelector('b').textContent = T.abbr; const cv = box.querySelector('canvas'), x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height); if (typeof drawLogo === 'function') { try { drawLogo(x, T, cv.width); } catch (e) { } } box.style.setProperty('--sbc', T.c1); box.style.setProperty('--sbc2', T.c2 || T.c1); box.style.setProperty('--sbink', typeof lum === 'function' && lum(T.c1) > 0.6 ? '#10141c' : '#ffffff'); }
 }
 function shadeHex(h, k) { const n = parseInt(String(h).slice(1), 16), f = c => Math.round(clamp(k < 0 ? c * (1 + k) : c + (255 - c) * k, 0, 255)); return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(c => f(c).toString(16).padStart(2, '0')).join(''); }
 let hudCache = '';
@@ -591,7 +591,7 @@ function pchip() {
   if (!rp) { if (chipKey) { el.pchip.classList.remove('show'); chipKey = ''; } return; }
   const pos = rp.pos, kind = c.unit === 'D' ? (['CB', 'S'].includes(pos) ? 'cov' : ['DE', 'DT'].includes(pos) ? 'rush' : 'def') : c === pl.qb && pl.ball.state === 'held' && !pl.scramble && !pl.qbRun ? 'pass' : ['WR', 'TE'].includes(pos) ? 'rec' : 'run';
   const k = rp.id + kind; if (k === chipKey) return; chipKey = k;
-  const ks = CHIP_KEYS[kind], col = v => v >= 88 ? '#3ecf8e' : v >= 78 ? '#9be15d' : v >= 68 ? '#ffd166' : v >= 58 ? '#ffa94d' : '#ff7b7b';
+  const ks = CHIP_KEYS[kind], col = v => 'var(--rt' + (v >= 88 ? 5 : v >= 78 ? 4 : v >= 68 ? 3 : v >= 58 ? 2 : 1) + ')';
   el.pchip.innerHTML = `<div class="pcn"><b>#${rp.num || ''}</b> ${esc(pos)} ${esc((rp.fn || '')[0] || '')}. ${esc(rp.ln || '')}<i style="background:${col(rp.ovr || 60)}">${rp.ovr || ''}</i></div><div class="pcr">${ks.map(x => `<span><em>${CHIP_LAB[x]}</em><b style="color:${col(rp.a[x] || 0)}">${rp.a[x] || 0}</b><u style="width:${clamp(rp.a[x] || 0, 0, 99)}%;background:${col(rp.a[x] || 0)}"></u></span>`).join('')}</div>`;
   el.pchip.classList.add('show');
 }
@@ -830,13 +830,13 @@ function matchups(side) {
   const yds = p => typeof PHYS !== 'undefined' && PHYS._ && PHYS._.physFrom ? Math.round(PHYS._.physFrom(p).range / 0.9144) : null;
   if (side === 'O') {
     const wr = top(me, 'WR', 3, 'spd')[0], cb = top(them, 'CB', 3, 'spd').pop(), qb = dp(me, 'QB', 0), de = top(them, 'DE', 2, 'prs')[0], lt = dp(me, 'OT', 0);
-    if (wr && cb) { const d = wr.a.spd - cb.a.spd; out.push(d >= 5 ? ['good', `⚡ ${nm(wr)} (SPD ${wr.a.spd}) can run past CB ${nm(cb)} (SPD ${cb.a.spd})`] : d <= -5 ? ['bad', `CB ${nm(cb)} (SPD ${cb.a.spd}) is faster than your WRs`] : ['', `WR ${nm(wr)} SPD ${wr.a.spd} vs CB ${nm(cb)} SPD ${cb.a.spd}`]); }
-    if (qb) { const y = yds(qb); if (y) out.push([y >= 60 ? 'good' : y < 48 ? 'bad' : '', `💪 ${nm(qb)} can throw it about ${y} yards (ARM ${qb.a.thp}, ACC ${qb.a.tha})`]); }
-    if (de && lt && de.a.prs - lt.a.pbk >= 6) out.push(['bad', `⚠ DE ${nm(de)} (RUSH ${de.a.prs}) beats your tackle ${nm(lt)} (PBK ${lt.a.pbk}): get it out fast`]);
+    if (wr && cb) { const d = wr.a.spd - cb.a.spd; out.push(d >= 5 ? ['good', `${nm(wr)} (SPD ${wr.a.spd}) can run past CB ${nm(cb)} (SPD ${cb.a.spd})`] : d <= -5 ? ['bad', `CB ${nm(cb)} (SPD ${cb.a.spd}) is faster than your WRs`] : ['', `WR ${nm(wr)} SPD ${wr.a.spd} vs CB ${nm(cb)} SPD ${cb.a.spd}`]); }
+    if (qb) { const y = yds(qb); if (y) out.push([y >= 60 ? 'good' : y < 48 ? 'bad' : '', `${nm(qb)} can throw it about ${y} yards (ARM ${qb.a.thp}, ACC ${qb.a.tha})`]); }
+    if (de && lt && de.a.prs - lt.a.pbk >= 6) out.push(['bad', `DE ${nm(de)} (RUSH ${de.a.prs}) beats your tackle ${nm(lt)} (PBK ${lt.a.pbk}): get it out fast`]);
   } else {
     const wr = top(them, 'WR', 3, 'spd')[0], cb = top(me, 'CB', 3, 'spd').pop(), qb = dp(them, 'QB', 0);
     if (qb) { const y = yds(qb); if (y) out.push([y < 50 ? 'good' : y >= 62 ? 'bad' : '', y < 50 ? `Their QB ${nm(qb)} can't throw past ~${y} yards: squeeze the short stuff` : `Their QB ${nm(qb)} has a ${y}-yard arm (ARM ${qb.a.thp})`]); }
-    if (wr && cb) { const d = wr.a.spd - cb.a.spd; if (d >= 5) out.push(['bad', `⚡ Their WR ${nm(wr)} (SPD ${wr.a.spd}) outruns CB ${nm(cb)} (SPD ${cb.a.spd}): keep a safety deep`]); }
+    if (wr && cb) { const d = wr.a.spd - cb.a.spd; if (d >= 5) out.push(['bad', `Their WR ${nm(wr)} (SPD ${wr.a.spd}) outruns CB ${nm(cb)} (SPD ${cb.a.spd}): keep a safety deep`]); }
     const rb = dp(them, 'RB', 0); if (rb && rb.a.btk >= 85) out.push(['bad', `RB ${nm(rb)} breaks tackles (BTK ${rb.a.btk}): gang tackle`]);
   }
   const html = out.length ? `<div class="mups">${out.slice(0, 3).map(([c, t]) => `<div class="mu ${c}">${t}</div>`).join('')}</div>` : '';
@@ -860,7 +860,7 @@ function filmFor(op) {
 function filmThreats(form) { return Object.values(G.film || {}).filter(e => !form || e.form === form).map(e => ({ type: e.type, deep: e.deep, w: filmSeen(e) * (Math.max(0, e.yds / Math.max(1, e.n)) + 2 + e.big * 3) })).filter(x => x.w > 2); }
 function filmLine() {
   const top = Object.values(G.film || {}).map(e => [e, filmSeen(e)]).filter(x => x[1] >= 2.5).sort((a, b) => b[1] - a[1])[0];
-  return top ? `<div class="mups"><div class="mu bad">🎥 They have seen ${esc(top[0].name)} ${Math.round(top[1])} times. Mix it up or they will jump it.</div></div>` : '';
+  return top ? `<div class="mups"><div class="mu bad">They have seen ${esc(top[0].name)} ${Math.round(top[1])} times. Mix it up or they will jump it.</div></div>` : '';
 }
 function renderSheet() {
   const s = G.sheet, sh = el.sheet, T = TM(G.user), off = G.poss;
@@ -875,10 +875,10 @@ function renderSheet() {
   const f = s.filter, shown = f === 'coach' ? (picks.length ? [] : pool) : pool.filter(p => f === 'all' || (f === 'run' && p.type === 'run') || (f === 'pass' && p.type === 'pass') || (f === 'blitz' && p.blitz && p.blitz.length) || (f === 'man' && MAN_COVERAGES[p.cov]) || (f === 'zone' && p.side === 'D' && !MAN_COVERAGES[p.cov]) || p.form === f);
   const chips = (side === 'O' ? [['coach', 'Coach picks'], ['all', 'All'], ['run', 'Run'], ['pass', 'Pass']] : [['coach', 'Coach picks'], ['all', 'All'], ['blitz', 'Blitz'], ['man', 'Man'], ['zone', 'Zone']]).concat(forms.map(x => [x, x]));
   const fg = has('fgProb') ? LG.fgProb(G.user, Math.round(G.yl)) : null, late = G.q >= 4 || G.q === 2, lead = G.score[G.user] - G.score[opp(G.user)];
-  const clockNote = G.runoff > 0 && G.clock - G.runoff <= 0 ? `<div class="small" style="color:#ff9b8a;margin-top:4px">⏱ The clock runs out before the snap unless you call timeout.</div>` : '';
+  const clockNote = G.runoff > 0 && G.clock - G.runoff <= 0 ? `<div class="small" style="color:var(--bad);margin-top:4px">The clock runs out before the snap unless you call timeout.</div>` : '';
   const four = side === 'O' && G.down === 4 && has('cpuFourth') ? LG.cpuFourth(G.user, ctxFor(G.user, 'O')) : null, fourTxt = four ? ` On 4th down I'd ${four === 'go' ? 'go for it' : four === 'fg' ? 'kick the field goal' : 'punt it'}.` : '';
   const who = cc && cc.who ? cc.who : null, say = (cc && cc.say ? cc.say : 'Your call, coach.') + fourTxt;
-  sh.innerHTML = `<div class="sh-top"><span class="side ${side === 'D' ? 'd' : ''}">${side === 'O' ? 'OFFENSE' : 'DEFENSE'}</span><span class="sit">${G.pat && G.pat.two ? 'Two-point try' : esc(ddTxt())}</span><span class="sp"></span><span class="small mute">${qTxt(G.q)} ${clockTxt(G.clock - G.runoff)}${G.runoff > 0 ? ' ⏱' : ''}</span></div>${clockNote}
+  sh.innerHTML = `<div class="sh-top"><span class="side ${side === 'D' ? 'd' : ''}">${side === 'O' ? 'OFFENSE' : 'DEFENSE'}</span><span class="sit">${G.pat && G.pat.two ? 'Two-point try' : esc(ddTxt())}</span><span class="sp"></span><span class="small mute">${qTxt(G.q)} ${clockTxt(G.clock - G.runoff)}${G.runoff > 0 ? ' <i class="clk">running</i>' : ''}</span></div>${clockNote}
     <div class="coord">${who && typeof lookC === 'function' ? lookC(who.lk, 50, G.user) : ''}<div><div class="who">${who ? `${who.role} ${esc(who.fn)} ${esc(who.ln)}` : 'COORDINATOR'}</div><p>${esc(say)}</p></div></div>
     ${matchups(side)}${side === 'O' ? filmLine() : ''}
     ${picks.length && f === 'coach' ? `<div class="picks">${picks.slice(0, 3).map(p => playCard(p, true)).join('')}</div>` : ''}
@@ -969,12 +969,12 @@ function finalCard(pog) {
   const line = s => [s.pa ? `${s.pc || 0}/${s.pa} ${s.py || 0} yds ${s.ptd || 0} TD` : '', s.ra ? `${s.ra} car ${s.ry || 0} yds` : '', s.rec ? `${s.rec} rec ${s.recy || 0} yds` : '', (s.rtd || 0) + (s.rectd || 0) ? `${(s.rtd || 0) + (s.rectd || 0)} TD` : '', s.tk ? `${s.tk} tk` : '', s.sk ? `${s.sk} sk` : '', s.int ? `${s.int} INT` : '', s.fgm ? `${s.fgm} FG` : ''].filter(Boolean).join(' · ');
   const L1 = (k, f, lab) => `<div><b>${lab}</b>${esc(A.abbr)}: ${esc(leader(G.aid, k, f))}<br>${esc(H.abbr)}: ${esc(leader(G.hid, k, f))}</div>`;
   overlay(`<div class="card fin"><div class="small mute" style="text-align:center;letter-spacing:.08em">FINAL${G.q >= 5 ? ' / OT' : ''}</div>
-    <div class="mu"><div class="t">${typeof logoC === 'function' ? logoC(A, 56) : ''}<b>${esc(A.name)}</b><span class="big" style="color:${G.score[G.aid] >= G.score[G.hid] ? '#fff' : 'rgba(255,255,255,.45)'}">${G.score[G.aid]}</span></div><div class="at">@</div><div class="t">${typeof logoC === 'function' ? logoC(H, 56) : ''}<b>${esc(H.name)}</b><span class="big" style="color:${G.score[G.hid] >= G.score[G.aid] ? '#fff' : 'rgba(255,255,255,.45)'}">${G.score[G.hid]}</span></div></div>
-    ${G.mode === 'play' ? `<div style="text-align:center;font:600 26px var(--disp);color:${tie ? '#ccc' : won ? 'var(--good)' : 'var(--bad)'}">${tie ? 'TIE GAME' : won ? 'VICTORY' : 'DEFEAT'}</div>` : ''}
+    <div class="mu"><div class="t">${typeof logoC === 'function' ? logoC(A, 56) : ''}<b>${esc(A.name)}</b><span class="big${G.score[G.aid] >= G.score[G.hid] ? '' : ' lo'}">${G.score[G.aid]}</span></div><div class="at">@</div><div class="t">${typeof logoC === 'function' ? logoC(H, 56) : ''}<b>${esc(H.name)}</b><span class="big${G.score[G.hid] >= G.score[G.aid] ? '' : ' lo'}">${G.score[G.hid]}</span></div></div>
+    ${G.mode === 'play' ? `<div style="text-align:center;font:600 26px var(--disp);color:${tie ? 'var(--mute)' : won ? 'var(--good)' : 'var(--bad)'}">${tie ? 'TIE GAME' : won ? 'VICTORY' : 'DEFEAT'}</div>` : ''}
     <table>${row('', esc(A.abbr), esc(H.abbr))}${row('Total yards', a.ty, h.ty)}${row('Passing', a.py, h.py)}${row('Rushing', a.ry, h.ry)}${row('Comp / Att', `${a.pc}/${a.pa}`, `${h.pc}/${h.pa}`)}${row('First downs', a.fd, h.fd)}${row('Turnovers', a.to, h.to)}${row('Sacks', a.sk, h.sk)}</table>
     <div class="ld">${L1('py', s => `${s.py} yds`, 'PASSING')}${L1('ry', s => `${s.ry} yds`, 'RUSHING')}${L1('recy', s => `${s.recy} yds`, 'RECEIVING')}${L1('tk', s => `${s.tk} tk`, 'TACKLES')}</div>
     ${pg ? `<div class="pog">${typeof bustC === 'function' ? bustC(pg, 48) : ''}<div><div class="small" style="color:var(--gold);font-weight:700;letter-spacing:.06em">PLAYER OF THE GAME</div><b>${esc(pg.pos)} ${esc(pg.fn)} ${esc(pg.ln)}</b><div class="small mute">${esc(line(ps))}</div></div></div>` : ''}
-    ${G.injuries.length ? `<div class="small" style="margin-top:8px;color:#ff9b8a">Injuries: ${G.injuries.map(i => `${esc(pnm(i.pid))} (${esc(i.type)}, ${i.weeks} wk)`).join(', ')}</div>` : ''}
+    ${G.injuries.length ? `<div class="small" style="margin-top:8px;color:var(--bad)">Injuries: ${G.injuries.map(i => `${esc(pnm(i.pid))} (${esc(i.type)}, ${i.weeks} wk)`).join(', ')}</div>` : ''}
     <div class="row" style="margin-top:14px"><button class="pri big on" id="mDone">Continue</button></div></div>`);
   if (typeof paintArt === 'function') { try { paintArt(el.ovl); } catch (e) { } }
   document.getElementById('mDone').onclick = () => close(G.result);

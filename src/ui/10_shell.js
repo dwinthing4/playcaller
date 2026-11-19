@@ -6,8 +6,12 @@ function toast(text) { const box = document.getElementById('toasts'); if (!box) 
 function modal(html, cls) { const m = document.getElementById('modal'); m.innerHTML = `<div class="modal" onclick="if(event.target===this)closeModal()"><div class="box ${cls || ''}" role="dialog">${html}</div></div>`; paintArt(m); }
 function closeModal() { const m = document.getElementById('modal'); if (m) m.innerHTML = ''; }
 function uiRes(r) { if (r && r.msg) toast(r.msg); saveGame(); render(); return r; }
-const ovrColor = o => o >= 90 ? '#3ecf8e' : o >= 80 ? '#9be15d' : o >= 70 ? '#ffd166' : o >= 60 ? '#ffa94d' : '#ff7b7b';
-const ovrTag = o => `<span class="ovr" style="background:${ovrColor(o)}">${o}</span>`;
+// rating colours are style tokens (--rt5 best .. --rt1 worst) so every UI style can tune them
+const ovrTier = o => o >= 90 ? 5 : o >= 80 ? 4 : o >= 70 ? 3 : o >= 60 ? 2 : 1;
+const ovrColor = o => `var(--rt${ovrTier(o)})`;
+const ovrTag = o => `<span class="ovr r${ovrTier(o)}" style="background:${ovrColor(o)}">${o}</span>`;
+// morale as five bars (no emoji faces)
+const moodTag = m => { const n = m >= 75 ? 5 : m >= 58 ? 4 : m >= 42 ? 3 : m >= 28 ? 2 : 1; return `<span class="mood m${n}" title="Morale ${Math.round(m)}" aria-label="Morale ${Math.round(m)}"><i></i><i></i><i></i><i></i><i></i></span>`; };
 function meter(v, col) { return `<div class="meter"><i style="width:${clamp(v, 0, 100)}%;background:${col || (v > 60 ? 'var(--good)' : v > 35 ? 'var(--amber)' : 'var(--bad)')}"></i></div>`; }
 function potBar(cur, pot, known, col) { if (!known) return `<div class="pbar unk" title="Not scouted yet"><i style="width:100%"></i><span>?</span></div>`; return `<div class="pbar" title="Now ${Math.round(cur)} · Potential ${Math.round(pot)}"><b style="width:${clamp(pot, 0, 100)}%"></b><i style="width:${clamp(cur, 0, 100)}%;background:${col || ovrColor(cur)}"></i></div>`; }
 const bustC = (p, sz, tid) => `<canvas class="bust" data-bust="${p.id}" ${tid != null ? `data-tid="${tid}"` : ''} width="${(sz || 48) > 72 ? 192 : 96}" height="${(sz || 48) > 72 ? 192 : 96}" style="width:${sz || 48}px;height:${sz || 48}px"></canvas>`;
@@ -43,6 +47,19 @@ function navAccent(T) {
   if (sat(T.c1) > 0.18) { let c = T.c1; for (let i = 0; i < 6 && lum(c) < 0.36; i++) c = shade(c, 0.22); return c; }
   return lum(T.c2) > 0.3 ? T.c2 : '#f2c230';
 }
+// the user's team colours as CSS tokens: c1, c2, an accent that reads on dark, c1 darkened until it reads on paper, ink for c1/c2
+function setTeamTokens(T) {
+  const ds = document.documentElement.style, ac = navAccent(T); let dk = T.c1; for (let i = 0; i < 8 && lum(dk) > 0.3; i++) dk = shade(dk, -0.16);
+  ds.setProperty('--tc', T.c1); ds.setProperty('--tc2', T.c2); ds.setProperty('--tca', ac); ds.setProperty('--tcon', lum(ac) > 0.55 ? '#10141c' : '#ffffff');
+  ds.setProperty('--tcd', dk); ds.setProperty('--tcink', lum(T.c1) > 0.6 ? '#10141c' : '#ffffff'); ds.setProperty('--tc2ink', lum(T.c2) > 0.6 ? '#10141c' : '#ffffff');
+}
+// ---------- UI styles: a device-level choice (so it dresses the title screen too), kept in localStorage ----------
+const UI_STYLES = [['broadcast', 'Broadcast', 'TV graphics: bold team-colour blocks, hard edges'], ['program', 'Game Program', 'Printed game-day program: paper, ink and one spot colour'], ['varsity', 'Varsity', 'Letterman felt patches on the coach\'s chalkboard'], ['night', 'Night Game', 'Matte black under the stadium lights']];
+function uiStyle() { let k = null; try { k = localStorage.getItem('pc_style'); } catch (e) { } return UI_STYLES.some(x => x[0] === k) ? k : 'broadcast'; }
+function applyUiStyle() { const k = uiStyle(); document.documentElement.dataset.style = k; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = { broadcast: '#15171b', program: '#efe8d8', varsity: '#26332d', night: '#0c0d0e' }[k]; }
+function setUiStyle(k) { try { localStorage.setItem('pc_style', k); } catch (e) { } applyUiStyle(); render(); }
+function stylePicker() { const cur = uiStyle(); return `<div class="stylepick" role="radiogroup" aria-label="Style"><span class="pos">Style</span>${UI_STYLES.map(([k, n, d]) => `<button role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" title="${d}" onclick="setUiStyle('${k}')"><i class="sw-${k}"></i>${n}</button>`).join('')}</div>`; }
+applyUiStyle();
 const VIEWS = {};
 let LASTSUB = {};
 function groupOf(t) { return NAVG.find(g => g[2].some(s => s[0] === t)) || NAVG[0]; }
@@ -53,12 +70,12 @@ function render() {
   if (!L) { renderTitle(); return; }
   if (L.picking) { renderPickTeam(); return; }
   if (L.retired) { app.innerHTML = retiredHTML(); paintArt(app); return; }
-  const T = UT(), ds = document.documentElement.style, ac = navAccent(T); ds.setProperty('--tc', T.c1); ds.setProperty('--tc2', T.c2); ds.setProperty('--tca', ac); ds.setProperty('--tcon', lum(ac) > 0.55 ? '#10141c' : '#ffffff');
+  const T = UT(); setTeamTokens(T);
   const G = groupOf(TAB); LASTSUB[G[0]] = TAB; let body = '';
   const hubCls = TAB === 'home' && !L.ghost && !L.fired ? ' hub-' + hubLayout() : '';
   try { body = (VIEWS[TAB] || VIEWS.home)(); } catch (e) { console.error(e); body = `<div class="panel">Something went wrong drawing this screen: ${esc(e.message)}</div>`; }
   const ur = unreadCount();
-  app.innerHTML = `<div class="shell tab-${TAB}${hubCls}"><header class="topbar">${logoC(T, 30)}<div class="tname"><b>${esc(T.name)}</b><span>${T.name !== T.city ? esc(T.city) + " · " : ""}${L.year} · ${phaseLabel()}</span></div><span class="rec">${T.w}-${T.l}${T.tie ? '-' + T.tie : ''}</span><span class="cred" title="Coach credits">🪙 ${T.coach.pts}</span></header>
+  app.innerHTML = `<div class="shell tab-${TAB}${hubCls}"><header class="topbar">${logoC(T, 30)}<div class="tname"><b>${esc(T.name)}</b><span>${T.name !== T.city ? esc(T.city) + " · " : ""}${L.year} · ${phaseLabel()}</span></div><span class="rec" title="Record"><small>Record</small><b>${T.w}-${T.l}${T.tie ? '-' + T.tie : ''}</b></span><span class="cred" title="Coach credits"><small>Credits</small><b>${T.coach.pts}</b></span></header>
   ${G[2].length > 1 ? `<div class="subnav">${G[2].map(([k, n]) => `<button class="${TAB === k ? 'on' : ''}" onclick="go('${k}')">${n}${k === 'inbox' && ur ? ` <i class="badge">${ur}</i>` : ''}</button>`).join('')}</div>` : ''}
   <main class="wrap">${body}</main>
   <nav class="nav"><div class="railtop" aria-hidden="true">${logoC(T, 44)}</div>${NAVG.map(([k, n]) => `<button class="${G[0] === k ? 'on' : ''}" onclick="goGroup('${k}')" aria-label="${n}"${G[0] === k ? ' aria-current="page"' : ''}><span class="ni">${NAV_ICON[k]}</span><span class="nl">${n}</span>${k === 'home' && ur ? `<i class="dot">${ur > 9 ? '9+' : ur}</i>` : ''}</button>`).join('')}</nav></div>`;
