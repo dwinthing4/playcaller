@@ -15,10 +15,13 @@ function vnoise(x, y, z) { const i = Math.floor(x), j = Math.floor(y), k = Math.
   return lp(lp(lp(a, b, fx), lp(c, d, fx), fy), lp(lp(e, f, fx), lp(g, h, fx), fy), fz); }
 function fbm(x, y, z) { return vnoise(x, y, z) * 0.55 + vnoise(x * 2.1, y * 2.1, z * 2.1) * 0.3 + vnoise(x * 4.3, y * 4.3, z * 4.3) * 0.15; }
 // ---- palette slots ----
-// body: 0 jersey 1 trim 2 pants 3 pantsStripe 4 socks 5 skin 6 glove 7 cleat 8 sole 9 spat (cleat collar) 10 belt 11 ankle (lower sock) 12 dirt 13 grass 14 neckRoll
-//       15-18 left arm: upper, elbow, forearm, wrist   19-22 right arm: upper, elbow, forearm, wrist   23-26 tattoo pattern: upper L, forearm L, upper R, forearm R   27 spare
+// body: 0 jersey 1 collar (trim) 2 pants 3 pantsStripe (unused since v9) 4 socks 5 skin 6 glove 7 cleat 8 sole 9 spat (cleat collar) 10 belt 11 ankle (lower sock) 12-13 spare (old baked dirt) 14 neckRoll
+//       15-18 left arm: upper, elbow, forearm, wrist   19-22 right arm: upper, elbow, forearm, wrist   23-26 tattoo pattern: upper L, forearm L, upper R, forearm R
+//       27 glove palm 28 glove cuff 29 cleat heel / toe accent 30-31 spare
 // Each player sets these per region, so one sculpted body shows bare arms, full / elbow / half sleeves on either arm, tape, bands, tattoos, spats...
-const NS = 28, NSH = 12, NSG = 12;
+// Stripes, seams, dirt and fabric are not baked into the slots: the mesh stores smooth "design coordinates" (dz) and a baked
+// ambient occlusion term, and the player shader draws crisp stripes / stitching / stains from them per kit (see 20_scene.js).
+const NS = 32, NSH = 12, NSG = 12;
 const SLOT = n => { const a = new Float32Array(NS); a[n] = 1; return a; }, ZERO = new Float32Array(NS);
 function mixc(a, b, t) { const o = new Float32Array(NS); for (let i = 0; i < NS; i++) o[i] = a[i] + (b[i] - a[i]) * t; return o; }
 function scl(a, s) { const o = new Float32Array(NS); for (let i = 0; i < NS; i++) o[i] = a[i] * s; return o; }
@@ -82,24 +85,26 @@ const PADS = { speed: { box: [0.112, 0.05, 0.138, 0.045, 0.22], capY: 1.505, cap
 // o: {heightIn, weightLb, muscle, pads:'speed'|'sleek'|'trench', arms:{L:{item,wrist},R:{item,wrist}}, spats, res}
 function makeBodyModel(o) {
   const PS = PADS[o.pads || 'speed'], bp = bodyParams(o), { H, g, m, fat } = bp, J = skeleton(bp), Rg = H * g, mf = 0.85 + 0.3 * m, Y = v => v * H, prims = [], add = p => { prims.push(p); return p; }, belt = Y(1.045);
-  const cJ = SLOT(0), cT = SLOT(1), cP = SLOT(2), cPS = SLOT(3), cS = SLOT(4), cSk = SLOT(5), cGl = SLOT(6), cCl = SLOT(7), cSo = SLOT(8), cSpat = SLOT(9), cBelt = SLOT(10), cAnk = SLOT(11), cDirt = SLOT(12), cGrass = SLOT(13), cRoll = SLOT(14);
-  const torsoCol = (x, y, z) => { const b = sstep(belt - 0.004, belt + 0.004, y); let c = mixc(cP, cJ, b); const bb = sstep(belt - 0.022, belt - 0.016, y) * (1 - sstep(belt - 0.006, belt - 0.002, y)); c = mixc(c, cBelt, bb); if (y < belt) { const st = sstep(0.92, 0.96, Math.abs(x) / (0.16 * Rg)); c = mixc(c, cPS, st); } return c; };
-  add(E([0, Y(0.985), -0.01], [0.160 * Rg, 0.105 * H, 0.112 * Rg], { k: 0, bone: BI.root, col: torsoCol, wr: 1 }));
-  for (const s of [1, -1]) add(E([s * 0.064 * H * g, Y(0.925), -0.062 * Rg], [0.084 * Rg, 0.088 * H, 0.078 * Rg * (0.9 + 0.25 * m)], { k: 0.04, bone: BI.root, col: () => cP, wr: 1 }));
-  add(E([0, Y(1.13), 0.005 + fat * 0.035], [0.148 * Rg, 0.13 * H, (0.105 + fat * 0.06) * Rg], { k: 0.06, bone: BI.spine, col: torsoCol, num: 1, wr: 1.3 }));
-  add(E([0, Y(1.32), 0.008], [0.168 * Rg * (0.95 + 0.1 * m), 0.16 * H, 0.118 * Rg * (0.95 + 0.1 * m) + fat * 0.02], { k: 0.06, bone: BI.chest, col: () => cJ, num: 1, wr: 1 }));
-  add(E([0, Y(1.30), -0.02], [0.18 * Rg, 0.12 * H, 0.10 * Rg], { k: 0.05, bone: BI.chest, col: () => cJ, num: 1, wr: 1 }));
+  const cJ = SLOT(0), cT = SLOT(1), cP = SLOT(2), cS = SLOT(4), cSk = SLOT(5), cGl = SLOT(6), cCl = SLOT(7), cSo = SLOT(8), cSpat = SLOT(9), cBelt = SLOT(10), cAnk = SLOT(11), cRoll = SLOT(14), cPalm = SLOT(27), cCuff = SLOT(28), cAcc = SLOT(29);
+  const torsoCol = (x, y, z) => { const b = sstep(belt - 0.004, belt + 0.004, y); let c = mixc(cP, cJ, b); const bb = sstep(belt - 0.024, belt - 0.019, y) * (1 - sstep(belt - 0.007, belt - 0.003, y)); return mixc(c, cBelt, bb); };
+  // du: how much a region picks up dirt / grass when the player goes to the ground on his chest or back (dirt: legs, knees, cleats)
+  add(E([0, Y(0.985), -0.01], [0.160 * Rg, 0.105 * H, 0.112 * Rg], { k: 0, bone: BI.root, col: torsoCol, wr: 1, dirt: 0.25, du: 0.35 }));
+  for (const s of [1, -1]) add(E([s * 0.064 * H * g, Y(0.925), -0.062 * Rg], [0.084 * Rg, 0.088 * H, 0.078 * Rg * (0.9 + 0.25 * m)], { k: 0.04, bone: BI.root, col: () => cP, wr: 1, dirt: 0.3, du: 0.4 }));
+  add(E([0, Y(1.13), 0.005 + fat * 0.035], [0.148 * Rg, 0.13 * H, (0.105 + fat * 0.06) * Rg], { k: 0.06, bone: BI.spine, col: torsoCol, num: 1, wr: 1.3, du: 0.75 }));
+  add(E([0, Y(1.32), 0.008], [0.168 * Rg * (0.95 + 0.1 * m), 0.16 * H, 0.118 * Rg * (0.95 + 0.1 * m) + fat * 0.02], { k: 0.06, bone: BI.chest, col: () => cJ, num: 1, wr: 1, du: 0.8 }));
+  add(E([0, Y(1.30), -0.02], [0.18 * Rg, 0.12 * H, 0.10 * Rg], { k: 0.05, bone: BI.chest, col: () => cJ, num: 1, wr: 1, du: 0.7 }));
   const PW = H * (0.88 + 0.12 * g), PD = H * (0.85 + 0.2 * g), sx = J.shL[0], holeR = 0.085 * H * (0.8 + 0.25 * g) * PS.hole;
   const padCol = (x, y, z) => { const rr = Math.sqrt(x * x + (z + 0.005) * (z + 0.005)), col = (1 - sstep(holeR + 0.014, holeR + 0.02, rr)) * sstep(Y(1.47), Y(1.49), y); return mixc(cJ, cT, col); };
-  add(E([0, Y(PS.archY), 0], [PS.arch[0] * PW, PS.arch[1], PS.arch[2] * PD], { g: 1, k: 0, bone: BI.chest, col: padCol, num: 1, wr: 0.35 }));
-  for (const s of [1, -1]) { if (PS.box) { const b = PS.box; add(B([s * (sx + PS.capX), Y(PS.capY), 0], [b[0] * PW, b[1], b[2] * PD], b[3], { g: 1, k: 0.035, ang: -s * b[4], bone: BI.chest, col: padCol, wr: 0.35 })); }
-    else add(E([s * (sx + PS.capX), Y(PS.capY), 0], [PS.cap[0] * PW, PS.cap[1], PS.cap[2] * PD], { g: 1, k: 0.035, bone: BI.chest, col: padCol, wr: 0.35 })); }
-  add(E([0, Y(1.405), 0.052 * Rg + 0.01], [0.165 * PW, 0.115 * H, 0.06 * PS.plate], { g: 1, k: 0.04, bone: BI.chest, col: padCol, num: 1, wr: 0.3 }));
-  add(E([0, Y(1.41), -0.05 * Rg - 0.01], [0.17 * PW, 0.12 * H, 0.06 * PS.plate], { g: 1, k: 0.04, bone: BI.chest, col: padCol, num: 1, wr: 0.3 }));
+  add(E([0, Y(PS.archY), 0], [PS.arch[0] * PW, PS.arch[1], PS.arch[2] * PD], { g: 1, k: 0, bone: BI.chest, col: padCol, num: 1, wr: 0.35, du: 0.45 }));
+  for (const s of [1, -1]) { if (PS.box) { const b = PS.box; add(B([s * (sx + PS.capX), Y(PS.capY), 0], [b[0] * PW, b[1], b[2] * PD], b[3], { g: 1, k: 0.035, ang: -s * b[4], bone: BI.chest, col: padCol, wr: 0.35, du: 0.55 })); }
+    else add(E([s * (sx + PS.capX), Y(PS.capY), 0], [PS.cap[0] * PW, PS.cap[1], PS.cap[2] * PD], { g: 1, k: 0.035, bone: BI.chest, col: padCol, wr: 0.35, du: 0.55 })); }
+  add(E([0, Y(1.405), 0.052 * Rg + 0.01], [0.165 * PW, 0.115 * H, 0.06 * PS.plate], { g: 1, k: 0.04, bone: BI.chest, col: padCol, num: 1, wr: 0.3, du: 0.7 }));
+  add(E([0, Y(1.41), -0.05 * Rg - 0.01], [0.17 * PW, 0.12 * H, 0.06 * PS.plate], { g: 1, k: 0.04, bone: BI.chest, col: padCol, num: 1, wr: 0.3, du: 0.6 }));
   if (PS.roll) add(T([0, Y(1.572), -0.006], holeR + 0.01, 0.02, { g: 4, k: 0, bone: BI.chest, col: () => cRoll }));
+  const sleeves = {};
   for (const [s, L] of [[1, 'L'], [-1, 'R']]) { const sh = J['sh' + L], el = J['el' + L], t = PS.slT, b = [lp(sh[0], el[0], t), lp(sh[1], el[1], t), lp(sh[2], el[2], t)], ar = lp(0.056 * Rg * mf, 0.043 * Rg, t) + 0.011;
-    const slCol = (x, y, z, tt) => { if (!PS.stripes) return cJ; const st = PS.stripes > 1 ? sstep(0.6, 0.63, tt) * (1 - sstep(0.8, 0.83, tt)) : sstep(0.72, 0.75, tt) * (1 - sstep(0.84, 0.87, tt)); return mixc(cJ, cT, Math.min(st, 1)); };
-    add(C([sh[0] + s * 0.005, sh[1] + 0.005, sh[2]], b, PS.sl * PW, ar, { g: 3, k: 0.02, bone: BI['sh' + L], col: slCol, wr: 0.25 })); }
+    sleeves[s] = { a: [sh[0] + s * 0.005, sh[1] + 0.005, sh[2]], b, r: PS.sl * PW };
+    add(C(sleeves[s].a, b, PS.sl * PW, ar, { g: 3, k: 0.02, bone: BI['sh' + L], col: () => cJ, wr: 0.25, du: 0.5 })); }
   add(C([0, Y(1.47), -0.012], [0, Y(1.69), 0.005], 0.064 * Rg * (0.9 + 0.25 * m), 0.054 * Rg, { k: 0.03, bone: BI.neck, col: () => cSk, skin: 1 }));
   for (const [s, L] of [[1, 'L'], [-1, 'R']]) {
     const sh = J['sh' + L], el = J['el' + L], wr = J['wr' + L], lq = (a, b, t) => [lp(a[0], b[0], t), lp(a[1], b[1], t), lp(a[2], b[2], t)];
@@ -110,14 +115,15 @@ function makeBodyModel(o) {
     const armCol = (x, y, z, t) => { const c = mixc(sU, sE, sstep(0.82, 0.86, t)), p = ink(x, y, z, t, 0.3, 0.8); return p > 0 ? mixc(c, sTU, p) : c; };
     const faCol = (x, y, z, t) => { let c = mixc(sE, sF, sstep(0.26, 0.3, t)); const p = ink(x, y, z, t, 0.36, 0.76); if (p > 0) c = mixc(c, sTF, p); return mixc(c, sW, sstep(0.8, 0.815, t)); };
     const thick = AG.item === 'bare' ? 0 : 0.0025;
-    const ua = add(C(sh, el, 0.056 * Rg * mf + thick * 0.4, 0.043 * Rg + thick, { k: 0.025, bone: BI['sh' + L], col: armCol, wr: AG.item === 'full' ? 0.5 : 0 }));
+    const ua = add(C(sh, el, 0.056 * Rg * mf + thick * 0.4, 0.043 * Rg + thick, { k: 0.025, bone: BI['sh' + L], col: armCol, wr: AG.item === 'full' ? 0.5 : 0, du: 0.25 }));
     add(E([sh[0] + s * 0.015, sh[1] - 0.02, sh[2]], [0.06 * Rg * mf, 0.07 * Rg, 0.065 * Rg * mf], { k: 0.03, bone: BI['sh' + L], col: () => cJ }));
     const bc = lq(sh, el, 0.52); add(E([bc[0], bc[1], bc[2] + 0.022 * Rg], [0.038 * Rg * (0.7 + 0.6 * m), 0.075 * H, 0.036 * Rg * (0.7 + 0.6 * m)], { k: 0.03, bone: BI['sh' + L], col: (x, y, z) => { sdP(ua, x, y, z); return armCol(x, y, z, ua._t); } }));
     const tc = lq(sh, el, 0.42); add(E([tc[0] + s * 0.005, tc[1], tc[2] - 0.028 * Rg], [0.04 * Rg * (0.7 + 0.6 * m), 0.085 * H, 0.036 * Rg * (0.7 + 0.6 * m)], { k: 0.03, bone: BI['sh' + L], col: (x, y, z) => { sdP(ua, x, y, z); return armCol(x, y, z, ua._t); } }));
-    const fa = add(C(el, wr, 0.045 * Rg * (0.9 + 0.2 * m) + thick, 0.03 * Rg + thick + (AG.wrist !== 'none' ? 0.002 : 0), { k: 0.025, bone: BI['el' + L], col: faCol, wr: AG.item === 'half' || AG.item === 'full' ? 0.4 : 0 }));
+    const fa = add(C(el, wr, 0.045 * Rg * (0.9 + 0.2 * m) + thick, 0.03 * Rg + thick + (AG.wrist !== 'none' ? 0.002 : 0), { k: 0.025, bone: BI['el' + L], col: faCol, wr: AG.item === 'half' || AG.item === 'full' ? 0.4 : 0, du: 0.7 }));
     const fc = lq(el, wr, 0.22); add(E([fc[0] + s * 0.008, fc[1], fc[2] + 0.006], [0.046 * Rg * (0.75 + 0.45 * m), 0.075 * H, 0.042 * Rg * (0.75 + 0.45 * m)], { k: 0.03, bone: BI['el' + L], col: (x, y, z) => { sdP(fa, x, y, z); return faCol(x, y, z, fa._t); } }));
     if (AG.item === 'pad') add(E([el[0] + s * 0.006, el[1] + 0.005, el[2] - 0.03 * Rg], [0.045 * Rg, 0.06 * H, 0.035 * Rg], { k: 0.02, bone: BI['el' + L], col: () => cA }));
-    const w = wr, hs = Math.pow(H, 0.6) * 1.12, GB = BI['wr' + L], gc = () => cGl;
+    // glove: cuff band at the wrist, darker grip palm on the inner (thigh-facing) side of the hanging hand
+    const w = wr, hs = Math.pow(H, 0.6) * 1.12, GB = BI['wr' + L], gc = (x, y, z) => { let c = mixc(cGl, cPalm, 1 - sstep(-0.007, 0.004, (x - (w[0] - s * 0.008 * hs)) * s)); return mixc(c, cCuff, sstep(w[1] - 0.026, w[1] - 0.018, y)); };
     add(C([w[0], w[1] + 0.005, w[2]], [w[0], w[1] - 0.03, w[2] + 0.005], 0.031 * hs, 0.03 * hs, { k: 0.012, bone: GB, col: gc }));
     add(E([w[0], w[1] - 0.06 * hs, w[2] + 0.008], [0.022 * hs, 0.05 * hs, 0.045 * hs], { k: 0.015, bone: GB, col: gc }));
     const zs = [0.03, 0.011, -0.008, -0.026], ls = [0.92, 1.0, 0.96, 0.8], coarse = (o.res || 0.016) > 0.012;
@@ -130,8 +136,8 @@ function makeBodyModel(o) {
   }
   for (const [s, L] of [[1, 'L'], [-1, 'R']]) {
     const hp = J['hip' + L], kn = J['kn' + L], an = J['an' + L], lq = (a, b, t) => [lp(a[0], b[0], t), lp(a[1], b[1], t), lp(a[2], b[2], t)];
-    let th; const thCol = (x, y, z) => { sdP(th, x, y, z); const r = axisRadial(th, x, y, z), ow = s * r[0]; return mixc(cP, cPS, sstep(0.86, 0.9, ow) * (1 - sstep(0.97, 0.995, ow))); };
-    th = add(C(hp, kn, 0.088 * Rg * mf, 0.056 * Rg, { k: 0.05, bone: BI['hip' + L], col: thCol, wr: 1.2, dirt: 0.5 }));
+    const thCol = () => cP;
+    add(C(hp, kn, 0.088 * Rg * mf, 0.056 * Rg, { k: 0.05, bone: BI['hip' + L], col: thCol, wr: 1.2, dirt: 0.5 }));
     const q = lq(hp, kn, 0.45); add(E([q[0] + s * 0.008, q[1], q[2] + 0.028 * Rg], [0.066 * Rg * (0.75 + 0.45 * m), 0.15 * H, 0.06 * Rg * (0.75 + 0.45 * m)], { k: 0.04, bone: BI['hip' + L], col: thCol, wr: 1, dirt: 0.6 }));
     const hm = lq(hp, kn, 0.4); add(E([hm[0], hm[1], hm[2] - 0.03 * Rg], [0.065 * Rg * (0.75 + 0.35 * m), 0.15 * H, 0.055 * Rg * (0.75 + 0.35 * m)], { k: 0.04, bone: BI['hip' + L], col: thCol, wr: 1 }));
     const tp = lq(hp, kn, 0.42); add(E([tp[0] + s * 0.003, tp[1], tp[2] + 0.072 * Rg * mf], [0.058 * Rg, 0.085 * H, 0.022], { k: 0.03, bone: BI['hip' + L], col: thCol, wr: 0.4, dirt: 0.7 }));
@@ -139,7 +145,8 @@ function makeBodyModel(o) {
     const shCol = (x, y, z, t) => mixc(mixc(cP, cS, sstep(0.085, 0.095, t)), cAnk, sstep(0.7, 0.73, t));
     const sh = add(C(kn, [an[0], an[1] + 0.02, an[2]], 0.054 * Rg, 0.034 * Rg, { k: 0.03, bone: BI['kn' + L], col: shCol, wr: 0.5, dirt: 0.3 }));
     const cf = lq(kn, an, 0.27); add(E([cf[0] + s * 0.004, cf[1], cf[2] - 0.032 * Rg], [0.05 * Rg * (0.7 + 0.5 * m), 0.10 * H, 0.048 * Rg * (0.7 + 0.5 * m)], { k: 0.03, bone: BI['kn' + L], col: (x, y, z) => { sdP(sh, x, y, z); return shCol(x, y, z, sh._t); }, wr: 0.4 }));
-    const ax = an[0], az = an[2], AB = BI['an' + L], clCol = (x, y, z) => mixc(mixc(cSo, cCl, sstep(0.019, 0.023, y)), cSpat, sstep(0.055, 0.065, y));
+    // cleat: sole, upper with a contrast heel counter and toe cap, then the collar / spat
+    const ax = an[0], az = an[2], AB = BI['an' + L], clCol = (x, y, z) => { const acc = Math.max(1 - sstep(az - 0.06, az - 0.035, z), sstep(az + 0.14, az + 0.165, z)) * (1 - sstep(0.048, 0.056, y)); return mixc(mixc(cSo, mixc(cCl, cAcc, acc), sstep(0.019, 0.023, y)), cSpat, sstep(0.055, 0.065, y)); };
     add(C([ax, 0.052, az - 0.05], [ax + s * 0.012, 0.042, az + 0.168], 0.046, 0.037, { g: 2, k: 0, bone: AB, col: clCol, dirt: 0.4 }));
     add(C([ax, 0.05, az - 0.012], [ax, Y(0.16), az - 0.014], 0.05, 0.042, { g: 2, k: 0.03, bone: AB, col: clCol }));
     add(B([ax + s * 0.006, 0.012, az + 0.06], [0.05, 0.012, 0.142], 0.01, { g: 2, k: 0.01, bone: AB, col: clCol }));
@@ -158,37 +165,76 @@ function makeBodyModel(o) {
     const lim = mn + 2 * rc + 0.12, out = []; for (let p = 0; p < n; p++) if (ubuf[p] < lim) out.push(p);
     Lc = Int16Array.from(out); cells.set(key, Lc); return Lc;
   }
-  function sdf(x, y, z, store) {
+  // mask (optional): bit set of bones whose primitives count (the AO bake looks at one limb chain at a time, so a hanging arm does not shadow the torso)
+  function sdf(x, y, z, store, mask) {
     let d0 = 1e9, d1 = 1e9, d2 = 1e9, d3 = 1e9, d4 = 1e9, best = 0, bd = 1e9; const list = cellList(x, y, z), nl = list.length;
     if (store) D.fill(1e9);
-    for (let li = 0; li < nl; li++) { const i = list[li], P = prims[i]; let d; const ex = x - P.bx0, ey = y - P.by0, ez = z - P.bz0, lb = Math.sqrt(ex * ex + ey * ey + ez * ez) - P.br, cur = P.g === 0 ? d0 : P.g === 1 ? d1 : P.g === 2 ? d2 : P.g === 3 ? d3 : d4;
+    for (let li = 0; li < nl; li++) { const i = list[li], P = prims[i]; if (mask && !((mask >> P.bone) & 1)) continue; let d; const ex = x - P.bx0, ey = y - P.by0, ez = z - P.bz0, lb = Math.sqrt(ex * ex + ey * ey + ez * ez) - P.br, cur = P.g === 0 ? d0 : P.g === 1 ? d1 : P.g === 2 ? d2 : P.g === 3 ? d3 : d4;
       if (!store && lb > cur + 0.07 && lb > 0.02) d = lb; else d = sdP(P, x, y, z); if (store) D[i] = d; if (d < bd) { bd = d; best = i; }
       if (P.g === 0) d0 = d0 > 1e8 ? d : smin(d0, d, P.k); else if (P.g === 1) d1 = d1 > 1e8 ? d : smin(d1, d, P.k); else if (P.g === 2) d2 = d2 > 1e8 ? d : smin(d2, d, P.k); else if (P.g === 3) d3 = Math.min(d3, d); else d4 = Math.min(d4, d); }
     const cd = Math.max(Math.sqrt(x * x + (z + 0.005) * (z + 0.005)) - nhR, nhY - y); d1 = smax(d1, -cd, 0.012); d2 = smax(d2, -y, 0.002);
     let d = smin(d0, d1, 0.045); d = smin(d, d3, 0.008); d = Math.min(d, d4); d = smin(d, d2, 0.02);
+    if (bd > 1e8) return 1;
     const w = prims[best].wr; if (w && bd < 0.03) { const nn = fbm(x * 14, y * 9, z * 14); d += wrAmp * w * (Math.sin(y * 95 + nn * 9 + x * 20) * 0.6 + nn * 0.8 - 0.4); }
     return d;
   }
+  // design coordinates: pants stripe = arc distance (m) from the outer-leg line, from the belt to the knee (the leg axis carried up to the waist);
+  // sleeve = distance (m) above the jersey sleeve hem along the upper arm (bands, hem stitching, TV numbers)
+  const nrm3 = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }, legA = {}, slA = {};
+  for (const [s, L] of [[1, 'L'], [-1, 'R']]) { const hp = J['hip' + L], kn = J['kn' + L], ax = nrm3([kn[0] - hp[0], kn[1] - hp[1], kn[2] - hp[2]]), dt = s * ax[0], o = nrm3([s - ax[0] * dt, -ax[1] * dt, -ax[2] * dt]); legA[s] = { hp, ax, o };
+    const S = sleeves[s], sa = nrm3([S.b[0] - S.a[0], S.b[1] - S.a[1], S.b[2] - S.a[2]]); slA[s] = { b: S.b, ax: sa, r: S.r }; }
+  const kneeY = J.knL[1];
+  function pantsCoord(x, y, z) {
+    if (y > belt + 0.03 || y < kneeY - 0.14) return 1;
+    const s = x >= 0 ? 1 : -1, A = legA[s], px = x - A.hp[0], py = y - A.hp[1], pz = z - A.hp[2], t = px * A.ax[0] + py * A.ax[1] + pz * A.ax[2];
+    const rx = px - A.ax[0] * t, ry = py - A.ax[1] * t, rz = pz - A.ax[2] * t, rl = Math.hypot(rx, ry, rz) || 1e-6;
+    return Math.acos(cl((rx * A.o[0] + ry * A.o[1] + rz * A.o[2]) / rl, -1, 1)) * rl;
+  }
+  function sleeveCoord(x, y, z) {
+    const s = x >= 0 ? 1 : -1, A = slA[s], px = x - A.b[0], py = y - A.b[1], pz = z - A.b[2], t = px * A.ax[0] + py * A.ax[1] + pz * A.ax[2];
+    const rx = px - A.ax[0] * t, ry = py - A.ax[1] * t, rz = pz - A.ax[2] * t; if (Math.hypot(rx, ry, rz) > A.r + 0.025) return 1;   // 'not on the sleeve' must sit above the band range, so blends never cross it
+    return -t;
+  }
+  // AO bake: a few SDF probes along the normal, against the vertex's own limb chain plus the torso piece it hangs from
+  const MASK = { torso: 0b1111, L: (1 << 2) | (1 << 5) | (1 << 6) | (1 << 7), R: (1 << 2) | (1 << 8) | (1 << 9) | (1 << 10), LL: 1 | (1 << 11) | (1 << 12) | (1 << 13), RL: 1 | (1 << 14) | (1 << 15) | (1 << 16) };
+  const boneMask = b => b <= 4 ? MASK.torso : b <= 7 ? MASK.L : b <= 10 ? MASK.R : b <= 13 ? MASK.LL : MASK.RL;
+  const AOD = [0.01, 0.024, 0.045, 0.075], AOW = [1, 0.8, 0.55, 0.4];
+  function aoAt(x, y, z, nx, ny, nz, mask) { let occ = 0; for (let k = 0; k < AOD.length; k++) { const d = AOD[k], v = sdf(x + nx * d, y + ny * d, z + nz * d, false, mask); occ += AOW[k] * Math.max(0, d - Math.max(0, v)) / d; } return cl(1 - occ * 0.42, 0.22, 1); }
   const bounds = [-(J.wrL[0] + 0.12), -0.01, -0.3 * Rg - 0.03, (J.wrL[0] + 0.12), Y(1.78), 0.32 * Rg + 0.07];
   const model = { prims, J, bp, bounds, h: o.res || 0.016, sdf: (x, y, z) => sdf(x, y, z, false), eps: 0.0025 };
   model.attribs = function (out) {
     const nv = out.count, P = out.position, N = out.normal, W = new Float32Array(nv * NS), uv = new Float32Array(nv * 2), nm = new Float32Array(nv), si = new Uint16Array(nv * 4), sw = new Float32Array(nv * 4), bw = new Float64Array(BONES.length), Yc = Y(1.30), acc = new Float32Array(NS);
+    const dz = new Float32Array(nv * 4), ao = new Float32Array(nv);
     for (let q = 0; q < nv; q++) {
       const x = P[q * 3], y = P[q * 3 + 1], z = P[q * 3 + 2]; sdf(x, y, z, true); let dmin = 1e9; for (let i = 0; i < n; i++) if (D[i] < dmin) dmin = D[i];
-      acc.fill(0); let wsum = 0, num = 0, dirt = 0; bw.fill(0);
+      acc.fill(0); let wsum = 0, num = 0, dirt = 0, du = 0; bw.fill(0);
       for (let i = 0; i < n; i++) { const dd = D[i] - dmin; if (dd > 0.05) continue; const P2 = prims[i], wc = Math.exp(-dd / 0.0018);
-        if (wc > 0.002) { sdP(P2, x, y, z); const c = P2.col(x, y, z, P2._t); for (let s = 0; s < NS; s++) acc[s] += c[s] * wc; wsum += wc; if (P2.num) num += wc; dirt += (P2.dirt || 0) * wc; }
+        if (wc > 0.002) { sdP(P2, x, y, z); const c = P2.col(x, y, z, P2._t); for (let s = 0; s < NS; s++) acc[s] += c[s] * wc; wsum += wc; if (P2.num) num += wc; dirt += (P2.dirt || 0) * wc; du += (P2.du || 0) * wc; }
         bw[P2.bone] += Math.exp(-dd / 0.016); }
-      let c = new Float32Array(NS); for (let s = 0; s < NS; s++) c[s] = acc[s] / wsum; num /= wsum; dirt /= wsum;
-      if (dirt > 0) { const fz = 0.35 + 0.65 * Math.max(0, N[q * 3 + 2]), low = 1 - sstep(Y(0.55), Y(0.95), y) * 0.6, nn = fbm(x * 16 + 3, y * 9, z * 16), a = dirt * fz * low * sstep(0.55, 0.85, nn) * 0.75, gr = sstep(0.66, 0.8, fbm(x * 30, y * 6 + 7, z * 30)) * dirt * fz * low * 0.55; c = mixc(c, cDirt, a * 0.7); c = mixc(c, cGrass, gr); }
+      const c = new Float32Array(NS); for (let s = 0; s < NS; s++) c[s] = acc[s] / wsum; num /= wsum; dirt /= wsum; du /= wsum;
       W.set(c, q * NS); nm[q] = num * sstep(0.15, 0.4, Math.abs(N[q * 3 + 2]));
       if (z >= 0) uv[q * 2] = 0.25 + x / 0.84; else uv[q * 2] = 0.75 - x / 0.84; uv[q * 2 + 1] = 0.5 + (y - Yc) / 0.42;
       const order = [0, 0, 0, 0], ov = [-1, -1, -1, -1]; for (let bi = 0; bi < bw.length; bi++) { const vv = bw[bi]; if (vv > ov[3]) { let k = 3; while (k > 0 && vv > ov[k - 1]) { ov[k] = ov[k - 1]; order[k] = order[k - 1]; k--; } ov[k] = vv; order[k] = bi; } }
       let ws = 0; for (let k = 0; k < 4; k++) ws += Math.max(ov[k], 0); for (let k = 0; k < 4; k++) { si[q * 4 + k] = order[k]; sw[q * 4 + k] = Math.max(ov[k], 0) / ws; }
+      // dirt-prone fields: legs mostly on the front (knees, shins, thighs), the torso front and back, elbows; varied by a little noise so stains are patchy
+      const nz = N[q * 3 + 2], fz = 0.4 + 0.6 * Math.max(0, nz), low = 1 - sstep(Y(0.55), Y(0.95), y) * 0.5, nn = 0.75 + 0.5 * fbm(x * 9 + 3, y * 7, z * 9);
+      const b0 = order[0], onSleeve = b0 === BI.shL || b0 === BI.shR || b0 === BI.elL || b0 === BI.elR;
+      dz[q * 4] = c[2] + c[3] > 0.05 ? pantsCoord(x, y, z) : 1; dz[q * 4 + 1] = onSleeve && Math.abs(x) > sx * 0.55 ? sleeveCoord(x, y, z) : 1;
+      dz[q * 4 + 2] = cl(dirt * fz * low * nn, 0, 1); dz[q * 4 + 3] = cl(du * (0.55 + 0.45 * Math.abs(nz)) * nn, 0, 1);
+      ao[q] = aoAt(x, y, z, N[q * 3], N[q * 3 + 1], nz, boneMask(b0));
     }
-    out.W = W; out.uv = uv; out.nm = nm; out.skinIndex = si; out.skinWeight = sw;
+    out.W = W; out.uv = uv; out.nm = nm; out.skinIndex = si; out.skinWeight = sw; out.dz = dz; out.ao = ao;
   };
   return model;
+}
+// rest-space landmarks the player shader needs for kit designs and seams (cheap: no meshing, so it works for meshes loaded from the cache)
+function bodyDesign(o) {
+  const PS = PADS[o.pads || 'speed'], bp = bodyParams(o), { H, g, m } = bp, J = skeleton(bp), Rg = H * g, Y = v => v * H, PW = H * (0.88 + 0.12 * g);
+  const sh = J.shL, el = J.elL, t = PS.slT, b = [lp(sh[0], el[0], t), lp(sh[1], el[1], t), lp(sh[2], el[2], t)], a = [sh[0] + 0.005, sh[1] + 0.005, sh[2]], al = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]), ax = [(b[0] - a[0]) / al, (b[1] - a[1]) / al, (b[2] - a[2]) / al];
+  const kn = J.knL, an = J.anL, shin = (tt => lp(kn[1], an[1] + 0.02, tt));
+  return { belt: Y(1.045), hem: shin(0.09), sockT: shin(0.09), ankT: shin(0.7), kneeY: kn[1], ankY: an[1], wrY: J.wrL[1], wrX: J.wrL[0],
+    holeR: 0.085 * H * (0.8 + 0.25 * g) * PS.hole + 0.017, collarY: Y(1.48), loopX: sh[0] + PS.capX, loopY: Y(1.455), capTop: Y(PS.capY) + 0.04, yokeF: Y(1.405), yokeB: Y(1.43), chestW: 0.168 * Rg * (0.95 + 0.1 * m), armpit: Y(1.36),
+    seamZ: -0.012, pseamZ: 0.006, collar: Y(0.16) + 0.02, anX: an[0], anZ: an[2], elX: el[0], elY: el[1], tv: [b[0] - ax[0] * 0.05, b[1] - ax[1] * 0.05, b[2] - ax[2] * 0.05], slR: PS.sl * PW, H };
 }
 // ---- head (face under the helmet). slots: 0 skin, 1 lip dark, 2 eye white, 3 iris ----
 function makeHeadModel(o) {
@@ -392,29 +438,49 @@ function hexLum(h) { const s = String(h || '#808080').replace('#', ''), v = [0, 
 const POS_MASK3 = { QB: 'opo', RB: 'ropo', FB: 'ropo', WR: 'bullet', TE: 'cage', OT: 'bigcage', OG: 'bigcage', C: 'bigcage', DE: 'cage', DT: 'bigcage', LB: 'cage', CB: 'bullet', S: 'egop', K: '2bar', P: '2bar' };
 function lookOf(rp) { return (typeof ensureLook === 'function' && rp ? ensureLook(rp) : rp && rp.lk) || {}; }
 function maskStyle(rp) { const lk = lookOf(rp), M2 = typeof LK_MASKS !== 'undefined' ? LK_MASKS : null; return (M2 && lk.fm != null && M2[lk.fm]) || POS_MASK3[rp && rp.pos] || 'opo'; }
+// fabric whites are never paper white (they read as plastic): pull very light colours toward a warm, slightly grey off-white
+function fabric(h) { const l = hexLum(h); return l > 0.8 ? hexMix(h, '#d9d4c9', cl((l - 0.8) / 0.2, 0, 1) * 0.55) : h; }
+// kit design options (the league defines the lists and per-team defaults; these fallbacks keep old saves and bare kits working)
+const KSTY0 = { jstyle: ['stripes', 'triple', 'loops', 'yoke', 'panel', 'plain'], pstyle: ['solid', 'double', 'tri', 'outline', 'thin', 'none'], hstyle: ['single', 'double', 'tri', 'wide', 'none'],
+  hfinish: ['gloss', 'matte', 'metal', 'satin'], sstyle: ['solid', 'stripes', 'hoops', 'twotone'], nfont: ['block', 'pro', 'italic', 'slab'], nstyle: ['outline', 'double', 'plain', 'shadow'], tvnum: ['none', 'sleeve'] };
+const KSTY_DEF = { jstyle: 'stripes', pstyle: 'solid', hstyle: 'single', hfinish: 'gloss', sstyle: 'solid', nfont: 'block', nstyle: 'outline', tvnum: 'none' };
+function kitStyle(k) {
+  k = k || {}; const L = (typeof KIT_STYLES !== 'undefined' && KIT_STYLES) || KSTY0, o = {};
+  for (const f in KSTY_DEF) o[f] = L[f] && L[f].includes(k[f]) ? k[f] : KSTY_DEF[f];
+  o.nbar = k.nbar ? 1 : 0; o.trim2 = k.trim2 || k.numOutline || '#151517'; return o;
+}
 function look3(rp, kit, arch) {
-  const lk = lookOf(rp);
+  const lk = lookOf(rp); kit = kit || {}; const KS = kitStyle(kit);
   const SKN = (typeof SKIN !== 'undefined' && SKIN) || ['#bd8152'], HC = (typeof HAIRC !== 'undefined' && HAIRC) || ['#16110e'], EC = (typeof EYEC !== 'undefined' && EYEC) || ['#3b2416'];
   const skin = SKN[lk.sk] || (rp && rp.id != null ? SKN[rp.id % SKN.length] : SKN[4]) || '#bd8152', hair = HC[lk.hc] || HC[0], big = arch === 'BIG';
-  const J0 = kit.jersey || '#7a7a7a', T0 = kit.trim || '#ffffff', WH = '#efede7', BK = '#151517', TAPE = '#eeeae0';
+  const J0 = fabric(kit.jersey || '#7a7a7a'), T0 = fabric(kit.trim || '#ffffff'), WH = '#e2ded5', BK = '#18181b', TAPE = '#e6e1d4';
+  // per-slot surface: [roughness, jersey knit, pants twill, rib knit, skin]; the shader blends them with the slot weights
+  const SK = [0.5, 0, 0, 0, 1], KN = [0.84, 1, 0, 0, 0], TW = [0.62, 0, 1, 0, 0], RB = [0.8, 0, 0, 1, 0], CMP = [0.5, 0, 0, 0.55, 0], TP = [0.86, 0, 0.35, 0, 0];
   // arms: item 0 bare / 1 full / 2 elbow / 3 half; wrist 0 bare / 1 tape / 2 band; tattoo ink only shows on bare skin
   const sleeve = [BK, WH, J0, T0][lk.ac | 0] || BK, band = [WH, BK, J0, T0][lk.wc | 0] || WH, ink = hexMix(skin, '#1a222e', hexLum(skin) > 0.45 ? 0.55 : 0.38);
   const arm = (item, wrist, tat) => { const up = item === 1 ? sleeve : skin, elb = item ? sleeve : skin, fo = item === 1 || item === 3 ? sleeve : skin, wr = wrist === 1 ? TAPE : wrist === 2 ? band : item === 1 ? sleeve : skin;
-    return [up, elb, fo, wr, tat && up === skin ? ink : up, tat && fo === skin ? ink : fo]; };
+    const mt = [item === 1 ? CMP : SK, item ? CMP : SK, item === 1 || item === 3 ? CMP : SK, wrist === 1 ? TP : wrist === 2 ? RB : item === 1 ? CMP : SK];
+    return { c: [up, elb, fo, wr, tat && up === skin ? ink : up, tat && fo === skin ? ink : fo], m: [...mt, mt[0], mt[2]] }; };
   const AL = arm(lk.aL | 0, lk.wL | 0, lk.tat && (lk.ta & 1)), AR = arm(lk.aR | 0, lk.wR | 0, lk.tat && (lk.ta & 2));
-  const glove = [kit.glove || BK, BK, '#eceae4', J0, T0, skin][lk.gl | 0] || kit.glove || BK;
-  let cleat = [kit.cleat || BK, BK, '#efede7', J0, T0][lk.clc | 0] || BK, spat = cleat, ankle = kit.socks || J0; const sole = hexLum(cleat) > 0.7 ? '#d8d6d0' : '#2a2b30', sp = lk.sp | 0;
-  if (sp === 1 || sp === 2 || sp === 4) { cleat = spat = ankle = sp === 1 ? '#f2f0ea' : sp === 2 ? BK : J0; } else if (sp === 3) spat = ankle = TAPE;
+  const bare = (lk.gl | 0) === 5, glove = fabric([kit.glove || BK, BK, '#eceae4', J0, T0, skin][lk.gl | 0] || kit.glove || BK);
+  const palm = bare ? skin : hexLum(glove) > 0.62 ? hexMix(glove, '#8d8b84', 0.45) : hexMix(glove, '#0c0c0e', 0.4);
+  const cuff = bare ? skin : [T0, J0, KS.trim2, BK, WH].find(c => Math.abs(hexLum(c) - hexLum(glove)) > 0.22) || BK;
+  let cleat = fabric([kit.cleat || BK, BK, '#efede7', J0, T0][lk.clc | 0] || BK), spat = cleat, ankle = fabric(kit.socks || J0); const sole = hexLum(cleat) > 0.7 ? '#cfccc4' : '#2a2b30', sp = lk.sp | 0;
+  let acc = hexLum(cleat) > 0.6 ? (hexLum(J0) < 0.6 ? J0 : BK) : (hexLum(T0) > 0.45 && T0 !== cleat ? T0 : WH);
+  if (sp === 1 || sp === 2 || sp === 4) { cleat = spat = ankle = acc = sp === 1 ? '#e8e5dd' : sp === 2 ? BK : J0; } else if (sp === 3) spat = ankle = TAPE;
   const roll = ['#2a2b30', J0, '#eceae4', T0][lk.nrc | 0] || '#2a2b30';
-  const body = [J0, T0, kit.pants || '#e8e8e8', kit.pstripe || J0, kit.socks || J0, skin, glove, cleat, sole, spat, '#15151a', ankle, '#4a3b28', '#3f5a22', roll, AL[0], AL[1], AL[2], AL[3], AR[0], AR[1], AR[2], AR[3], AL[4], AL[5], AR[4], AR[5], J0];
+  const collar = KS.jstyle === 'plain' ? hexMix(J0, hexLum(J0) > 0.5 ? '#000000' : '#ffffff', 0.12) : T0, pants = fabric(kit.pants || '#e8e8e8');
+  const belt = hexLum(pants) < 0.12 ? '#3a3b40' : '#1d1d20', body = [J0, collar, pants, pants, fabric(kit.socks || J0), skin, glove, cleat, sole, spat, belt, ankle, pants, pants, roll, AL.c[0], AL.c[1], AL.c[2], AL.c[3], AR.c[0], AR.c[1], AR.c[2], AR.c[3], AL.c[4], AL.c[5], AR.c[4], AR.c[5], palm, cuff, acc, J0, J0];
+  const spatM = sp === 1 || sp === 2 || sp === 4 ? [0.5, 0, 0.3, 0, 0] : sp === 3 ? TP : [0.5, 0, 0.22, 0, 0], ankM = sp === 1 || sp === 2 || sp === 4 ? spatM : sp === 3 ? TP : RB;
+  const bodyMat = [KN, RB, TW, TW, RB, SK, bare ? SK : [0.55, 0, 0.3, 0, 0], [0.5, 0, 0.22, 0, 0], [0.7, 0, 0, 0, 0], spatM, [0.45, 0, 0, 0, 0], ankM, TW, TW, RB, ...AL.m.slice(0, 4), ...AR.m.slice(0, 4), AL.m[4], AL.m[5], AR.m[4], AR.m[5], bare ? SK : [0.45, 0, 0.45, 0, 0], bare ? SK : [0.75, 0, 0, 0.6, 0], [0.45, 0, 0, 0, 0], KN, KN];
   // face: [mustache, chin, jaw] per beard style, eye black, nose strip, brows
   const st = k => hexMix(skin, hair, k), bd = lk.bd | 0;
   const BEARD = { 1: [st(.35), st(.35), st(.35)], 2: [hair, hair, skin], 3: [hair, hair, hair], 4: [hair, skin, skin], 5: [hair, skin, hair], 6: [skin, st(.75), st(.75)], 7: [skin, st(.6), skin], 8: [hair, hair, hair], 9: [st(.55), st(.55), st(.55)], 10: [hair, st(.3), skin] }[bd] || [skin, skin, skin];
   const ebOn = lk.ey && lk.eb, eb = ebOn ? '#121214' : skin, ebl = ebOn && lk.eb === 3 ? '#121214' : skin;
-  const head = [skin, hexMix(skin, '#4a1f1a', 0.42), hexMix('#e8e2d8', skin, 0.35), EC[lk.ec] || '#2a1a10', BEARD[0], BEARD[1], BEARD[2], eb, ebl, lk.ns ? '#e4dfd3' : skin, hexMix(hair, '#120c08', 0.3), hexMix(skin, '#000000', 0.2)];
+  const head = [skin, hexMix(skin, '#4a1f1a', 0.42), hexMix('#bcb0a2', skin, 0.45), EC[lk.ec] || '#2a1a10', BEARD[0], BEARD[1], BEARD[2], eb, ebl, lk.ns ? '#e4dfd3' : skin, hexMix(hair, '#120c08', 0.3), hexMix(skin, '#000000', 0.2)];
   // gear
-  const pants = kit.pants || '#e8e8e8', tip = lk.ht === 1 ? '#e3cf98' : lk.ht === 2 ? '#b5532a' : hair; let towel = ['#f4f2ec', J0, T0, BK][lk.twc | 0] || '#f4f2ec';
-  if (Math.abs(hexLum(towel) - hexLum(pants)) < 0.18) towel = hexLum(pants) > 0.5 ? (hexLum(J0) < 0.55 ? J0 : hexLum(T0) < 0.55 ? T0 : BK) : '#f4f2ec';   // a towel has to read against the pants
+  const tip = lk.ht === 1 ? '#e3cf98' : lk.ht === 2 ? '#b5532a' : hair; let towel = ['#e9e6de', J0, T0, BK][lk.twc | 0] || '#e9e6de';
+  if (Math.abs(hexLum(towel) - hexLum(pants)) < 0.18) towel = hexLum(pants) > 0.5 ? (hexLum(J0) < 0.55 ? J0 : hexLum(T0) < 0.55 ? T0 : BK) : '#e9e6de';   // a towel has to read against the pants
   const epad = [BK, '#e9e7e1', J0, T0][lk.ac | 0] || BK;
   const mgc = ['#dce6e8', BK, J0, T0][lk.mgc | 0] || '#dce6e8', warmer = hexLum(J0) > 0.8 ? T0 : J0;
   const gearPal = [hair, tip, towel, epad, '#1c1d21', '#aab0b8', mgc, warmer, roll, hexMix(hair, '#000000', 0.12), '#141416', J0];
@@ -427,7 +493,7 @@ function look3(rp, kit, arch) {
   const up = f(0.88, 1.12, 0.03), fo = f(0.9, 1.08, 0.02), th = f(0.925, 1.08, 0.03), sh = f(0.94, 1.05, 0.015);
   const girth = [f(0.955, 1.045, 0.025), f(0.93, 1.07, 0.05), f(0.965, 1.035, 0.015), f(0.95, 1.1, 0.03), 1, up, fo, 1, up, fo, 1, th, sh, 1, th, sh, 1];
   const visor = lk.vz ? ((typeof LK_VISOR !== 'undefined' && LK_VISOR[lk.vt | 0]) || 'smoke') : null;
-  return { body, head, gearPal, spec, gearKey, hasGear, girth, visor, mask: maskStyle(rp) };
+  return { body, bodyMat, head, gearPal, spec, gearKey, hasGear, girth, visor, mask: maskStyle(rp), kit: KS, skin, ink, spat: sp };
 }
-Object.assign(R3D._, { NS, NSH, NSG, meshSDF, bodyParams, skeleton, BONES, BI, makeBodyModel, makeHeadModel, makeHelmetModel, maskBars, HELMS, makeGear, look3, maskStyle });
+Object.assign(R3D._, { NS, NSH, NSG, meshSDF, bodyParams, skeleton, BONES, BI, makeBodyModel, makeHeadModel, makeHelmetModel, maskBars, HELMS, makeGear, look3, maskStyle, bodyDesign, kitStyle, fabric, hexMix, hexLum });
 })();

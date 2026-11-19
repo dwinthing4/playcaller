@@ -22,33 +22,163 @@ const POS_MASK = { QB: 'opo', RB: 'ropo', FB: 'ropo', WR: 'bullet', TE: 'ropo', 
 const SKIN = ['#f9dcc4', '#f1c7a3', '#e3ad85', '#d29a6c', '#bd8152', '#a06a40', '#87532f', '#6a3f22', '#4f2d18', '#3d2213', '#f3d0b8', '#c99570'];
 function res() { return coarse ? { body: 0.019, head: 0.0085, helm: 0.0095 } : { body: 0.017, head: 0.0075, helm: 0.0085 }; }
 // ---------------- palette material ----------------
-function palMat(nSlots, kind, opts) {
-  const nA = Math.ceil(nSlots / 4), m = kind === 'physical' ? new THREE.MeshPhysicalMaterial(opts) : new THREE.MeshStandardMaterial(opts);
-  m.userData.pal = Array.from({ length: nSlots }, () => new THREE.Color(1, 1, 1)); m.userData.decal = null; m.userData.n = nSlots;
+// Every player part is one mesh whose vertices carry weights over a palette of colour slots (10_models.js). The shader mixes the slot
+// colours and, per slot, the surface (roughness, jersey knit, pants twill, rib knit, skin), then adds what makes a kit look made rather
+// than rendered: a tiled fabric texture in rest space, crisp kit stripes drawn from the mesh's design coordinates, seams and stitching,
+// baked occlusion, a soft cloth sheen instead of a plastic highlight, raised twill numbers, and dirt / grass that builds up in the game.
+// variant: 'body' (players' bodies), 'helm' (shell stripes, finish, scuffs), 'head' (skin), 'gear' (hair, towels, pads).
+const UK_N = { body: 34, helm: 5, head: 1, gear: 1 };
+const GLSL_FN = `
+float pcLine(float d, float w) { float fw = fwidth(d) + 1e-6; return clamp((w - abs(d)) / fw + 0.5, 0.0, 1.0) * clamp(2.0 * w / fw, 0.0, 1.0); }
+vec3 pcBand(vec3 base, float d, vec3 w, vec4 c1, vec4 c2, vec4 c3, float m) {
+  float fw = fwidth(d) * 0.75 + 1e-5;
+  float i1 = (1.0 - smoothstep(w.x - fw, w.x + fw, d)) * step(1e-6, w.x), i2 = (1.0 - smoothstep(w.y - fw, w.y + fw, d)) * step(1e-6, w.y), i3 = (1.0 - smoothstep(w.z - fw, w.z + fw, d)) * step(1e-6, w.z);
+  base = mix(base, c3.rgb, max(i3 - i2, 0.0) * c3.w * m); base = mix(base, c2.rgb, max(i2 - i1, 0.0) * c2.w * m); return mix(base, c1.rgb, i1 * c1.w * m); }
+vec3 pcPerturb(vec3 sp, vec3 n, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = cross(sy, n), r2 = cross(n, sx); float det = dot(sx, r1) * fd; vec3 g = sign(det) * (dH.x * r1 + dH.y * r2); return normalize(abs(det) * n - g); }
+vec4 pcTri(vec3 p, vec3 nn) { vec3 w = abs(nn); w *= w; w *= w; w /= (w.x + w.y + w.z + 1e-5); return texture2D(fabTex, p.zy) * w.x + texture2D(fabTex, p.xz) * w.y + texture2D(fabTex, p.xy) * w.z; }
+`;
+// body: kit designs from uK (layout in setBodyKit), decal = numbers + name + TV numbers
+const FRAG_BODY = `
+float pcSkin = clamp(vPal.w, 0.0, 1.0), pcKnit = vMat.y, pcTwill = vMat.z, pcRib = vMat.w, pcFab = clamp(pcKnit + pcTwill + pcRib, 0.0, 1.0);
+vec4 fx = pcTri(vRest * 4.0, vRN);
+vec3 pcC = vPal.rgb, rn = normalize(vRN); float ax = abs(vRest.x), py = vRest.y, pside = vRest.x >= 0.0 ? 1.0 : -1.0, beltM = 0.0, fwy = fwidth(py) * 0.75 + 1e-5;
+// crisp garment edges in rest space (the slot blend is only as sharp as the 2 cm mesh): jersey / belt / pants at the waist, pants / socks at the knee, socks / ankle
+{ float z = step(ax, 0.2) * (1.0 - smoothstep(0.03, 0.045, abs(py - uK[24].w))); if (z > 0.0) { float isJ = smoothstep(uK[24].w + 0.0115 - fwy, uK[24].w + 0.0115 + fwy, py), isB = smoothstep(uK[24].w - 0.0115 - fwy, uK[24].w - 0.0115 + fwy, py) - isJ, isP = 1.0 - isJ - isB;
+  pcC = mix(pcC, uK[25].rgb * isJ + uK[24].rgb * isB + uK[26].rgb * isP, z); pcKnit = mix(pcKnit, isJ, z); pcTwill = mix(pcTwill, isP, z); pcRib *= 1.0 - z; beltM = isB * z; } }
+{ float z = step(py, 0.8) * (1.0 - smoothstep(0.025, 0.04, abs(py - uK[25].w))) * step(0.5, pcTwill + pcRib); if (z > 0.0) { float a = smoothstep(uK[25].w - fwy, uK[25].w + fwy, py);
+  pcC = mix(pcC, mix(uK[27].rgb, uK[26].rgb, a), z); pcTwill = mix(pcTwill, a, z); pcRib = mix(pcRib, 1.0 - a, z); } }
+{ float z = step(py, 0.45) * (1.0 - smoothstep(0.022, 0.035, abs(py - uK[26].w))) * uK[28].w; if (z > 0.0) { float a = smoothstep(uK[26].w - fwy, uK[26].w + fwy, py);
+  pcC = mix(pcC, mix(uK[28].rgb, uK[27].rgb, a), z); pcRib = mix(pcRib, a + (1.0 - a) * uK[27].w, z); } }
+{ float z = step(py, 0.3) * (1.0 - smoothstep(0.016, 0.028, abs(py - uK[29].x))) * uK[30].w; if (z > 0.0) { float a = smoothstep(uK[29].x - fwy, uK[29].x + fwy, py); pcC = mix(pcC, mix(uK[30].rgb, uK[28].rgb, a), z); pcRib = mix(pcRib, a * uK[27].w, z); } }
+{ float rr = length(vec2(vRest.x, vRest.z + 0.005)), z = step(uK[32].y - 0.03, py) * (1.0 - smoothstep(uK[32].x + 0.02, uK[32].x + 0.035, rr)) * step(0.4, pcKnit + pcRib); if (z > 0.0) { float fr = fwidth(rr) * 0.75 + 1e-5;
+  float a = (1.0 - smoothstep(uK[32].x - fr, uK[32].x + fr, rr)) * smoothstep(uK[32].y - fwy, uK[32].y + fwy, py); pcC = mix(pcC, mix(uK[25].rgb, uK[33].rgb, a), z); pcRib = mix(pcRib, a, z); pcKnit = mix(pcKnit, 1.0 - a, z); } }
+if (uK[29].w > 0.5) { vec2 fq = vec2(vRest.x - pside * uK[29].y, vRest.z - uK[29].z); float on = step(py, 0.115) * step(0.03, py) * smoothstep(0.3, 0.55, rn.y) * (1.0 - smoothstep(0.014, 0.019, abs(fq.x))) * step(0.03, fq.y) * step(fq.y, 0.112);
+  pcC = mix(pcC, uK[31].rgb, pcLine(abs(fract(fq.y / 0.0125) - 0.5) * 0.0125, 0.0024) * on); pcC = mix(pcC, pcC * 0.55, pcLine(fq.x, 0.0012) * on); }
+pcC = pcBand(pcC, abs(vDz.y - uK[0].x), uK[0].yzw, uK[1], uK[2], uK[3], pcKnit);
+pcC = pcBand(pcC, abs(ax - uK[4].x), vec3(uK[4].z, uK[4].w, uK[4].w), uK[5], uK[6], vec4(0.0), pcKnit * smoothstep(uK[4].y - 0.012, uK[4].y + 0.004, py));
+{ float yl = mix(uK[7].y + 0.028, uK[7].x + 0.03, smoothstep(-0.05, 0.05, vRest.z)) - uK[7].z * (1.0 - smoothstep(0.0, 0.12, ax)), yd = py + 0.25 * abs(vRest.z) - yl, fw = fwidth(yd) * 0.75 + 1e-5, on = uK[7].w * pcKnit;
+  pcC = mix(pcC, uK[8].rgb, smoothstep(-fw, fw, yd) * on); pcC = mix(pcC, uK[9].rgb, pcLine(yd, 0.0045) * on * uK[9].w); }
+{ float sp = abs(normalize(vec2(vRest.x, (vRest.z - 0.004) * 1.42)).x) - uK[10].x, fw = fwidth(sp) * 0.75 + 1e-5, on = uK[10].w * pcKnit * step(ax, uK[10].y + 0.03) * (1.0 - smoothstep(uK[10].z - 0.01, uK[10].z + 0.01, py));
+  pcC = mix(pcC, uK[11].rgb, smoothstep(-fw, fw, sp) * on); pcC = mix(pcC, uK[9].rgb, pcLine(sp, 0.011) * on * uK[9].w); }
+pcC = pcBand(pcC, vDz.x, uK[12].xyz, uK[13], uK[14], uK[15], pcTwill * uK[12].w);
+pcC = pcBand(pcC, abs(py - uK[16].x), uK[16].yzw, uK[17], uK[18], uK[19], pcRib * (1.0 - smoothstep(uK[21].x - 0.006, uK[21].x + 0.004, py)));
+float sideOnly = 1.0 - smoothstep(uK[10].z, uK[10].z + 0.03, py);   // side seams only: over the lumpy pad tops a plane cut reads as a zigzag
+float seam = step(0.06, ax) * (pcKnit * sideOnly * pcLine(vRest.z - uK[20].x, 0.0012) + pcTwill * pcLine(vRest.z - uK[20].y, 0.0011) * step(0.11, py));
+float stitch = pcKnit * sideOnly * step(0.06, ax) * pcLine(abs(vRest.z - uK[20].x) - 0.0042, 0.0005) + pcTwill * pcLine(py - uK[20].z - 0.008, 0.0006) + pcKnit * (pcLine(vDz.y - 0.008, 0.0006) + pcLine(vDz.y - 0.0135, 0.0006));
+vec4 tvc = vec4(0.0); float tvm = 0.0;
+if (uK[21].w > 0.5) { vec2 tq; float fm;
+  if (uK[21].w < 1.5) { tq = vec2(-pside * (vRest.z - uK[22].z) / (2.0 * uK[22].w), (py - uK[22].y) / uK[22].w) + 0.5; fm = smoothstep(0.3, 0.55, pside * rn.x) * step(uK[22].x, ax) * step(vDz.y, 0.3); }   // on the sleeve, never up on the pad cap
+  else { tq = vec2(-(vRest.x - pside * uK[22].x) / (2.0 * uK[22].w), vRest.z / uK[22].w) + 0.5; fm = smoothstep(0.25, 0.5, rn.y) * step(uK[22].y - 0.09, py); }
+  float inb = step(0.0, tq.x) * step(tq.x, 1.0) * step(0.0, tq.y) * step(tq.y, 1.0);
+  tvc = texture2D(decalMap, vec2(0.25 + (tq.x - 0.5) * 0.219, 0.8828 + (tq.y - 0.5) * 0.219)); tvm = tvc.a * inb * fm * pcKnit; }
+vec4 dc = texture2D(decalMap, vDuv.xy); float dcA = dc.a * vDuv.z * (1.0 - step(vDuv.x, 0.5) * step(0.77, vDuv.y));
+dc = mix(dc, tvc, step(dcA, tvm)); dcA = max(dcA, tvm);
+pcC = mix(pcC, pow(dc.rgb, vec3(2.2)) * (0.95 + 0.1 * fx.r), dcA);
+float pcH = pcKnit * fx.r + pcTwill * fx.g + pcRib * fx.b;
+pcC *= 1.0 + (fx.a - 0.5) * (0.16 * pcFab + 0.12 * pcSkin) + (pcH - 0.5 * pcFab) * 0.14;
+{ float el = 1.0 - smoothstep(0.012, 0.06, length(vec3(ax, py, vRest.z) - vec3(uK[32].z, uK[32].w, -0.035))); pcC *= mix(vec3(1.0), mix(vec3(1.045, 0.985, 0.965), vec3(0.97, 1.0, 1.03), fx.a) * mix(vec3(1.0), vec3(1.06, 0.93, 0.9), el), pcSkin); }
+pcC *= 1.0 - 0.26 * clamp(seam, 0.0, 1.0) - 0.16 * clamp(stitch, 0.0, 1.0);
+float dAmt = clamp(vDz.z * uK[23].x * 2.2 + vDz.w * uK[23].y * 1.7 + uK[23].z * (1.0 - smoothstep(uK[21].z - 0.03, uK[21].z - 0.005, py)) * step(uK[20].w - 0.06, ax) * step(0.45, py), 0.0, 1.0);
+float dn = texture2D(fabTex, vRest.xy * 2.3 + uK[23].w).a * 0.72 + fx.a * 0.28;
+float dm = smoothstep(1.0 - dAmt, 1.25 - dAmt * 0.9, dn) * step(0.001, dAmt) * (1.0 - 0.5 * pcSkin), gm = smoothstep(0.45, 0.75, fx.g * 0.45 + dn * 0.55) * (1.0 - smoothstep(0.8, 1.1, py));
+pcC = mix(pcC, pcC * mix(vec3(0.42, 0.3, 0.19), vec3(0.3, 0.42, 0.16), gm) + mix(vec3(0.07, 0.05, 0.03), vec3(0.03, 0.05, 0.015), gm), dm * 0.7);
+diffuseColor.rgb *= pcC;
+float pcR = mix(mix(clamp(vMat.x * (0.9 + 0.2 * fx.a) + dm * 0.15, 0.25, 1.0), 0.5, beltM), 0.64, dcA * 0.5);
+float pcHm = 0.0015 * (pcKnit * fx.r + pcTwill * fx.g) + 0.0009 * pcRib * fx.b + 0.0009 * dcA - 0.0008 * clamp(seam, 0.0, 1.0) - 0.0003 * clamp(stitch, 0.0, 1.0) + pcSkin * (0.00025 * fx.a + 0.00006 * fx.r) + 0.0002 * dm * fx.g;
+float pcAO = vDuv.w, pcAOd = 0.6, pcSheen = 0.34 * pcKnit + 0.22 * pcTwill + 0.28 * pcRib + 0.08 * pcSkin;
+`;
+// helmet shell: crisp stripes over the crown, team logo, paint finish (roughness / metal flake from the material) and game scuffs
+const FRAG_HELM = `
+float pcSkin = 0.0, shell = clamp(vPal.w, 0.0, 1.0);
+vec4 fx = pcTri(vRest * 9.0, vRN);
+vec3 pcC = vPal.rgb; float top = smoothstep(-0.06, -0.02, vRest.y + vRest.z * 0.2);
+pcC = pcBand(pcC, abs(vRest.x), uK[0].xyz, uK[1], uK[2], uK[3], shell * top * uK[0].w);
+{ vec4 dc = texture2D(decalMap, vDuv.xy); pcC = mix(pcC, pow(dc.rgb, vec3(2.2)), dc.a * vDuv.z); }
+float sc = smoothstep(1.0 - uK[4].y, 1.12 - uK[4].y, texture2D(fabTex, vRest.xy * 3.1 + uK[4].z).a * 0.62 + fx.r * 0.38) * shell * smoothstep(-0.12, 0.06, vRest.z) * step(0.0005, uK[4].y);
+pcC = mix(pcC, mix(vec3(0.5, 0.5, 0.47), pcC, 0.45), sc * 0.55);
+pcC *= 1.0 + (fx.a - 0.5) * 0.05 * shell;
+diffuseColor.rgb *= pcC;
+float pcR = clamp(roughness * (0.9 + 0.2 * fx.a) + sc * 0.35 + (1.0 - shell) * 0.3, 0.05, 1.0);
+float pcHm = shell * (uK[4].x * 0.00009 * (fx.r - 0.5) + 0.00003 * fx.a) - sc * 0.00015;
+float pcAO = 1.0, pcAOd = 0.6, pcSheen = 0.0;
+`;
+const FRAG_HEAD = `
+float pcSkin = clamp(vPal.w, 0.0, 1.0);
+vec4 fx = pcTri(vRest * 10.0, vRN);
+float fl = (1.0 - smoothstep(0.008, 0.03, length(vec2(abs(vRest.x) - 0.045, vRest.y + 0.03)))) * 0.8 + (1.0 - smoothstep(0.004, 0.02, length(vec2(vRest.x, vRest.y + 0.03)))) * step(0.09, vRest.z);
+diffuseColor.rgb *= vPal.rgb * (1.0 + (fx.a - 0.5) * 0.16 * pcSkin + (fx.g - 0.5) * 0.04 * pcSkin) * mix(vec3(1.0), mix(vec3(1.04, 0.985, 0.97), vec3(0.975, 1.0, 1.025), fx.a) * mix(vec3(1.0), vec3(1.07, 0.92, 0.9), fl), pcSkin);
+float pcR = mix(0.42, clamp(roughness * (0.86 + 0.28 * fx.a), 0.3, 0.9), pcSkin), pcHm = pcSkin * (0.00015 * fx.a + 0.00005 * fx.r), pcSheen = 0.1 * pcSkin;
+// the face sits inside the helmet: darker under the brim, toward the jaw pads and deeper in
+float pcAO = (1.0 - 0.62 * smoothstep(-0.045, 0.035, vRest.y)) * (1.0 - 0.45 * smoothstep(0.045, 0.08, abs(vRest.x))) * mix(0.5, 1.0, smoothstep(0.02, 0.085, vRest.z)), pcAOd = 0.92;
+`;
+const FRAG_GEAR = `
+float pcSkin = 0.0;
+vec4 fx = pcTri(vRest * 4.0, vRN);
+diffuseColor.rgb *= vPal.rgb * (1.0 + (fx.a - 0.5) * 0.14 + (fx.r - 0.5) * 0.08);
+float pcR = clamp(roughness * (0.9 + 0.2 * fx.a), 0.2, 1.0), pcHm = 0.0004 * fx.r, pcAO = 1.0, pcAOd = 0.6, pcSheen = 0.18;
+`;
+function palMat(nSlots, kind, opts, variant = 'gear') {
+  const nA = Math.ceil(nSlots / 4), m = kind === 'physical' ? new THREE.MeshPhysicalMaterial(opts) : new THREE.MeshStandardMaterial(opts), body = variant === 'body', nK = UK_N[variant] || 1;
+  m.userData.pal = Array.from({ length: nSlots }, () => new THREE.Vector4(1, 1, 1, 0)); m.userData.pmat = Array.from({ length: nSlots }, () => new THREE.Vector4(0.6, 0, 0, 0));
+  m.userData.uK = Array.from({ length: nK }, () => new THREE.Vector4()); m.userData.decal = null; m.userData.n = nSlots;
   m.onBeforeCompile = sh => {
-    sh.uniforms.pal = { value: m.userData.pal }; sh.uniforms.decalMap = { value: m.userData.decal || BLANK };
-    let attrs = '', sumv = ''; for (let a = 0; a < nA; a++) { attrs += `attribute vec4 w${a};\n`; for (let c = 0; c < 4; c++) { const i = a * 4 + c; if (i < nSlots) sumv += `${sumv ? '+' : ''}w${a}.${'xyzw'[c]}*pal[${i}]`; } }
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${attrs}attribute vec2 duv;\nattribute float nm;\nuniform vec3 pal[${nSlots}];\nvarying vec3 vPal;\nvarying vec2 vDuv;\nvarying float vNm;`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvPal=${sumv};vDuv=duv;vNm=nm;`);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D decalMap;\nvarying vec3 vPal;\nvarying vec2 vDuv;\nvarying float vNm;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb*=vPal;\n{vec4 dc=texture2D(decalMap,vDuv);dc.rgb=pow(dc.rgb,vec3(2.2));diffuseColor.rgb=mix(diffuseColor.rgb,dc.rgb,dc.a*vNm);}');
+    sh.uniforms.pal = { value: m.userData.pal }; sh.uniforms.decalMap = { value: m.userData.decal || BLANK }; sh.uniforms.fabTex = { value: fabricTex() }; sh.uniforms.uK = { value: m.userData.uK };
+    if (body) sh.uniforms.pmat = { value: m.userData.pmat };
+    let attrs = '', sumv = '', summ = ''; for (let a = 0; a < nA; a++) { attrs += `attribute vec4 w${a};\n`; for (let c = 0; c < 4; c++) { const i = a * 4 + c; if (i < nSlots) { const w = `w${a}.${'xyzw'[c]}`; sumv += `${sumv ? '+' : ''}${w}*pal[${i}]`; summ += `${summ ? '+' : ''}${w}*pmat[${i}]`; } } }
+    const vary = `varying vec4 vPal;\nvarying vec4 vDuv;\nvarying vec3 vRest;\nvarying vec3 vRN;\n${body ? 'varying vec4 vMat;\nvarying vec4 vDz;\n' : ''}`;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\n${attrs}attribute vec4 duv;\n${body ? 'attribute vec4 dz;\nuniform vec4 pmat[' + nSlots + '];\n' : ''}uniform vec4 pal[${nSlots}];\n${vary}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvPal=${sumv};vDuv=duv;vRest=position;vRN=normal;${body ? `vMat=${summ};vDz=dz;` : ''}`);
+    const frag = body ? FRAG_BODY : variant === 'helm' ? FRAG_HELM : variant === 'head' ? FRAG_HEAD : FRAG_GEAR;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nuniform sampler2D decalMap;\nuniform sampler2D fabTex;\nuniform vec4 uK[${nK}];\n${vary}${GLSL_FN}`)
+      .replace('#include <color_fragment>', '#include <color_fragment>\n' + frag)
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = pcR;')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = pcPerturb(-vViewPosition, normal, vec2(dFdx(pcHm), dFdy(pcHm)), faceDirection);')
+      .replace('#include <aomap_fragment>', `#include <aomap_fragment>
+{ float nv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), rim = (1.0 - nv) * (1.0 - nv) * (1.0 - nv);
+  vec3 aoT = mix(vec3(pcAO), pow(vec3(pcAO), vec3(0.72, 1.06, 1.22)), pcSkin);
+  reflectedLight.indirectDiffuse *= aoT; reflectedLight.indirectSpecular *= pcAO; reflectedLight.directDiffuse *= mix(vec3(1.0), aoT, pcAOd); reflectedLight.directSpecular *= mix(1.0, pcAO, pcAOd);
+  reflectedLight.directDiffuse += (reflectedLight.directDiffuse + reflectedLight.indirectDiffuse) * rim * pcSheen; }`);
     m.userData.shader = sh;
   };
-  m.customProgramCacheKey = () => 'pal' + nSlots + kind + (opts.skinning ? 's' : '');
+  m.customProgramCacheKey = () => 'pc2' + nSlots + kind + variant + (opts.skinning ? 's' : '');
   return m;
 }
 let BLANK = null;
-function setPal(m, hexes) { hexes.forEach((h, i) => { if (h != null && i < m.userData.n) m.userData.pal[i].copy(col(h)); }); }
+// colours (sRGB hex) per slot; flags (skin weight for the body / face, shell for the helmet) go in the 4th component
+function setPal(m, hexes, flags) { hexes.forEach((h, i) => { if (h != null && i < m.userData.n) { const c = col(h); m.userData.pal[i].set(c.r, c.g, c.b, flags ? flags[i] || 0 : 0); } }); }
+function setMat(m, rows) { rows.forEach((r, i) => { if (r && i < m.userData.n) m.userData.pmat[i].set(r[0], r[1], r[2], r[3]); }); }
 function geoFrom(out, slotsKey, n, stride = n) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(out.position, 3)); g.setAttribute('normal', new THREE.BufferAttribute(out.normal, 3));
   const Wsrc = out[slotsKey], nv = out.count, nA = Math.ceil(n / 4);
   for (let a = 0; a < nA; a++) { const arr = new Float32Array(nv * 4); for (let q = 0; q < nv; q++) for (let c = 0; c < 4; c++) { const i = a * 4 + c; arr[q * 4 + c] = i < n ? Wsrc[q * stride + i] : 0; } g.setAttribute('w' + a, new THREE.BufferAttribute(arr, 4)); }
-  g.setAttribute('duv', new THREE.BufferAttribute(out.uv || new Float32Array(nv * 2), 2)); g.setAttribute('nm', new THREE.BufferAttribute(out.nm || new Float32Array(nv), 1));
+  // duv: decal uv, decal mask, baked AO; dz (bodies): pants stripe / sleeve coordinates and dirt-prone fields
+  const duv = new Float32Array(nv * 4); for (let q = 0; q < nv; q++) { duv[q * 4] = out.uv ? out.uv[q * 2] : 0; duv[q * 4 + 1] = out.uv ? out.uv[q * 2 + 1] : 0; duv[q * 4 + 2] = out.nm ? out.nm[q] : 0; duv[q * 4 + 3] = out.ao ? out.ao[q] : 1; }
+  g.setAttribute('duv', new THREE.BufferAttribute(duv, 4));
+  if (out.dz) g.setAttribute('dz', new THREE.BufferAttribute(out.dz, 4));
   if (out.skinIndex) { g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(out.skinIndex, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(out.skinWeight, 4)); }
   g.setIndex(new THREE.BufferAttribute(out.index, 1)); g.computeBoundingSphere(); return g;
 }
+// shared fabric detail (one per session): R jersey knit + soft folds, G pants twill + creases, B rib knit, A mottling (tone, stains, scuffs).
+// Tiled in each part's rest space by the shader (25 cm per tile on bodies), so it never swims when the body moves.
+let fabT = null;
+function fabricTex() {
+  if (fabT) return fabT;
+  const N = coarse ? 256 : 512, d = new Uint8Array(N * N * 4); let sd = 1337; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const lattice = (cx, cy) => { const g = new Float32Array(cx * cy); for (let i = 0; i < g.length; i++) g[i] = rnd(); return (u, v) => { const x = u * cx, y = v * cy, i = Math.floor(x), j = Math.floor(y); let fx = x - i, fy = y - j; fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    const i0 = ((i % cx) + cx) % cx, i1 = (i0 + 1) % cx, j0 = ((j % cy) + cy) % cy, j1 = (j0 + 1) % cy; return (g[j0 * cx + i0] * (1 - fx) + g[j0 * cx + i1] * fx) * (1 - fy) + (g[j1 * cx + i0] * (1 - fx) + g[j1 * cx + i1] * fx) * fy; }; };
+  const m1 = lattice(5, 5), m2 = lattice(13, 13), m3 = lattice(37, 37), f1 = lattice(4, 14), f2 = lattice(9, 26), c1 = lattice(14, 4), w1 = lattice(64, 64), K = coarse ? 48 : 96, TP = Math.PI * 2;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const u = x / N, v = y / N, i = (y * N + x) * 4, px = rnd();
+    const mott = m1(u, v) * 0.5 + m2(u, v) * 0.32 + m3(u, v) * 0.18;
+    const fold = f1(u, v) * 0.72 + f2(u, v) * 0.28, crease = c1(u, v) * 0.7 + f2(v, u) * 0.3;
+    const knit = 0.5 + 0.035 * Math.sin(TP * K * u) * Math.sin(TP * K * v) + 0.5 * (fold - 0.5) + 0.06 * (w1(u, v) - 0.5) + 0.025 * (px - 0.5);
+    const twill = 0.5 + 0.035 * Math.sin(TP * K * (u + v)) + 0.55 * (crease - 0.5) + 0.06 * (w1(v, u) - 0.5) + 0.02 * (px - 0.5);
+    const rib = 0.5 + 0.3 * Math.sin(TP * (K / 2) * u) + 0.2 * (fold - 0.5) + 0.04 * (px - 0.5);
+    d[i] = Math.max(0, Math.min(255, knit * 255)); d[i + 1] = Math.max(0, Math.min(255, twill * 255)); d[i + 2] = Math.max(0, Math.min(255, rib * 255)); d[i + 3] = Math.max(0, Math.min(255, (mott * 1.25 - 0.12) * 255)); }
+  const t = new THREE.DataTexture(d, N, N, THREE.RGBAFormat); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
+  t.anisotropy = renderer ? Math.min(4, renderer.capabilities.getMaxAnisotropy()) : 1; t.needsUpdate = true; return (fabT = t);
+}
 // ---------------- asset builders (cached in memory, and in IndexedDB across sessions) ----------------
-const MODEL_V = 7, KIND_V = { body: 8, head: 8 }, outs = {};   // body / head v8: per-region colour slots (sleeves, ankles, beards, eye black)
+const MODEL_V = 7, KIND_V = { body: 10, head: 8 }, outs = {};   // body v10: 32 slots (glove palm / cuff, cleat accent), design coordinates + baked AO; head v8: per-region colour slots
 const meshKey = (kind, name) => `m${KIND_V[kind] || MODEL_V}|${kind}|${name}|${res()[kind]}`;
 const makers = {
   body: arch => M.meshSDF(M.makeBodyModel(Object.assign({}, ARCH[arch], { res: res().body * (arch === 'BIG' ? 0.86 : 1) }))),   // linemen: bigger pads need a finer grid to stay rounded
@@ -69,7 +199,7 @@ function buildBody(arch) {
   const P0v = {}; for (const k in P0) P0v[k] = V(...P0[k]);
   const right = V(-1, 0, 0), F0 = frames(P0v, { pelvis: right, spine: right, chest: right, neck: right, head: right, armR: right, armL: V(1, 0, 0), leg: right, fbT: V(0, 0, 1), fbA: V(0, 1, 0) });
   const geo = geoFrom(out, 'W', M.NS), L0 = {}; BMAP.forEach(([name, a, b]) => { L0[name] = Math.hypot(P0v[b].x - P0v[a].x, P0v[b].y - P0v[a].y, P0v[b].z - P0v[a].z); });
-  return (cache.body[arch] = { geo, P0: P0v, F0, L0, J, heightIn: A.heightIn, girth: Math.sqrt((A.weightLb * 0.4536) / (95 * Math.pow(A.heightIn / 73, 3))), tris: out.index.length / 3 });
+  return (cache.body[arch] = { geo, P0: P0v, F0, L0, J, D: M.bodyDesign(A), heightIn: A.heightIn, girth: Math.sqrt((A.weightLb * 0.4536) / (95 * Math.pow(A.heightIn / 73, 3))), tris: out.index.length / 3 });
 }
 function buildHead(arch) {
   if (cache.head[arch]) return cache.head[arch];
@@ -81,12 +211,18 @@ function buildHelm(shell) {
   const out = outFor('helm', shell);
   return (cache.helm[shell] = geoFrom(out, 'W8', 5, 8));
 }
+// facemask bars plus the chin strap (cup and two straps to snaps on the shell); vertex colour 1 = mask colour, dark = strap / cup
 function buildMask(style) {
   if (cache.mask[style]) return cache.mask[style];
-  const MB = M.maskBars(style), pos = [], nor = [], idx = []; let base = 0;
-  for (const pts of MB.bars) { const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, 'centripetal'), tg = new THREE.TubeGeometry(curve, Math.max(8, pts.length * 8), MB.r, 6, false);
-    const p = tg.attributes.position.array, n = tg.attributes.normal.array, ix = tg.index.array; for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); } for (let i = 0; i < ix.length; i++) idx.push(ix[i] + base); base += p.length / 3; tg.dispose(); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx); g.computeBoundingSphere();
+  const MB = M.maskBars(style), pos = [], nor = [], idx = [], cols = []; let base = 0;
+  const addGeo = (tg, shade) => { const p = tg.attributes.position.array, n = tg.attributes.normal.array, ix = tg.index.array; for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); } for (let i = 0; i < p.length / 3; i++) cols.push(shade[0], shade[1], shade[2]); for (let i = 0; i < ix.length; i++) idx.push(ix[i] + base); base += p.length / 3; tg.dispose(); };
+  const tube = (pts, r, seg) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, 'centripetal'), seg, r, 6, false);
+  for (const pts of MB.bars) addGeo(tube(pts, MB.r, Math.max(8, pts.length * 8)), [1, 1, 1]);
+  const STRAP = [0.075, 0.075, 0.08], CUP = [0.13, 0.13, 0.135];
+  { const cup = new THREE.SphereGeometry(1, 12, 8); cup.scale(0.03, 0.019, 0.021); cup.rotateX(-0.35); cup.translate(0, -0.116, 0.084); addGeo(cup, CUP); }
+  for (const s of [1, -1]) { addGeo(tube([[s * 0.024, -0.114, 0.082], [s * 0.06, -0.106, 0.07], [s * 0.098, -0.092, 0.052], [s * 0.121, -0.07, 0.044]], 0.0042, 12), STRAP);
+    const snap = new THREE.CylinderGeometry(0.009, 0.009, 0.005, 10); snap.rotateZ(Math.PI / 2); snap.translate(s * 0.123, -0.068, 0.044); addGeo(snap, [0.55, 0.56, 0.58]); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g.setIndex(idx); g.computeBoundingSphere();
   return (cache.mask[style] = g);
 }
 // visor: a curved shield behind the facemask at eye level (helmet space), one shared geometry and one shared material per tint
@@ -157,14 +293,54 @@ function updateSkin(r, J) {
     const Fs = frameDir(sub3(ik.end, ik.mid), Vx(Ft.x), fT); setBone(r, BIx['kn' + L], Fs, sz * st, gb(BIx['kn' + L]), ik.mid);
     const Fa = frameDir(sub3(Lg.toe, Lg.ankle), Vx(Fs.x), fT); setBone(r, BIx['an' + L], Fa, sz, sz, ik.end);
   }
+  if (r.dirt) groundDirt(r, J);
+}
+// dirt and grass stains build up through the game: knees on the turf mark the legs, going down marks the jersey (and scuffs the
+// helmet), a hand in the dirt (three-point stance) marks the gloves. One uniform per rig; the shader decides where it shows.
+// Counted per contact (knee goes down, body hits the turf, hand goes down), so it does not depend on frame rate or sim speed.
+function groundDirt(r, J) {
+  const g = r.gd || (r.gd = { knee: 0, down: 0, hand: 0 }), d = r.dirt;   // flags with hysteresis, so a stance hovering at the threshold counts once
+  let kMin = 9, hMin = 9; for (const lg of J.legs) if (lg.knee) kMin = Math.min(kMin, lg.knee.y); for (const a of J.arms) if (a.hand) hMin = Math.min(hMin, a.hand.y);
+  const cy = J.chest ? J.chest.y : 9, py = J.pelvis ? J.pelvis.y : 9;
+  const knee = kMin < 0.17 ? 1 : kMin > 0.28 ? 0 : g.knee, hand = hMin < 0.14 ? 1 : hMin > 0.3 ? 0 : g.hand, down = cy < 0.62 ? 1 : py < 0.4 ? Math.max(0.5, g.down) : cy > 0.85 ? 0 : g.down;
+  if (knee && !g.knee) d.x = Math.min(1, d.x + 0.07);
+  if (down > g.down) { const k = down - g.down; d.x = Math.min(1, d.x + 0.06 * k); d.y = Math.min(1, d.y + 0.13 * k); if (r.scuff) r.scuff.y = Math.min(0.4, r.scuff.y + 0.03 * k); }
+  if (hand && !g.hand) d.z = Math.min(1, d.z + 0.025);
+  g.knee = knee; g.down = down; g.hand = hand;
 }
 // ---------------- per-player textures ----------------
 const hexs = c => typeof c === 'number' ? '#' + c.toString(16).padStart(6, '0') : c;
-function numberTexture(num, name, kit) {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d'), ppm = 1219 / 2; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.lineJoin = 'round';
-  const draw = (cx, cy, hM, sxk) => { const fs = hM * ppm / 0.72; x.save(); x.translate(cx, cy + hM * ppm / 2); x.scale(sxk, 1); x.font = `${fs}px Graduate, "Arial Black", Impact, sans-serif`; x.lineWidth = fs * 0.1; x.strokeStyle = hexs(kit.numOutline || '#000'); x.strokeText(num, 0, 0); x.fillStyle = hexs(kit.num || '#fff'); x.fillText(num, 0, 0); x.restore(); };
-  const k = num.length > 1 ? 0.82 : 1; draw(128, 122, 0.2, k); draw(384, 131, 0.235, k);
-  x.save(); x.translate(384, 31); const nf = 0.042 * ppm / 0.72; x.font = `700 ${nf}px "Barlow Condensed", "Arial Narrow", sans-serif`; const w = x.measureText(name).width; x.scale(Math.min(1, 165 / (w || 1)), 1); x.fillStyle = hexs(kit.num || '#fff'); x.fillText(name, 0, 0); x.restore();
+// numbers as layered tackle twill: optional shadow / outer outline, outline, fill, stitching along the edges and a faint twill weave;
+// name on the back (optionally on a name bar); TV numbers in the free strip above the chest number (sampled by the shader on the
+// sleeves or shoulders). Canvas layout: left half = front (chest), right half = back, 0.42 m per half.
+const NUM_FONT = { block: s => `${s}px Graduate, "Arial Black", Impact, sans-serif`, pro: s => `800 ${s}px "Barlow Condensed", "Arial Narrow", Impact, sans-serif`,
+  italic: s => `italic 800 ${s}px "Barlow Condensed", "Arial Narrow", Impact, sans-serif`, slab: s => `700 ${s}px Teko, "Barlow Condensed", Impact, sans-serif` };
+function numberTexture(num, name, kit, KS) {
+  KS = KS || M.kitStyle(kit); const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d'), ppm = 1219 / 2; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.lineJoin = 'round';
+  const F = M.fabric, font = NUM_FONT[KS.nfont] || NUM_FONT.block, fill = F(hexs(kit.num || "#fff")); let out1 = F(hexs(kit.numOutline || '#000')), jer = F(kit.jersey || '#808080');
+  let out2 = F(hexs(KS.trim2)), st = KS.nstyle; if (st === 'double' && Math.abs(M.hexLum(out2) - M.hexLum(jer)) < 0.16) { out2 = [kit.trim, fill, '#18181b'].map(c => F(c || '#18181b')).find(c => Math.abs(M.hexLum(c) - M.hexLum(jer)) > 0.25 && c !== out1) || out1; }
+  const lumN = M.hexLum(fill);
+  if (st !== 'plain' && Math.abs(M.hexLum(out1) - M.hexLum(jer)) < 0.12) out1 = [KS.trim2, kit.trim, '#18181b'].map(c => F(c || '#18181b')).find(c => Math.abs(M.hexLum(c) - M.hexLum(jer)) > 0.2 && Math.abs(M.hexLum(c) - lumN) > 0.15) || out1;   // an outline the colour of the jersey only reads as a smudge
+  const stitchOn = c => M.hexLum(c) > 0.5 ? 'rgba(30,26,22,.34)' : 'rgba(255,250,240,.26)';
+  // hPx: cap height in canvas px, wPx: widest the number may be. Each layer's stitching is a dashed stroke drawn just before the layer
+  // over it, so only the outer fringe shows (no stitch lines through overlapping glyph contours)
+  const draw = (cx, cy, hPx, wPx) => {
+    x.font = font(100); const m0 = x.measureText(num), asc = m0.actualBoundingBoxAscent || 72, fs = 100 * hPx / asc; x.font = font(fs);
+    const lw = fs * (st === 'double' ? 0.058 : 0.1), LO = 2.3, pad = st === 'double' ? lw * LO : st === 'plain' ? 0 : lw, wid = x.measureText(num).width + pad, sxk = Math.min(1, wPx / wid), sw = Math.max(2.2, fs * 0.022);
+    const dash = (w, c) => { x.setLineDash([Math.max(1.6, fs * 0.024), Math.max(1.3, fs * 0.017)]); x.lineWidth = w; x.strokeStyle = c; x.strokeText(num, 0, 0); x.setLineDash([]); };
+    x.save(); x.translate(cx, cy + hPx / 2); x.scale(sxk, 1);
+    if (st === 'shadow') { x.fillStyle = out1; x.fillText(num, fs * 0.055, fs * 0.05); }
+    if (st === 'double') { dash(lw * LO + sw, stitchOn(jer)); x.lineWidth = lw * LO; x.strokeStyle = out2; x.strokeText(num, 0, 0); }
+    if (st !== 'plain') { dash(lw + sw, stitchOn(st === 'double' ? out2 : jer)); x.lineWidth = lw; x.strokeStyle = out1; x.strokeText(num, 0, 0); }
+    dash(sw, stitchOn(st === 'plain' || st === 'shadow' ? jer : out1)); x.fillStyle = fill; x.fillText(num, 0, 0);
+    x.restore(); };
+  draw(128, 122, 0.2 * ppm, 0.3 * ppm); draw(384, 131, 0.235 * ppm, 0.34 * ppm);
+  if (KS.tvnum !== 'none') draw(128, 30, 44, 104);
+  x.save(); x.translate(384, 31); const nf = 0.042 * ppm / 0.72; x.font = `700 ${nf}px "Barlow Condensed", "Arial Narrow", sans-serif`; const w = x.measureText(name).width, ns = Math.min(1, 165 / (w || 1));
+  if (KS.nbar && name) { const bw = Math.min(190, w * ns + 22); x.fillStyle = M.hexLum(out1) > 0.5 === lumN > 0.5 ? out2 : out1; x.beginPath(); if (x.roundRect) x.roundRect(-bw / 2, -nf * 0.82, bw, nf * 1.02, 4); else x.rect(-bw / 2, -nf * 0.82, bw, nf * 1.02); x.fill(); }
+  x.scale(ns, 1); x.fillStyle = fill; x.fillText(name, 0, 0); x.restore();
+  // twill weave over every patch (only where something is drawn)
+  x.save(); x.globalCompositeOperation = 'source-atop'; x.strokeStyle = 'rgba(0,0,0,.07)'; x.lineWidth = 1; x.beginPath(); for (let i = -256; i < 512; i += 3) { x.moveTo(i, 0); x.lineTo(i + 256, 256); } x.stroke(); x.restore();
   const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
 }
 const logoTex = {};
@@ -182,26 +358,80 @@ function makeRig(rp, team, kit) {
   const root = new THREE.Group(); root.matrixAutoUpdate = false; scene.add(root);
   const bones = M.BONES.map(() => { const b = new THREE.Bone(); b.matrixAutoUpdate = false; root.add(b); return b; });
   const sk = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
-  const mat = palMat(M.NS, 'standard', { roughness: 0.62, metalness: 0, skinning: true });
-  setPal(mat, L3.body);
-  mat.userData.decal = numberTexture(String(rp.num ?? ''), (rp.ln || '').toUpperCase().slice(0, 12), kit);
+  const KS = L3.kit, mat = palMat(M.NS, 'standard', { roughness: 0.8, metalness: 0, skinning: true }, 'body');
+  setPal(mat, L3.body, L3.bodyMat.map(m => m[4])); setMat(mat, L3.bodyMat);
+  mat.userData.decal = numberTexture(String(rp.num ?? ''), (rp.ln || '').toUpperCase().slice(0, 12), kit, KS);
+  const hsh = ((rp.id | 0) * 2654435761 >>> 0) / 4294967296, line = arch === 'BIG';
+  const dirt = setBodyKit(mat, kit, KS, base.D, hsh, line, rp.pos, L3.body, L3.spat);
   const body = new THREE.SkinnedMesh(base.geo, mat); body.bind(sk, new THREE.Matrix4()); body.frustumCulled = false; body.castShadow = true; body.receiveShadow = true; scene.add(body);
   const gear = new THREE.Group(), hb = bones[M.BI.head]; gear.position.set(...base.J.head); hb.add(gear);
-  const hm = palMat(M.NSH, 'standard', { roughness: 0.52, metalness: 0 }); setPal(hm, L3.head); const head = new THREE.Mesh(headB.geo, hm); gear.add(head);
+  const hm = palMat(M.NSH, 'standard', { roughness: 0.55, metalness: 0 }, 'head'); setPal(hm, L3.head, [1, 1, 0, 0, 1, 1, 1, 0.4, 0.4, 0.3, 1, 1]); const head = new THREE.Mesh(headB.geo, hm); head.receiveShadow = true; gear.add(head);
   const shell = new THREE.Group(); shell.scale.setScalar(headB.scale); gear.add(shell);
-  const helmMat = palMat(5, 'physical', { roughness: 0.28, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.06 }); setPal(helmMat, [kit.helmet, kit.hstripe, kit.hstripe2, '#141416', '#202226']); helmMat.userData.decal = logoTexture(team, kit);
+  // helmet: paint finish per kit (gloss / satin / metallic flake as physical clearcoat, matte as a plain standard material)
+  const HF = { gloss: [{ roughness: 0.26, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.05 }, 0], satin: [{ roughness: 0.4, metalness: 0.06, clearcoat: 0.45, clearcoatRoughness: 0.3 }, 0],
+    metal: [{ roughness: 0.3, metalness: 0.55, clearcoat: 1, clearcoatRoughness: 0.04 }, 1], matte: [{ roughness: 0.64, metalness: 0.0 }, 0] }[KS.hfinish] || [{ roughness: 0.26, metalness: 0.02, clearcoat: 1, clearcoatRoughness: 0.05 }, 0];
+  const hcol = M.fabric(kit.helmet || '#888888'), helmMat = palMat(5, KS.hfinish === 'matte' ? 'standard' : 'physical', HF[0], 'helm'); setPal(helmMat, [hcol, hcol, hcol, '#141416', '#202226'], [1, 1, 1, 0, 0]); helmMat.userData.decal = logoTexture(team, kit);
+  const scuff = setHelmKit(helmMat, kit, KS, hcol, HF[1], hsh, line);
   const helm = new THREE.Mesh(helmG, helmMat); helm.castShadow = true; shell.add(helm);
-  const mm = new THREE.MeshStandardMaterial({ color: col(kit.mask || '#d4d8de'), roughness: 0.38, metalness: 0.45 }); const mask = new THREE.Mesh(maskG, mm); mask.castShadow = true; shell.add(mask);
+  // facemask: bare titanium look for grey masks, powder coat for coloured ones
+  const mc = new THREE.Color(kit.mask || '#d4d8de'), hsl = {}; mc.getHSL(hsl); const ti = hsl.s < 0.14 && hsl.l > 0.42 && hsl.l < 0.92;
+  const mm = new THREE.MeshStandardMaterial({ color: col(kit.mask || '#d4d8de'), roughness: ti ? 0.32 : 0.46, metalness: ti ? 0.7 : 0.08, vertexColors: true }); const mask = new THREE.Mesh(maskG, mm); mask.castShadow = true; shell.add(mask);
   if (L3.visor) { const vz = new THREE.Mesh(buildVisor(), visorMat(L3.visor)); vz.renderOrder = 2; shell.add(vz); }
   const mats = [mat, hm, helmMat, mm]; let extra = null;
   const xg = L3.hasGear ? buildGear(arch, L3, headB.scale) : null;
-  if (xg) { const xm = palMat(M.NSG, 'standard', { roughness: 0.72, metalness: 0.05, skinning: true }); setPal(xm, L3.gearPal); mats.push(xm);
+  if (xg) { const xm = palMat(M.NSG, 'standard', { roughness: 0.78, metalness: 0.03, skinning: true }, 'gear'); setPal(xm, L3.gearPal.map(M.fabric)); mats.push(xm);
     extra = new THREE.SkinnedMesh(xg, xm); extra.bind(sk, new THREE.Matrix4()); extra.frustumCulled = false; extra.castShadow = false; extra.receiveShadow = true; scene.add(extra); }
   const physSize = (rp.ht || base.heightIn) / 73, archSize = base.heightIn / 73, ratio = physSize / archSize;
   const pg = Math.sqrt(((rp.wt || 220) * 0.4536) / (95 * Math.pow(physSize, 3)));
-  return { root, bones, body, gear, extra, mats, base, m: bones.map(() => new Float64Array(12)), sz: ratio, g: ratio * Math.pow(pg / base.girth, 0.9), gb: L3.girth, pid: rp.id, tid: team.id, kitKey: kitKey(kit), visible: true };
+  return { root, bones, body, gear, extra, mats, base, m: bones.map(() => new Float64Array(12)), sz: ratio, g: ratio * Math.pow(pg / base.girth, 0.9), gb: L3.girth, pid: rp.id, tid: team.id, kitKey: kitKey(kit), visible: true, dirt, scuff };
 }
-const kitKey = k => [k.jersey, k.trim, k.pants, k.helmet, k.num, k.shell, k.mask].join('|');
+// kit design uniforms for a body material (layout read by FRAG_BODY). Returns the rig's dirt vector (x legs, y torso, z gloves, w pattern seed).
+function setBodyKit(mat, kit, KS, D, hsh, line, pos, P, spat) {
+  const u = mat.userData.uK, V = (i, a, b, c, d) => u[i].set(a, b, c, d), C = (i, hex, on = 1) => { const c = col(hex); u[i].set(c.r, c.g, c.b, on); };
+  const F = M.fabric, jer = F(kit.jersey || '#7a7a7a'), tr = F(kit.trim || '#ffffff'), t2 = F(KS.trim2), pants = F(kit.pants || '#e8e8e8'), lum = M.hexLum;
+  let ps = F(kit.pstripe || kit.jersey || '#7a7a7a'); if (Math.abs(lum(ps) - lum(pants)) < 0.1) ps = [tr, jer, t2].find(c => Math.abs(lum(c) - lum(pants)) > 0.2) || ps;
+  const sockC = F(kit.socks || kit.jersey || '#7a7a7a'), sockS = [tr, '#e2ded5', t2, jer].find(c => Math.abs(lum(c) - lum(sockC)) > 0.2) || tr;
+  for (const i of [1, 2, 3, 5, 6, 8, 9, 11, 13, 14, 15, 17, 18, 19]) u[i].set(0, 0, 0, 0);
+  V(0, 0, 0, 0, 0); V(4, 0, 0, 0, 0); V(7, 0, 0, 0, 0); V(10, 0.88, D.chestW, D.armpit, 0);
+  // jersey: sleeve bands (around a distance above the hem), shoulder loops, yoke, side panels
+  switch (KS.jstyle) {
+    case 'stripes': V(0, 0.042, 0.009, 0.025, 0.025); C(2, tr); break;
+    case 'triple': V(0, 0.036, 0.006, 0.013, 0.019); C(1, tr); C(3, tr); break;
+    case 'loops': V(0, 0.012, 0.0045, 0.0045, 0.0045); C(1, tr); V(4, D.loopX, D.loopY, 0.016, 0.022); C(5, tr); C(6, t2); break;
+    case 'yoke': V(0, 0.01, 0.004, 0.004, 0.004); C(1, t2); V(7, D.yokeF, D.yokeB, 0.035, 1); C(8, tr); C(9, t2); break;
+    case 'panel': V(0, 0.016, 0.009, 0.009, 0.009); C(1, tr); V(10, line ? 0.92 : 0.89, D.chestW, D.armpit, 1); C(11, tr); C(9, t2); break;
+    default: V(0, 0.009, 0.0035, 0.0035, 0.0035); C(1, t2); break;      // plain: just a thin cuff piping
+  }
+  // pants stripe: bands around the outer-leg line
+  const PSW = { solid: [0.026, 0.026, 0.026, ps, 0, 0], double: [0.007, 0.019, 0.019, 0, ps, 0], tri: [0.011, 0.017, 0.025, ps, 0, t2], outline: [0.015, 0.022, 0.022, ps, t2, 0], thin: [0.0075, 0.0075, 0.0075, ps, 0, 0] }[KS.pstyle];
+  if (PSW) { V(12, PSW[0], PSW[1], PSW[2], 1); if (PSW[3]) C(13, PSW[3]); if (PSW[4]) C(14, PSW[4]); if (PSW[5]) C(15, PSW[5]); } else V(12, 0, 0, 0, 0);
+  // socks: bands around a height on the calf (two-tone = a lighter lower sock)
+  const midC = D.sockT + (D.ankT - D.sockT) * 0.4, half = (D.sockT - D.ankT) * 0.42;
+  if (KS.sstyle === 'stripes') { V(16, midC, 0.011, 0.025, 0.025); C(18, sockS); }
+  else if (KS.sstyle === 'hoops') { V(16, midC, 0.009, 0.019, 0.028); C(17, sockS); C(19, sockS); }
+  else if (KS.sstyle === 'twotone') { V(16, D.ankT, half, half + 0.008, half + 0.008); C(17, '#e2ded5'); C(18, tr); }
+  else V(16, 0, 0, 0, 0);
+  V(20, D.seamZ, D.pseamZ, D.hem, D.wrX);
+  // garment edges: belt (centre y), jersey (knee hem y), pants (ankle-tape line y), socks (ankle is rib knit), ankle colour (on when it differs)
+  C(24, P[10]); u[24].w = D.belt - 0.0135; C(25, P[0]); u[25].w = D.hem; C(26, P[2]); u[26].w = D.ankT; C(27, P[4]); u[27].w = P[11] === P[4] ? 1 : 0; C(28, P[11]); u[28].w = P[11] === P[4] ? 0 : 1;
+  u[32].set(D.holeR, line ? 99 : D.collarY, D.elX, D.elY); C(33, P[1]);   // collar ring (linemen's pads have a neck roll there instead)
+  // cleat collar edge (only when the collar and the sock above differ) and laces (not under spats)
+  u[29].set(D.collar, D.anX, D.anZ, spat === 1 || spat === 2 || spat === 4 ? 0 : 1); C(30, P[9], P[9] === P[11] ? 0 : 1); C(31, M.hexLum(P[7]) > 0.5 ? '#2a2a2e' : '#e6e3dc');
+  let tv = { none: 0, sleeve: 1, shoulder: 2 }[KS.tvnum] || 0; if (tv && (KS.jstyle === 'stripes' || KS.jstyle === 'triple')) tv = 0; else if (tv === 2 && KS.jstyle === 'loops') tv = 1;   // never over the stripes V(21, D.sockT, D.ankT, D.wrY, tv);
+  if (tv === 2) V(22, D.loopX, D.capTop, 0, 0.048); else V(22, D.chestW + 0.012, D.tv[1] - 0.012, D.tv[2], 0.046);
+  // starting dirt: everyone has a little; linemen live in the trenches, kickers and QBs stay cleaner
+  const cleanK = pos === 'K' || pos === 'P' ? 0.25 : pos === 'QB' ? 0.55 : 1;
+  V(23, (0.1 + hsh * 0.14 + (line ? 0.16 : 0)) * cleanK, (0.03 + hsh * 0.06 + (line ? 0.1 : 0)) * cleanK, line ? 0.3 + hsh * 0.2 : 0.06, hsh * 7.31);
+  return u[23];
+}
+function setHelmKit(mat, kit, KS, hcol, flake, hsh, line) {
+  const u = mat.userData.uK, C = (i, hex, on = 1) => { const c = col(hex); u[i].set(c.r, c.g, c.b, on); }, s1 = kit.hstripe || '#ffffff', s2 = kit.hstripe2 || s1;
+  for (let i = 0; i < 4; i++) u[i].set(0, 0, 0, 0);
+  const HS = { single: [0.0105, 0.016, 0.016, s1, s2, 0], double: [0.006, 0.0145, 0.0145, 0, s1, 0], tri: [0.0085, 0.0135, 0.019, s1, 0, s2], wide: [0.026, 0.031, 0.031, s1, s2, 0] }[KS.hstyle];
+  if (HS) { u[0].set(HS[0], HS[1], HS[2], 1); if (HS[3]) C(1, HS[3]); if (HS[4]) C(2, HS[4]); if (HS[5]) C(3, HS[5]); }
+  u[4].set(flake, 0.05 + (line ? 0.08 : 0) + hsh * 0.05, hsh * 5.17, 0); return u[4];
+}
+const kitKey = k => { const S = M.kitStyle(k); return [k.jersey, k.trim, k.pants, k.pstripe, k.socks, k.helmet, k.hstripe, k.hstripe2, k.num, k.numOutline, k.shell, k.mask, k.glove, k.cleat, S.jstyle, S.pstyle, S.hstyle, S.hfinish, S.sstyle, S.nfont, S.nstyle, S.nbar, S.tvnum, S.trim2].join('|'); };
 function hideRig(r, v) { r.body.visible = v; r.gear.visible = v; if (r.extra) r.extra.visible = v; r.visible = v; }
 function disposeRig(r) { scene.remove(r.root); scene.remove(r.body); if (r.extra) scene.remove(r.extra); for (const m of r.mats) { if (m.userData.decal && !Object.values(logoTex).includes(m.userData.decal)) m.userData.decal.dispose(); m.dispose(); } }
 // ---------------- field ----------------
