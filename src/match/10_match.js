@@ -799,7 +799,7 @@ function bubbles() {
 // ------------------------------------------------------------ sim drive / sim to the end: the coordinators call it and you watch every snap, at the speed you pick
 const SPEEDS = [1, 2, 4, 10, 20];
 function setSpeed(s) { if (G) G.speed = s; const i = SPEEDS.indexOf(s); if (el.spdIn) el.spdIn.value = String(i < 0 ? 0 : i); if (el.spdV) el.spdV.textContent = s + '×'; }
-function speedBar(on) { if (!el.spdBar) return; el.spdBar.classList.toggle('show', !!on); el.spdBar.classList.toggle('on', !!on); }
+function speedBar(on) { if (!el.spdBar) return; el.spdBar.classList.toggle('show', !!on); el.spdBar.classList.toggle('on', !!on); if (el.game) el.game.classList.toggle('spdon', !!on); }
 function startAuto(kind) {
   if (!G || G.over) return; G.auto = { kind, tid: G.poss }; G.autoFrom = G.mode; G.mode = 'watch';
   slingEnd(false); G.userSide = null; if (G.play) G.play.userSide = null; actsFor('none'); hideSheet(); closeOverlay();

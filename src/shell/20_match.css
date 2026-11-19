@@ -204,3 +204,6 @@ body.phonemode .acts .a{width:52px;height:52px;font-size:10px;padding:2px;border
 body.phonemode .acts .a.big{width:66px;height:66px;font-size:15px}
 body.phonemode .acts .a.wide{height:42px;border-radius:var(--a-wr,21px);padding:0 12px;font-size:11px}
 body.phonemode #gui .joy{display:none!important}
+
+/* the sim speed bar sits at the bottom: lift the coordinator tip above it */
+#game.spdon #hud .csay{bottom:calc(84px + var(--sab))}
