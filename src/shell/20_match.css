@@ -264,3 +264,74 @@ body.phonemode #gui .joy{display:none!important}
 .rb.pre.hr:active{transform:translate(-50%,-100%) scale(.94)}
 /* phones held upright: the weather chip and crowd meter sit bottom right, clear of the event ticker under the scorebug */
 @media (max-width:520px){#hud .gday{z-index:2;top:auto;bottom:calc(14px + var(--sab))}}
+
+/* ---------- game modes (pregame choice, pause menu), calls at the line, the play clock, no huddle, the daily drive ---------- */
+/* pregame: Play full game is the big button, offense only / defense only below it */
+.ovl .gmodes{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin-top:12px}
+.ovl .gmodes>.pri.big{font-size:22px;padding:.72em 1.4em .66em;clip-path:none}
+.gmodes .gm2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gmodes .gmb{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:11px 12px 10px;background:var(--fill);color:var(--ink);border-color:transparent}
+.gmodes .gmb b{font:var(--cond-w) 16px/1.1 var(--cond)}.gmodes .gmb small{font:500 12px/1.25 var(--body);color:var(--ink2);text-transform:none;letter-spacing:0}
+.gmodes .gmb.last{box-shadow:inset 0 0 0 2px var(--acc)}
+.gmodes .gmb em{position:absolute;top:-8px;right:8px;font:var(--cond-w) 9.5px/1 var(--cond);font-style:normal;letter-spacing:.08em;background:var(--acc);color:var(--accink);padding:3px 5px 2px;border-radius:var(--r)}
+.gmodes>.ghost{align-self:center}
+@media (max-width:380px){.gmodes .gm2{grid-template-columns:1fr}}
+.ovl .dlyi{display:flex;flex-direction:column;gap:3px;text-align:center;background:var(--fill);border-radius:var(--r);padding:9px 10px;box-shadow:inset 0 4px 0 var(--gold)}
+.ovl .dlyi b{font:var(--cond-w) 12px var(--cond);letter-spacing:.08em;color:var(--ink2)}.ovl .dlyi span{font:600 15px/1.3 var(--body)}
+/* pause menu: who you play */
+.ovl .gmp{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin:12px 0 2px}
+.ovl .gmp .seg button{background:var(--fill);color:var(--ink);font-size:13px}.ovl .gmp .seg button.sel{background:var(--on);color:var(--onink)}
+
+/* the panels at the line: Audible, Motion, Calls (above the action buttons; on a phone, beside them) */
+#gui .lpan{z-index:7}
+.lpan{position:absolute;right:calc(12px + var(--sar));bottom:calc(198px + var(--sab));width:min(350px,calc(100vw - 24px));display:none;flex-direction:column;gap:7px;background-color:var(--s-bg);background-image:var(--s-img);color:var(--ink);border-radius:var(--r2);padding:9px 10px 10px;box-shadow:0 12px 32px rgba(0,0,0,.5),inset 0 4px 0 var(--tc);max-height:calc(100% - 290px);overflow-y:auto}
+.lpan.show{display:flex}
+.lpan .lh{display:flex;align-items:center;justify-content:space-between;padding-top:2px}.lpan .lh b{font:var(--disp-w) 21px/1 var(--disp);text-transform:var(--disp-tt);padding-top:var(--disp-pt)}
+.lpan .lh .x{width:34px;height:34px;padding:0;background:var(--fill);color:var(--ink);border:0}
+.lpan .lw{font:600 12.5px/1.3 var(--body);color:var(--bad);background:var(--fill);border-radius:var(--r);padding:5px 8px;box-shadow:inset 3px 0 0 var(--bad)}
+.lpan .lsub{font:500 12px/1.3 var(--body);color:var(--ink2)}
+.lpan button{background:var(--fill);color:var(--ink);border:0;font-size:13px;padding:9px 9px 8px}
+.lpan button.sel{background:var(--on);color:var(--onink);--ink2:var(--onink)}
+.lpan .lg2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.lpan .lg2 button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;min-height:50px}
+.lpan .lg2 b{font:var(--cond-w) 14px/1.1 var(--cond)}.lpan small{font:500 11.5px/1.2 var(--body);color:var(--ink2);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.lpan .lbook{background:transparent;box-shadow:inset 0 0 0 1px var(--rule2)}
+.lpan .lrow{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);gap:4px;align-items:center}
+.lpan .lrow span{font:500 13px/1.1 var(--cond);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink2)}.lpan .lrow span b{color:var(--ink);font-weight:700}
+.lpan .lrow button{padding:8px 9px 7px;font-size:12.5px}
+.lpan .lgap{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+.lpan .lgap button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 2px 6px}.lpan .lgap b{font:var(--num-w) 18px/1 var(--num)}.lpan .lgap small{font-size:10px}
+.lpan .lgap button:nth-child(3){margin-right:5px}
+body.phonemode .lpan{left:calc(128px + var(--sal));right:calc(8px + var(--sar));width:auto;bottom:calc(10px + var(--sab));max-height:calc(100% - 150px);padding:8px}
+body.phonemode .lpan .lg2 button{min-height:44px;padding:7px}
+#game.rot .lpan,body.phonemode #game.rot .lpan{max-height:calc(100% - 80px)}
+
+/* the play clock: under the scorebug while it runs for you (red at 5) */
+#hud .pclk{z-index:3}
+.pclk{position:absolute;left:50%;top:calc(57px + var(--sat));transform:translateX(-50%);display:none;align-items:center;gap:6px;height:24px;padding:0 4px 0 9px;background:var(--h-bga);color:var(--ink);border-radius:var(--r);box-shadow:inset 0 -3px 0 var(--tca)}
+.pclk.show{display:flex}
+.pclk small{font:var(--cond-w) 9.5px/1 var(--cond);letter-spacing:.1em;color:var(--ink2);padding-top:2px}
+.pclk b{font:var(--num-w) 17px/1 var(--num);min-width:26px;text-align:center;padding:3px 4px 1px;background:#0b0c0e;color:#fff;border-radius:var(--r)}
+.pclk.lo b{background:#d4202a;animation:pclkp .5s ease-in-out infinite alternate}
+@keyframes pclkp{to{transform:scale(1.12)}}
+#game.pcon .tick{top:calc(88px + var(--sat))}#game.pcon .hint{top:calc(120px + var(--sat))}#game.pcon .refc{top:calc(146px + var(--sat))}
+@media (max-width:640px){#game.pcon:not(.rot):has(#hud .pchip.show) #gui .hint{top:calc(170px + var(--sat))}}
+
+/* no huddle: a short bar instead of the playbook */
+.sheet.hq{max-height:none}
+.sheet .hqg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:10px 0 8px}
+.sheet .hqc{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:10px 11px 9px;background:var(--fill);color:var(--ink);border:0;min-height:56px}
+.sheet .hqc b{font:var(--cond-w) 16px/1.1 var(--cond)}.sheet .hqc small{font:500 12px/1.2 var(--body);color:var(--ink2);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sheet .hqc.pri{background:var(--on);color:var(--onink);clip-path:none;--ink2:color-mix(in srgb,var(--onink) 72%,transparent)}
+@media (max-width:480px){.sheet .hqg{grid-template-columns:1fr 1fr}}
+@media (max-height:500px){.sheet.hq{display:flex;flex-direction:column}}
+#game.rot .sheet.hq{display:flex;flex-direction:column}
+
+/* the daily drive result */
+.dlyc .dlyv{text-align:center;font:var(--disp-w) 34px/1 var(--disp);text-transform:var(--disp-tt);margin:8px 0 2px;padding-top:var(--disp-pt)}
+.dlyc .dlyv.good{color:var(--good)}.dlyc .dlyv.bad{color:var(--bad)}
+.dlyc .dlyh{text-align:center;font:var(--cond-w) 15px var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
+.dlyc .dlys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:12px 0 10px}
+.dlyc .dlys div{display:flex;flex-direction:column;align-items:center;background:var(--fill);border-radius:var(--r);padding:8px 4px 7px}
+.dlyc .dlys b{font:var(--num-w) 24px/1 var(--num);padding-top:var(--disp-pt)}.dlyc .dlys span{font:var(--cond-w) 10.5px var(--cond);letter-spacing:.07em;color:var(--ink2);text-transform:uppercase}
+.dlyc .dlys .sc{background:var(--on);color:var(--onink);--ink2:var(--onink)}

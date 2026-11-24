@@ -1,0 +1,9 @@
+/* the daily drive on the title screen */
+.daily{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background-color:var(--c-bg);background-image:var(--c-img);box-shadow:var(--c-edge),inset 5px 0 0 var(--gold);border-radius:var(--r2);padding:12px 14px 12px 18px;margin:4px 0 6px}
+.daily .dl{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 260px}
+.daily .pos{font:var(--cond-w) 12px var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.daily b{font:var(--disp-w) 1.55rem/1 var(--disp);text-transform:var(--disp-tt);padding-top:var(--disp-pt)}
+.daily .dt{font:500 14px/1.35 var(--body)}
+.daily .db{font:600 13px/1.3 var(--body);color:var(--ink2)}.daily .db em{font-style:normal;color:var(--good);font-weight:800}
+.daily .dm{font:500 12.5px/1.3 var(--body);color:var(--ink2)}
+.daily .row{flex:none}

@@ -60,6 +60,8 @@ function cpuCall(tid, side, ctx) {
     if (!c.length) c = pool;
     const type = R() < pass ? 'pass' : 'run'; let d = c.filter(p => p.type === type); if (!d.length) d = c;
     if (type === 'pass') { const deep = R() < st.deep + (ps === 'aggressive' ? 0.15 : 0) && yl < 85; const d2 = d.filter(p => !!p.deep === deep); if (d2.length) d = d2; }
+    // two-minute drill, behind: throw toward the sideline (out of bounds stops the clock), no play action (the match also runs it without a huddle)
+    if (type === 'pass' && late && sd < 0 && clock < qlen * 0.25) { const sl = d.filter(p => !p.pa && Object.values(p.routes || {}).some(r => r === 'out' || r === 'corner' || r === 'comeback' || r === 'fade')); if (sl.length && R() < 0.65) d = sl; }
     if (ps === 'adaptive' && ctx.oppTid === L.user) { const t = tend(); const man = (t.man + 1) / (t.man + t.zone + 2); const want = man > 0.6 ? /Slant|Mesh|Cross|Drag|Shallow|Stick/ : man < 0.4 ? /Flood|Smash|Curl|Sail|Levels|Spot|Dagger/ : null; if (want && R() < 0.4) { const d3 = d.filter(p => want.test(p.name)); if (d3.length) d = d3; } }
     // weight toward plays that fit the situation
     const opp = L.teams[ctx.oppTid] || T; const sc = ctx.scen || scenKeyFor(down, togo, yl, q, clock, qlen, sd);

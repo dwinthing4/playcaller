@@ -1209,14 +1209,17 @@ function drawOverlay(play, side) {
     const e = pts[pts.length - 1], p2 = pts[pts.length - 2], dx = e.x - p2.x, dz = e.z - p2.z, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l, hw = w * 3.2; const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.Float32BufferAttribute([e.x + ux * hw * 1.4, y, e.z + uz * hw * 1.4, e.x - uz * hw, y, e.z + ux * hw, e.x + uz * hw, y, e.z - ux * hw], 3)); overlay.add(new THREE.Mesh(tg, m.material)); };
   if (side === 'O') {
     for (const r of play.receivers) if (r.route && r.route.length) ribbon([{ x: r.p.x, z: r.p.z }].concat(r.route), 0xffe066, 0.09);
+    { const m = play.umo; if (m && !m.set && m.path) ribbon([{ x: m.p.p.x, z: m.p.p.z }].concat(m.path.slice(m.i)), 0xffffff, 0.07); }      // motion called at the line: where he is going
     if (play.op.type === 'run') { const rb = play.O.find(p => p.role === 'rb') || play.qb; ribbon([{ x: rb.p.x, z: rb.p.z }, { x: play.gapX, z: play.losZ - 0.4 }, { x: play.gapX, z: play.losZ + 4.5 }], 0xff5a5a, 0.11); }
     for (const b of play.O) if (b.ol && b.asg) { const a = b.asg, dx = -(a.d || 0), pts = a.t === 'pull' ? [{ x: b.p.x, z: b.p.z }, { x: b.p.x, z: b.p.z - 1 }, { x: play.gapX, z: play.losZ - 0.6 }, { x: play.gapX, z: play.losZ + 1.5 }] : a.t === 'pass' ? [{ x: b.p.x, z: b.p.z }, { x: b.p.x, z: b.p.z - 1.6 }] : a.t === 'climb' ? [{ x: b.p.x, z: b.p.z }, { x: b.p.x, z: b.p.z + 4.2 }] : [{ x: b.p.x, z: b.p.z }, { x: b.p.x + dx * 1.6, z: b.p.z + 1.7 }];
       ribbon(pts, a.t === 'pull' ? 0xff9b4a : a.t === 'pass' ? 0x9fd0ff : 0xffffff, 0.06); }
   } else {
     for (const d of play.D) {
       if (d.zone) { const r = d.zone.deep ? 4.5 : 3.2, ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.12, r, 48), new THREE.MeshBasicMaterial({ color: d.zone.deep ? 0x5fb4ff : 0xffe066, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.set(d.zone.x, y, d.zone.z); overlay.add(ring); ribbon([{ x: d.p.x, z: d.p.z }, { x: d.zone.x, z: d.zone.z }], d.zone.deep ? 0x5fb4ff : 0xffe066, 0.04); }
-      else if (d.job === 'man' && d.cover) ribbon([{ x: d.p.x, z: d.p.z }, { x: d.cover.p.x, z: d.cover.p.z + 0.4 }], 0xd08cff, 0.04);
+      else if (d.job === 'man' && d.cover) ribbon([{ x: d.p.x, z: d.p.z }, { x: d.cover.p.x, z: d.cover.p.z + 0.4 }], d.bracket ? 0x5fb4ff : 0xd08cff, d.bracket ? 0.07 : 0.04);
+      else if (d.gapAim != null) ribbon([{ x: d.p.x, z: d.p.z }, { x: d.gapAim, z: play.losZ + 0.3 }, { x: play.qb.p.x, z: play.losZ - 1.6 }], 0xff5a5a, 0.1);     // a gap blitz, through his gap
       else if (d.job === 'rush' && !d.dl) ribbon([{ x: d.p.x, z: d.p.z }, { x: play.qb.p.x, z: play.losZ - 0.8 }], 0xff5a5a, 0.08);
+      else if (d.qbSpy) ribbon([{ x: d.p.x, z: d.p.z }, { x: play.qb.p.x, z: play.qb.p.z + 1.2 }], 0xff9b4a, 0.07);      // the spy, eyes on the QB
     }
   }
   scene.add(overlay);
