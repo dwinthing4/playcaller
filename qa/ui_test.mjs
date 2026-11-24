@@ -7,7 +7,7 @@ const shots = path.join(root, 'qa', 'shots', 'ui'); fs.mkdirSync(shots, { recurs
 const exe = [path.join(os.homedir(), 'AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe')].find(f => fs.existsSync(f));
 const browser = await chromium.launch({ executablePath: exe, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const url = 'file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/');
-const TABS = ['home', 'inbox', 'roster', 'depth', 'develop', 'stories', 'uniforms', 'teaminfo', 'plan', 'playbook', 'film', 'staff', 'coach', 'facilities', 'trade', 'fa', 'scouting', 'draft', 'mock', 'contracts', 'standings', 'schedule', 'leaders', 'history', 'records', 'settings'];
+const TABS = ['home', 'inbox', 'roster', 'depth', 'develop', 'stories', 'uniforms', 'teaminfo', 'plan', 'playbook', 'film', 'staff', 'coach', 'facilities', 'trade', 'fa', 'scouting', 'draft', 'mock', 'contracts', 'standings', 'schedule', 'leaders', 'history', 'records', 'map', 'settings'];
 let problems = [];
 for (const [vw, vh, tag] of [[390, 844, 'phone'], [1280, 800, 'desk']]) {
   const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: tag === 'phone' ? 2 : 1, hasTouch: tag === 'phone' });

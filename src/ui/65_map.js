@@ -20,12 +20,14 @@ function mapZone(lon, lat) { return lat > 51 && lon < -129 ? 'ak' : lon < -150 &
 function mapXY(lon, lat, zone) { const P = MAP_PRJ[zone || mapZone(lon, lat)], p = P[0](lon, lat); return [P[2] + p[0] * P[1], P[3] - p[1] * P[1]]; }
 function mapPath(str, zone) { return str.split('|').map(poly => 'M' + poly.trim().split(/\s+/).map(pt => { const [lo, la] = pt.split(',').map(Number), q = mapXY(lo, la, zone); return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join('L') + 'Z').join(''); }
 let MAP_CACHE = null;
+// label spots where the middle of the box would fall outside the state
+const MAP_LABEL = { FL: [-81.6, 28.3], MI: [-84.7, 43.4], LA: [-92.4, 31.0], CA: [-119.8, 37.4], KY: [-85.3, 37.6], VA: [-78.6, 37.6], NY: [-75.3, 42.9], MD: [-76.9, 39.45], TX: [-99, 31.3], ID: [-114.6, 44.0], OK: [-97.3, 35.6], MA: [-71.9, 42.35], NJ: [-74.5, 40.1], WV: [-80.6, 38.7], TN: [-86.3, 35.8], NC: [-79.4, 35.6], MN: [-94.3, 46.0], WI: [-89.8, 44.6], NV: [-117, 39.5], WA: [-120.5, 47.4] };
 function mapShapes() {
   if (MAP_CACHE) return MAP_CACHE; const st = {}, c = {};
   for (const k in MAP_STATES) st[k] = mapPath(MAP_STATES[k], k === 'AK' ? 'ak' : k === 'HI' ? 'hi' : 'm');
   for (const k in MAP_LAND) c[k] = mapPath(MAP_LAND[k], 'm');
   // a label spot per state: the middle of its first polygon's box
-  const mid = {}; for (const k in MAP_STATES) { const pts = MAP_STATES[k].split('|')[0].trim().split(/\s+/).map(p => p.split(',').map(Number)); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [lo, la] of pts) { x0 = Math.min(x0, lo); x1 = Math.max(x1, lo); y0 = Math.min(y0, la); y1 = Math.max(y1, la); } mid[k] = mapXY((x0 + x1) / 2, (y0 + y1) / 2, k === 'AK' ? 'ak' : k === 'HI' ? 'hi' : 'm'); }
+  const mid = {}; for (const k in MAP_STATES) { const pts = MAP_STATES[k].split('|')[0].trim().split(/\s+/).map(p => p.split(',').map(Number)); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [lo, la] of pts) { x0 = Math.min(x0, lo); x1 = Math.max(x1, lo); y0 = Math.min(y0, la); y1 = Math.max(y1, la); } mid[k] = MAP_LABEL[k] ? mapXY(MAP_LABEL[k][0], MAP_LABEL[k][1]) : mapXY((x0 + x1) / 2, (y0 + y1) / 2, k === 'AK' ? 'ak' : k === 'HI' ? 'hi' : 'm'); }
   return (MAP_CACHE = { st, c, mid });
 }
 const MAP_DIVC = { 'A-East': '#d1495b', 'A-North': '#e3a33b', 'A-South': '#5f9e7c', 'A-West': '#1f7f99', 'N-East': '#8d6a9f', 'N-North': '#3b6ea5', 'N-South': '#c97b4a', 'N-West': '#7d8c3e' };

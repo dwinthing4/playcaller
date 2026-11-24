@@ -619,7 +619,7 @@ function conditions(H, L0) { let w = null; try { if (typeof VENUE !== 'undefined
 function fieldDir(tid) { return (tid === G.hid ? 1 : -1) * (G.q % 2 === 1 ? 1 : -1); }
 // the wind in a play's frame, m/s (the team going +z in the engine is tid)
 function windFor(tid) { const w = G.wx && G.wx.wind; if (!w || !w.mph) return { x: 0, z: 0 }; const s = w.mph * 0.447 * fieldDir(tid); return { x: Math.sin(w.dir) * s, z: Math.cos(w.dir) * s }; }
-function applyConditions(opts, tid) { if (!G.wx) return opts; opts.weather = G.wx.weather; opts.wx = { weather: G.wx.weather, wind: windFor(tid), temp: G.wx.temp }; if (glOk && !G.sim) R3D.windV = opts.wx.wind; return opts; }
+function applyConditions(opts, tid) { if (!G.wx) return opts; opts.weather = G.wx.weather; opts.wx = { weather: G.wx.weather, wind: windFor(tid), temp: G.wx.temp, surf: G.wx.surface }; if (glOk && !G.sim) R3D.windV = opts.wx.wind; return opts; }
 // a kick by tid: the wind along (+ = at his back) and across (+ = toward his left), the cold, the wet
 function kickWx(tid) { const w = windFor(tid); return { along: w.z, cross: w.x, temp: G.wx ? G.wx.temp : 60, weather: G.wx ? G.wx.weather : 'clear', alt: G.wx ? G.wx.alt || 0 : 0 }; }
 // field-goal odds today: a headwind or the cold makes it play longer, a crosswind or a wet ball costs accuracy

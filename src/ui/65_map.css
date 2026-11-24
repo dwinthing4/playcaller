@@ -50,7 +50,7 @@
 .usmap .pin{stroke:var(--mp-coast);stroke-width:1.4}
 .usmap .pin.pp{fill:var(--acc)}
 .usmap .cn{fill:#10141c;font-size:7.5px}
-.usmap .stn{fill:var(--mp-ink);font:800 10px/1 var(--num);paint-order:stroke;stroke:var(--mp-land);stroke-width:2.5px}
+.usmap .stn{fill:var(--mp-ink);font:800 14px/1 var(--num);paint-order:stroke;stroke:var(--mp-land);stroke-width:2.5px}
 .usmap .ev{fill:var(--surf);stroke:var(--mp-ink);stroke-width:1.6}
 .usmap .ev.allstar{fill:#ffcf3f}.usmap .ev.show{fill:#9fd2c5}
 .usmap .ev.booked{stroke-width:3;stroke:var(--tca)}
@@ -84,3 +84,4 @@
 /* the travel + forecast line on the matchup card */
 .geoline{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;margin:8px 0 2px;opacity:.92}
 .geoline b{font:var(--cond-w) 12px/1 var(--cond);text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
+.mhero .geoline{background:rgba(8,9,11,.66);color:#fff;padding:6px 12px 5px;margin:10px auto 2px;width:fit-content;max-width:100%;border-radius:var(--r)}
