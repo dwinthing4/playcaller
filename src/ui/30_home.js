@@ -260,7 +260,7 @@ function offseasonPanel() {
     <div class="row" style="margin-top:10px"><button class="pri" onclick="uiRes(offseasonNext());go('draft')">Go to the draft</button></div></div>`; }
   if (L.off === 'draft') return `<div class="panel"><h2>Draft day</h2><p>${userOnClock() ? 'You are on the clock.' : 'The draft is underway.'}</p><button class="pri" onclick="go('draft')">Open the draft room</button></div>`;
   return `<div class="panel"><h2>Free agency</h2><p>Sign free agents, then start the next season. Roster ${T.roster.length}/53 · Cap room ${money(capRoom(T))}</p>${L.offProg ? '' : ''}
-   <div class="row"><button onclick="go('fa')">Browse free agents</button><button class="pri" onclick="const r=offseasonNext();uiRes(r);if(r.ok){L._omShown=0;}">Start ${L.year + 1} season</button></div></div>`;
+   <div class="row"><button onclick="go('fa')">Browse free agents</button>${tcampOpen() ? `<button onclick="go('develop')">Training camp (${tcampLeft()} left)</button>` : ''}<button class="pri" onclick="const r=offseasonNext();uiRes(r);if(r.ok){L._omShown=0;}">Start ${L.year + 1} season</button></div></div>`;
 }
 function showRecap() { const R2 = L.recap; if (!R2) return; R2.seen = true; const ps = (R2.top || []).map(id => L.P[id]).filter(Boolean); const m = L.P[R2.mvp];
   modal(`<span class="pos">SEASON RECAP</span><h1>${R2.y}: ${R2.w}-${R2.l}${R2.t ? '-' + R2.t : ''}</h1><h3>${esc(R2.result)}${R2.champ ? ` · Champion: ${esc(R2.champ)}` : ''}</h3>
