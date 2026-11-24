@@ -44,3 +44,4 @@
 .hb-slot{margin-left:6px}.hb-slot::before{content:"· "}
 .bxls td{color:var(--ink)}
 .hsst{table-layout:fixed;margin-bottom:6px}.hsst th:first-child{width:30%}.hsst th:nth-child(2){width:18%}.hsst th:nth-child(3){width:22%}.hsst td{overflow:hidden;text-overflow:ellipsis}
+@media (max-width:640px){.sch .slt{display:none}.sch .schc{display:none}.sch td,.sch th{padding:5px 4px}.sch .rvl{display:none}}
