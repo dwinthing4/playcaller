@@ -43,8 +43,10 @@ function fixDepth(t, sortAll) {
 }
 function available(id) { const p = L.P[id]; return p && !(p.inj > 0) && !p.holdout && !p.redshirt; }
 function depthPick(t, pos, idx, used) {
-  used = used || new Set(); const c = (t.depth[pos] || []).filter(id => !used.has(id) && available(id));
-  if (idx < c.length) return c[idx];
+  // the idx-th healthy player on the depth chart (players already on the field are skipped, but they still count for the order: WR2 is the 2nd WR, not the 3rd)
+  used = used || new Set(); const c = (t.depth[pos] || []).filter(id => available(id));
+  for (let i = idx; i < c.length; i++) if (!used.has(c[i])) return c[i];
+  for (let i = Math.min(idx, c.length) - 1; i >= 0; i--) if (!used.has(c[i])) return c[i];
   for (const fp of FALLBACK[pos] || []) { const fl = (t.depth[fp] || []).filter(id => !used.has(id) && available(id)); if (fl.length) return fl[fl.length - 1]; }
   const any = t.roster.filter(id => !used.has(id) && available(id)); return any[0] ?? t.roster.find(id => !used.has(id));
 }
