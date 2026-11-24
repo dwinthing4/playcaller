@@ -46,17 +46,17 @@
 .usmap .mk text{font:700 7.2px/1 var(--cond);text-anchor:middle;letter-spacing:.02em;pointer-events:none}
 .usmap .mk .ab{font-size:7px}
 .usmap .mk.lab{pointer-events:none;cursor:default}
-.usmap .rl{font:800 13px/1 var(--head);letter-spacing:.12em;paint-order:stroke;stroke:var(--mp-land);stroke-width:3.5px;stroke-linejoin:round}
+.usmap .mk .rl{font:800 13px/1 var(--head);letter-spacing:.12em;paint-order:stroke;stroke:var(--mp-land);stroke-width:3.5px;stroke-linejoin:round}
 .usmap .pin{stroke:var(--mp-coast);stroke-width:1.4}
 .usmap .pin.pp{fill:var(--acc)}
-.usmap .cn{fill:#10141c;font-size:7.5px}
-.usmap .stn{fill:var(--mp-ink);font:800 14px/1 var(--num);paint-order:stroke;stroke:var(--mp-land);stroke-width:2.5px}
+.usmap .mk .cn{fill:#10141c;font-size:7.5px}
+.usmap .mk .stn{fill:var(--mp-ink);font:800 14px/1 var(--num);paint-order:stroke;stroke:var(--mp-land);stroke-width:2.5px}
 .usmap .ev{fill:var(--surf);stroke:var(--mp-ink);stroke-width:1.6}
 .usmap .ev.allstar{fill:#ffcf3f}.usmap .ev.show{fill:#9fd2c5}
 .usmap .ev.booked{stroke-width:3;stroke:var(--tca)}
-.usmap .evt{fill:#10141c;font-size:7px}
+.usmap .mk .evt{fill:#10141c;font-size:7px}
 .usmap .sct{fill:var(--mp-ink);stroke:var(--mp-land);stroke-width:1.6}
-.usmap .sci{fill:var(--mp-land);font-size:9px}
+.usmap .mk .sci{fill:var(--mp-land);font-size:9px}
 
 /* side cards */
 .mp-side{display:flex;flex-direction:column;gap:10px;min-width:0}

@@ -170,7 +170,7 @@ function mapPipeLayer(m) {
   let marks = '';
   if (D.by === 'col') { const cols = mapSpread(Object.values(P.col).map(e => { const q = mapXY(e.c.lon, e.c.lat); return { e, x: q[0], y: q[1] }; }), 9);
     for (const c of cols) marks += mapMk(c.x, c.y, `<circle class="pin pp" r="${Math.min(10, 4 + c.e.n * 1.3).toFixed(1)}"/>${c.e.n > 1 ? `<text class="cn" y="2.8">${c.e.n}</text>` : ''}`, 'c:' + c.e.c.name, m.sel === 'c:' + c.e.c.name ? 'sel' : ''); }
-  const S2 = mapShapes(); for (const st in P.st) { const q = S2.mid[st]; if (q && P.st[st] >= 2 && D.by === 'home') marks += mapMk(q[0], q[1], `<text class="stn">${P.st[st]}</text>`, 'p:' + st, 'lab'); }
+  const S2 = mapShapes(); for (const st in P.st) { const q = S2.mid[st]; if (q && P.st[st] >= 2 && D.by === 'home') marks += mapMk(q[0], q[1], `<text class="stn" y="5">${P.st[st]}</text>`, 'p:' + st, 'lab'); }
   const me = UT(), hq = mapPlaceXY(geoTeam(me)); marks += mapMk(hq[0], hq[1], `<circle class="dot" r="8" style="fill:${me.c1};stroke:${me.c2}"/>`, null, 'me');
   const svg = mapBase(fills) + `<g class="marks">${marks}</g>`;
   const top = Object.entries(P.st).sort((a, b) => b[1] - a[1]).slice(0, 8), topC = Object.values(P.col).sort((a, b) => b.n - a.n).slice(0, 8);
