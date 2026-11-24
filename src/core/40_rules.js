@@ -78,9 +78,9 @@ const yardsTxt = (o, P) => (P.spot ? 'spot foul' : o.half ? 'half the distance t
 // see plainly: an event's sev (0..1) is how clear it was. Tuned against qa/penalty_rates.mjs (full CPU games).
 const TRY = {
   hold: 0.03, rhold: 0.05,      // a beaten blocker hangs on (per beaten block; pass pro x1.25)
-  grab: 0.085,                   // a man DB being beaten downfield before the throw grabs him (one look a play)
-  pi: 0.5, opi: 0.12,           // ball in the air: a beaten DB grabs an arm; a receiver shoves off a man who has position
-  push: 0.03,                   // a receiver pushes off at the top of his break
+  grab: 0.12,                    // a man DB being beaten downfield before the throw grabs him (one look a play)
+  pi: 0.3, opi: 0.12,           // ball in the air: a beaten DB grabs an arm; a receiver shoves off a man who has position
+  push: 0.025,                  // a receiver pushes off at the top of his break
   fm: 0.004, helm: 0.05,        // a hand in the face mask (high tackles); a shot to the passer's head
   ibb: 0.3,                     // a return blocker who meets a man from behind goes ahead and blocks him in the back
 };

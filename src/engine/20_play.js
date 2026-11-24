@@ -117,7 +117,7 @@ class Play {
   }
   assignCoverage() {
     const dp = this.dp, los = this.losZ, bx = this.ballX, cov = dp.cov || 'c3', cand = this.D.filter(d => d.job !== 'rush');
-    const press = (this.o.def.style === 'Man Press' || dp.press);
+    const press = (this.o.def.style === 'Man Press' || dp.press || / Press$/.test(dp.name || ''));     // a press team, or a press call (Cover 1 Press, Dime Press, 2-Man Press)
     const recs = this.receivers.slice().sort((a, b) => Math.abs(b.p.x - bx) - Math.abs(a.p.x - bx));
     const toZ = (depth, y) => ({ x: -latM(y - MID_YD), z: los + depth * YD, deep: depth >= 13 });
     if (MAN_COVERAGES[cov]) {
@@ -1234,7 +1234,7 @@ class Play {
     const o = a.unit === 'O' ? a : b, d = o === a ? b : a; if (d.unit !== 'D' || o.unit !== 'O') return;
     if (o === this.passer && this.throwT != null) { if (j < 80) return; const dt = this.t - this.throwT; if (dt < 0.12 || this.seen('l' + d.pid)) return;
       // a hit a beat after the release is part of the play; one well after it is roughing
-      this.fev({ k: 'late', d: d.pid, q: o.pid, dt, j, x: o.p.x, z: o.p.z, sev: cl((dt - 0.42) / 0.3, 0, 1) * (j > 220 ? 1 : 0.75), awr: d.A.awr }); return; }
+      this.fev({ k: 'late', d: d.pid, q: o.pid, dt, j, x: o.p.x, z: o.p.z, sev: cl((dt - 0.38) / 0.3, 0, 1) * (j > 220 ? 1 : 0.75), awr: d.A.awr }); return; }
     const B = this.ball, r = B.target; if (!this.air || B.state !== 'air' || !B.land || B.away || o !== r || !r || r.unit !== 'O') return;
     const tl = B.T - B.t; if (tl < 0.05 || tl > 1.1) return;
     const lx = B.land.x - r.p.x, lz = B.land.z - r.p.z, ld = Math.hypot(lx, lz) || 1, ahead = ((d.p.x - r.p.x) * lx + (d.p.z - r.p.z) * lz) / ld, catchable = ld < 2.6;
@@ -1340,13 +1340,14 @@ class Play {
     // the defender ran through him downfield: he is knocked off his line (stumbles, stays up) and that is illegal contact
     const knock = past && !fight && dIn > rIn + 2 && -vn > 3.5 && !r.grabbedBy, kr = fight ? 0.55 : knock ? 0.5 : 0.2;
     r.vel.x -= nx * vn * kr; r.vel.z -= nz * vn * kr; d.vel.x += nx * vn * (1 - kr); d.vel.z += nz * vn * (1 - kr);
-    if (knock) { r.om.x += nx * 0.7; r.om.z += nz * 0.7; if (!this.seen('k' + d.pid)) this.fev({ k: 'ic', d: d.pid, r: r.pid, x: d.p.x, z: d.p.z, dz: (r.p.z - this.losZ) / YD, sev: cl((-vn - 3) / 2.5, 0.4, 1), awr: d.A.awr }); }
+    if (knock) { r.om.x += nx * 0.7; r.om.z += nz * 0.7; if (!this.seen('k' + d.pid)) this.fev({ k: 'ic', d: d.pid, r: r.pid, x: d.p.x, z: d.p.z, dz: (r.p.z - this.losZ) / YD, sev: cl((-vn - 3.5) / 3, 0.3, 1), awr: d.A.awr }); }
     return true;
   }
-  // a receiver on his route and a teammate (a lineman, a crossing receiver) before the throw: they slide off each other, nobody goes down
+  // a receiver on his route and a teammate (a lineman, a crossing receiver), or two defenders in coverage, before the throw:
+  // they slide off each other, nobody goes down
   wrMate(a, b, ov) {
-    if (a.role !== 'route' && b.role !== 'route') return false; if (a === this.carrier || b === this.carrier || !a.upright() || !b.upright()) return false;
-    const n = ov.n, hm = Math.hypot(n.x, n.z); if (hm < 0.3) return true; const nx = n.x / hm, nz = n.z / hm, wa = a.role === 'route' ? 0.35 : 0.65, push = Math.max(0, ov.depth * hm - 0.01) * 0.6;
+    if (a.unit === 'O' && a.role !== 'route' && b.role !== 'route') return false; if (a.unit === 'D' && (a.dl || b.dl || a.bondBy || b.bondBy)) return false; if (a === this.carrier || b === this.carrier || !a.upright() || !b.upright()) return false;
+    const n = ov.n, hm = Math.hypot(n.x, n.z); if (hm < 0.3) return true; const nx = n.x / hm, nz = n.z / hm, wa = a.unit === 'D' ? 0.5 : a.role === 'route' ? 0.35 : 0.65, push = Math.max(0, ov.depth * hm - 0.01) * 0.6;
     a.p.x += nx * push * wa; a.p.z += nz * push * wa; b.p.x -= nx * push * (1 - wa); b.p.z -= nz * push * (1 - wa);
     const vn = (a.vel.x - b.vel.x) * nx + (a.vel.z - b.vel.z) * nz; if (vn >= 0) return true;
     a.vel.x -= nx * vn * wa * 0.6; a.vel.z -= nz * vn * wa * 0.6; b.vel.x += nx * vn * (1 - wa) * 0.6; b.vel.z += nz * vn * (1 - wa) * 0.6; return true;
