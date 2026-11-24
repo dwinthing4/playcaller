@@ -55,3 +55,6 @@ LG._t = { UT, teamName, capRoom, capUsed, expiring, resignPlayer, userOnClock, u
   scoutingWeek, scoutState, meetProspect, proDay, hireScout, setScoutPri, ownerMeeting, ownerChoose, gmWeek, coordCall, cpuCall, cpuFourth, planSwap, planLock, scoutOpp, teamOvr, pct, restructure, franchiseTag, offerExtension, extAsk,
   applyMatchResult, userPlayoffGame, userGame, setFocus, upgradeFac, upgradePC, hireCoord, poach, jobSecurity, stories, storyGoal, sitOutSeason, acceptOffer, starterIds };
 Object.assign(LG._t, { teamLineup, rotInfo, rotRoles, rotSetPreset, rotSetShare, rotSetRole, rotToggleLock, rotSetOpt, rotReset, playerEndurance, rotSimLines });
+// front office (30_contracts.js, 62_coach.js): coach perks for the match (LG.coachPerk('str4'), LG.coachEdge(tid, ctx) -> rating points), internals for tests
+Object.assign(LG, { coachPerk: id => coachPerk(id), coachEdge: (tid, ctx) => coachEdge(tid, ctx) });
+Object.assign(LG._t, { capYear, ctSplit, ctDeadFor, ctJ1Left, ctOptPrice, ctOptOpen, optionDecide, ctTradeDead, ctRookieApy, coachTree, coachXP, coachLearn, coachRespec, coachPerk, coachCanLearn, CTREE, deadIfCut, kBase, execTrade, finishResign });

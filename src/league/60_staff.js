@@ -277,6 +277,7 @@ function userAfterGame(T, g, lines) {
   const rel = (teamOvr(opp) - teamOvr(T)) / 6, pat = (10 - T.owner.patience) / 5;
   if (won) T.ownerSup = clamp(T.ownerSup + 1 + Math.max(0, rel) * 0.6 + (po ? 3 : 0), 0, 100); else if (!tie) T.ownerSup = clamp(T.ownerSup - (1.4 - clamp(rel, -0.8, 0.8) * 0.6) * pat * ((T.coach.tenure || 0) >= 1 ? 1 : 0.5), 0, 100);
   const credits = won ? Math.round(0.6 + 1.3 * T.fanSup / 100 + (po ? 1 : 0)) + (isRival(T, opp) ? 1 : 0) : (T.fanSup > 75 ? 1 : 0); T.coach.pts += credits; T.lastCredits = credits;
+  coachXpGame(T, g, won, tie, po, opp);   // coach tree XP (62_coach.js)
   const m = Math.abs(g.hs - g.as); if (won && m >= 28) addHighlight(`Blew out the ${opp.name} by ${m}`); if (won && teamOvr(opp) >= teamOvr(T) + 6) addHighlight(`Upset the ${opp.name}`);
   relAdd('gm', won ? 0.6 : -0.4); relAdd('oc', won ? 0.5 : -0.3); relAdd('dc', won ? 0.5 : -0.3);
   moraleAfterGame(T, g, lines); storyAfterGame(T, lines);
@@ -355,6 +356,7 @@ function scoutsIntro() { inbox('scout', 'Scouting department', `Your ${L.scouts.
 function profAttrs(p) { return Object.keys(POS_PROFILE[p.pos] || {}); }
 function revealCap(p) { return Math.max(2, Math.floor(profAttrs(p).length * 0.8)); }
 function reveal(p, n, acc) {
+  acc = (acc || 0.25) * coachScoutMul();   // coach perk (62_coach.js)
   const sc = p.sc || (p.sc = { lvl: 0, rev: [], reports: [], acc: 0 }); const keys = Object.keys(OVR_W[p.pos] || {}).concat(profAttrs(p)); let got = [];
   for (const k of keys) { if (got.length >= n || sc.rev.length >= revealCap(p)) break; if (!sc.rev.includes(k)) { sc.rev.push(k); got.push(k); } }
   sc.lvl++; sc.acc = clamp((sc.acc || 0) + (acc || 0.25), 0, 0.92); const f = 1 - sc.acc;

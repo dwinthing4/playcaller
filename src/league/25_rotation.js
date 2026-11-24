@@ -241,7 +241,7 @@ function teamLineup(t, formKey, side, ctx, rs) {
 
 // ---------- match rotation state ----------
 function rotInit(H, A) { return { E: {}, work: {}, u: {}, last: {}, pend: {}, rest: {}, back: {}, n: {}, ids: (H.roster || []).concat(A.roster || []) }; }
-function rotRecMul(p) { return 0.5 + playerEndurance(p) / 100; }
+function rotRecMul(p, kind) { return (0.5 + playerEndurance(p) / 100) * coachRecMul(p, kind); }   // coachRecMul: coach perks (62_coach.js)
 function rotDrain(p, work) { return ((ROT_BASE[p.pos] || .015) + work * ROT_K) * (1.5 - playerEndurance(p) / 100); }
 // effort during a live play: distance run, weighted toward sprinting, plus time spent locked in a block
 function rotStep(rs, pl, dt) {
@@ -269,7 +269,7 @@ function rotSnap(rs, lists, res, st, op) {
   rs.pend = {}; rs.work = {};
 }
 // breaks in the game: timeouts, the two-minute warning, quarter breaks, halftime
-function rotRest(rs, kind) { if (!rs) return; const a = ROT_REST[kind] || 0; for (const id of rs.ids) { const e = rs.E[id]; if (e == null || e >= 1) continue; const p = L.P[id]; if (p) rs.E[id] = Math.min(1, e + a * rotRecMul(p)); } }
+function rotRest(rs, kind) { if (!rs) return; const a = ROT_REST[kind] || 0; for (const id of rs.ids) { const e = rs.E[id]; if (e == null || e >= 1) continue; const p = L.P[id]; if (p) rs.E[id] = Math.min(1, e + a * rotRecMul(p, kind)); } }
 // stamina 0..1 right now (during a live play: minus what this play has cost him so far)
 function rotEnergy(rs, pid, pl) { if (!rs || pid == null) return 1; let e = rs.E[pid] ?? 1; const w = rs.work[pid]; if (w && pl && pl.phase === 'live') { const p = L.P[pid]; if (p) e -= rotDrain(p, w); } return clamp(e, 0, 1); }
 function rotReport(rs) {

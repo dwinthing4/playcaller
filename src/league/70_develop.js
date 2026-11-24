@@ -37,9 +37,10 @@ function moraleAfterGame(T, g, lines) {
     if (p.holdout && p.mor >= 45) { p.holdout = false; p.tradeReq = 0; news(`${p.fn} ${p.ln} ended his holdout.`); }
     if (p.tradeReq && !p.holdout && p.mor >= 50) p.tradeReq = 0;
   }
+  coachMoraleFloor(T);   // coach perk (62_coach.js)
   T.morale = teamMorale(T);
 }
-function pepTalk(id) { const p = L.P[id]; if (p.pepW === L.year * 100 + L.week) return { ok: false, msg: 'You already talked to him this week.' }; p.pepW = L.year * 100 + L.week; const g = clamp(4 + (UT().coach.mot - 5) * 1.2 + gauss() * 2, 0, 10); moodAdd(p, g, 'Talk with the coach'); UT().morale = teamMorale(UT()); return { ok: true, msg: `${p.ln} morale +${Math.round(g)}` }; }
+function pepTalk(id) { const p = L.P[id]; if (p.pepW === L.year * 100 + L.week) return { ok: false, msg: 'You already talked to him this week.' }; p.pepW = L.year * 100 + L.week; const g = clamp(4 + (UT().coach.mot - 5) * 1.2 + gauss() * 2, 0, 10) * (coachPerk('mot1') ? 1.5 : 1); moodAdd(p, g, 'Talk with the coach'); UT().morale = teamMorale(UT()); return { ok: true, msg: `${p.ln} morale +${Math.round(g)}` }; }
 function promiseTouches(id) { const p = L.P[id]; if (p.promise) return { ok: false, msg: 'He is waiting on your last promise.' }; p.promise = 2; moodAdd(p, 7, 'Promised more touches'); return { ok: true, msg: 'Promise made. Deliver in the next two games.' }; }
 function giveRaise(id) { const p = L.P[id], T = UT(); const add = Math.round(p.sal * 0.2 * 10) / 10; if (capRoom(T) < add) return { ok: false, msg: 'Not enough cap room.' }; p.base = Math.round((kBase(p) + add) * 10) / 10; syncSal(p); moodAdd(p, 22, 'Got a raise'); if (p.holdout && p.mor >= 45) { p.holdout = false; p.tradeReq = 0; } T.morale = teamMorale(T); return { ok: true, msg: 'Raise given.' }; }
 function setCaptain(id) { const T = UT(); T.captains = T.captains || []; const i = T.captains.indexOf(id); if (i >= 0) T.captains.splice(i, 1); else { if (T.captains.length >= 2) T.captains.shift(); T.captains.push(id); moodAdd(L.P[id], 8, 'Named a team captain'); } }
@@ -50,7 +51,7 @@ function devKeys(p) { if (p.focus && p.focus.length) return p.focus; const w = O
 function setFocus(id, keys) { const p = L.P[id]; p.focus = (keys || []).filter(k => ATTRS.includes(k)).slice(0, 2); }
 function growthMult(p, T) { const age = p.age <= 22 ? 1.85 : p.age <= 23 ? 1.6 : p.age <= 25 ? 1.3 : p.age <= 27 ? 1.0 : p.age <= 30 ? 0.55 : 0.25; const curve = devTier(p).m;
   const pc = 1 + 0.1 * (((T.pcs || {})[pcGroup(p.pos)] || 1) - 1); const coach = 0.7 + T.coach.dev * 0.06; const fac = 1 + 0.04 * (facOf(T).train + facOf(T).weight - 2); const mentor = p.mentor && L.P[p.mentor] && L.P[p.mentor].tid === T.id ? 1.15 : 1;
-  return age * curve * pc * coach * fac * mentor; }
+  return age * curve * pc * coach * fac * mentor * coachDevMul(p, T); }
 function giveXP(p, T, amt, keys, rep, why) {
   ensurePot(p); p.xp = p.xp || {}; const m = growthMult(p, T); const ks = keys || devKeys(p); const ups = [];
   for (const k of ks) { if (p.a[k] >= p.ap[k]) continue; p.xp[k] = (p.xp[k] || 0) + amt * m / ks.length * rnd(0.7, 1.3); while (p.xp[k] >= 1 && p.a[k] < p.ap[k]) { p.xp[k] -= 1; p.a[k]++; ups.push(k); } }
@@ -103,6 +104,6 @@ function storyMentor(id, yes) { const s = stories().find(x => x.id === id); if (
 // ---------- film room (from MATCH perf notes) ----------
 function closeFilm(perf) { const items = []; for (const id in (perf || {})) { const pf = perf[id]; const p = L.P[id]; if (!p || p.tid !== L.user) continue; for (const n of (pf.notes || [])) items.push({ pid: +id, desc: typeof n === 'string' ? n : n.txt, k: (n && n.k) || null }); }
   L.film = { y: L.year, w: L.week, items: items.slice(0, 10), used: 0 }; }
-function filmCap() { return 2 + (facOf(UT()).film || 1); }
+function filmCap() { return 2 + (facOf(UT()).film || 1) + (coachPerk('str1') ? 1 : 0); }
 function coachUp(i) { const F = L.film; if (!F) return { ok: false }; const it = F.items[i]; if (!it || it.done) return { ok: false }; if (F.used >= filmCap()) return { ok: false, msg: `You can review ${filmCap()} plays per week.` };
   const p = L.P[it.pid]; if (!p) return { ok: false }; const ks = it.k ? [it.k] : ['awr']; const ups = giveXP(p, UT(), 0.9, ks, null, 'film'); it.done = true; F.used++; moodAdd(p, 2, 'Extra film work with the coach'); return { ok: true, msg: ups.length ? `${p.ln}: +1 ${ups.map(k => ATTR_NAME[k]).join(', ')}` : `${p.ln} learned from it (progress saved)` }; }

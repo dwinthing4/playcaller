@@ -77,7 +77,7 @@ function cpuCall(tid, side, ctx) {
   // a QB who keeps running on them (ctx.scout from the match): no all-out pressure that opens his lanes, keep a man home to spy him
   const scK = (ctx.scout && ctx.scout.k) || 0; if (scK > 0.25 && R() < scK * 0.7) { let c3 = c.filter(p => p.cov !== 'c0' && p.blitz.length <= 1); const z = c3.filter(p => !MAN_COVERAGES[p.cov]); if (z.length) c3 = z; if (c3.length) c = c3; }     // (zone: eyes on the QB, not backs turned in man)
   // in-game film: whatever has been beating them from this formation, every coordinator adjusts to it (most of the time, so he is not predictable either)
-  const fl = ctx.film || []; if (fl.length) {
+  const fl = coachFilm(ctx); if (fl.length) {   // coachFilm: ctx.film, read slower against a user with the Disguise perk (62_coach.js)
     const w = { run: 0, deep: 0, short: 0 }; for (const e of fl) w[e.type === 'run' ? 'run' : e.deep ? 'deep' : 'short'] += e.w;
     const tot = w.run + w.deep + w.short, top = Object.keys(w).sort((a, b) => w[b] - w[a])[0], share = tot ? w[top] / tot : 0, adj = clamp(0.35 + tot / 60, 0.35, 0.85) * (share > 0.45 ? 1 : 0.6);
     if (R() < adj) {

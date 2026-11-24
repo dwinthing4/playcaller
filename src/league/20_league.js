@@ -82,6 +82,7 @@ function newLeague(opts) {
   for (const t of L.teams) { for (let y = 0; y < 2; y++) for (let r = 1; r <= 7; r++) t.picks.push({ y: L.year + 1 + y, r, from: t.id }); L.rel[t.id] = ri(42, 60); }
   for (let i = 0; i < 70; i++) { const p = genPlayer(pick(POS_LIST.filter(x => x !== 'K' && x !== 'P')), rnd(48, 70), ri(24, 33)); setContract(p); p.sal = Math.max(0.9, Math.round(p.sal * .8 * 10) / 10); p.ask = p.sal; L.P[p.id] = p; L.fa.push(p.id); }
   ensureStaffAll(); genDraftClass(); makeSchedule();
+  ctInitLeague();   // contract structure: bonus proration + guarantees, dead money ledgers (30_contracts.js)
   L.uid = UID; return L;
 }
 function chooseTeam(id, coachName) {

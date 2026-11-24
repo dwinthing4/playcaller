@@ -52,7 +52,7 @@ function seasonGrowth(p, t) {
   // young players can break out (or stall)
   if (a <= 26 && R() < 0.07 + (p.dev === 'star' ? 0.05 : 0)) { const b = ri(2, 6); d += rnd(3, 6); p.pot = clamp((p.pot || p.ovr) + b, p.ovr, 99); raiseCaps(p, b); why = 'breakout'; }
   else if (a <= 25 && R() < 0.05 + (p.dev === 'slow' ? 0.05 : 0)) { d *= 0.2; p.pot = Math.max(p.ovr, (p.pot || p.ovr) - ri(2, 5)); why = 'stalled'; }
-  return { d, why };
+  return coachGrowthAdj(p, t, { d, why });   // coach perks (62_coach.js)
 }
 function raiseCaps(p, n) { ensurePot(p); for (const k of Object.keys(POS_PROFILE[p.pos] || {})) p.ap[k] = clamp((p.ap[k] || p.a[k]) + n, p.a[k], 99); }
 // turn an overall change into rating changes: the position's key ratings move first (inside each rating's ceiling), age takes the physical ones

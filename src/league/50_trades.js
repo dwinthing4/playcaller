@@ -12,20 +12,21 @@ function assetValue(a) { return a.type === 'p' ? playerValue(L.P[a.id]) : pickVa
 function evalTrade(give, get, tid) {
   const vg = sum(give.map(assetValue)), vr = sum(get.map(assetValue));
   const rel = L.rel && tid != null ? (L.rel[tid] ?? 50) : 50;
-  const need = (DIFFS[L.diff].ai > 0 ? 1.15 : L.diff === 'rookie' ? 0.95 : 1.05) * (1.12 - (rel - 50) / 220);
+  const need = (DIFFS[L.diff].ai > 0 ? 1.15 : L.diff === 'rookie' ? 0.95 : 1.05) * (1.12 - (rel - 50) / 220) * (coachPerk('exe4') ? 0.94 : 1);
   return { vg, vr, ok: vg >= vr * need && vg > 0, ratio: vr ? vg / vr : 9 };
 }
 function execTrade(O, gA, rA) {
   const T = UT(); const gp = gA.filter(a => a.type === 'p').map(a => L.P[a.id]).filter(Boolean), rp = rA.filter(a => a.type === 'p').map(a => L.P[a.id]).filter(Boolean);
-  const salIn = sum(rp.map(p => p.sal)), salOut = sum(gp.map(p => p.sal));
-  if (capRoom(T) + salOut - salIn < 0) return { ok: false, msg: 'That trade puts you over the cap.' };
-  if (capRoom(O) + salIn - salOut < 0) return { ok: false, msg: `${O.abbr} can't fit that salary under their cap.` };
+  // the new team pays a traded player's base salary; his remaining signing-bonus proration stays behind as dead money (30_contracts.js)
+  const salIn = sum(rp.map(p => kBase(p))), salOut = sum(gp.map(p => p.sal)), deadT = sum(gp.map(ctTradeDead)), deadO = sum(rp.map(ctTradeDead));
+  if (capRoom(T) + salOut - deadT - salIn < 0) return { ok: false, msg: deadT > 0.5 ? `That trade puts you over the cap (${money(deadT)} of dead money stays with you).` : 'That trade puts you over the cap.' };
+  if (capRoom(O) + sum(rp.map(p => p.sal)) - deadO - sum(gp.map(p => kBase(p))) < 0) return { ok: false, msg: `${O.abbr} can't fit that salary under their cap.` };
   if (T.roster.length - gp.length + rp.length > 55 || O.roster.length - rp.length + gp.length > 55) return { ok: false, msg: 'Roster limits block this trade.' };
-  for (const p of gp) { T.roster = T.roster.filter(x => x !== p.id); O.roster.push(p.id); p.tid = O.id; }
-  for (const p of rp) { O.roster = O.roster.filter(x => x !== p.id); T.roster.push(p.id); p.tid = T.id; moodAdd(p, 4, 'Fresh start'); }
+  for (const p of gp) { ctTradeMove(T, p); T.roster = T.roster.filter(x => x !== p.id); O.roster.push(p.id); p.tid = O.id; }
+  for (const p of rp) { ctTradeMove(O, p); O.roster = O.roster.filter(x => x !== p.id); T.roster.push(p.id); p.tid = T.id; moodAdd(p, 4, 'Fresh start'); }
   const mv = (from, to, pk) => { from.picks = from.picks.filter(x => !(x.y === pk.y && x.r === pk.r && x.from === pk.from)); to.picks.push(pk); };
   for (const a of gA) if (a.type === 'k') mv(T, O, a.pk); for (const a of rA) if (a.type === 'k') mv(O, T, a.pk);
-  if (L.draftOrder) for (const s of L.draftOrder) { const own = L.teams.find(t => t.picks.some(p => p.y === L.year + 1 && p.r === s.r && p.from === s.from)); if (own) s.owner = own.id; }
+  if (L.draftOrder) for (const s of L.draftOrder) { if (s.comp) continue; const own = L.teams.find(t => t.picks.some(p => p.y === L.year + 1 && p.r === s.r && p.from === s.from)); if (own) s.owner = own.id; }
   fixDepth(T); fixDepth(O); assignNumbers(T); assignNumbers(O); L.myBlock = myBlock();
   const nm = arr => arr.map(a => a.type === 'p' ? (L.P[a.id] ? L.P[a.id].ln : '?') : `${a.pk.y} R${a.pk.r}`).join(', ') || 'nothing';
   news(`Trade with ${O.abbr}: sent ${nm(gA)}, got ${nm(rA)}.`);
@@ -71,7 +72,7 @@ function aiDeadlineDeals() {
   if (L.deadlineDone === L.year) return; L.deadlineDone = L.year; const ts = L.teams.filter(t => t.id !== L.user).sort((a, b) => pct(b) - pct(a)); const buyers = ts.slice(0, 8), sellers = ts.slice(-8); let n = 0;
   for (const B of buyers) { if (n >= 4) break; const need = weakestPos(B);
     for (const S of sellers) { const cur = (B.depth[need] || [])[0] ? L.P[B.depth[need][0]].ovr : 0; const vet = S.roster.map(id => L.P[id]).filter(p => p.pos === need && p.age >= 27 && p.ovr >= 74 && p.ovr > cur + 2).sort((a, b) => b.ovr - a.ovr)[0];
-      if (!vet || capRoom(B) < vet.sal) continue; const pk = B.picks.filter(k => k.y === L.year + 1 && k.r >= 2 && k.r <= 4).sort((a, b) => a.r - b.r)[0]; if (!pk) continue;
-      S.roster = S.roster.filter(x => x !== vet.id); B.roster.push(vet.id); vet.tid = B.id; B.picks = B.picks.filter(k => k !== pk); S.picks.push(pk); fixDepth(B); fixDepth(S);
+      if (!vet || capRoom(B) < kBase(vet)) continue; const pk = B.picks.filter(k => k.y === L.year + 1 && k.r >= 2 && k.r <= 4).sort((a, b) => a.r - b.r)[0]; if (!pk) continue;
+      ctTradeMove(S, vet); S.roster = S.roster.filter(x => x !== vet.id); B.roster.push(vet.id); vet.tid = B.id; B.picks = B.picks.filter(k => k !== pk); S.picks.push(pk); fixDepth(B); fixDepth(S);
       news(`Deadline deal: ${B.abbr} acquired ${vet.pos} ${vet.fn} ${vet.ln} from ${S.abbr} for a ${pk.y} round-${pk.r} pick.`); n++; break; } }
 }

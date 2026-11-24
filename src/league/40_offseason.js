@@ -44,14 +44,15 @@ function beginOffseason() {
   for (const t of L.teams) for (const id of t.roster) { const p = L.P[id]; p.yrs--; if (p.prYrs > 0) { p.prYrs--; if (p.prYrs <= 0) p.pr = 0; } if (p.guar > 0) p.guar = Math.round(Math.max(0, p.guar - kBase(p)) * 10) / 10; syncSal(p); }
   coachingCarousel(); if (L.ownerMeet && !L.ownerMeet.done) L.ownerMeet.done = true;
   L.phase = 'offseason'; L.off = 'resign';
+  foOffseason();   // front office: option years, dead money ledger, comp picks, 5th-year options, coach XP (30_contracts.js)
   runCombine();
   inbox('gm', 'Offseason plan', gmOffseasonMemo());
 }
 function perfScore(s) { return (s.py || 0) / 25 + (s.ptd || 0) * 4 + (s.ry || 0) / 10 + (s.rtd || 0) * 6 + (s.recy || 0) / 10 + (s.rectd || 0) * 6 + (s.sk || 0) * 4 + (s.int || 0) * 5 + (s.tk || 0) * 0.5; }
 function finishResign() {
   for (const t of L.teams) for (const id of expiring(t)) {
-    const p = L.P[id]; if (t.id === L.user && !L.ghost) { if (p.resigned !== L.year) releaseToFA(t, p, false); continue; }
-    if (p.age < 31 && p.ovr >= 68 && R() < 0.75) { setDeal(p, askingSalary(p), ri(1, 4), 0.2); } else releaseToFA(t, p, false);
+    const p = L.P[id]; if (t.id === L.user && !L.ghost) { if (p.resigned !== L.year) { p.cfa = { from: t.id, y: L.year }; releaseToFA(t, p, false); } continue; }
+    const ask = askingSalary(p); if (p.age < 31 && p.ovr >= 68 && R() < 0.75 && capRoom(t) + p.sal >= ask) { setDeal(p, ask, ri(1, 4), 0.2); } else { p.cfa = { from: t.id, y: L.year }; releaseToFA(t, p, false); }
   }
   for (const t of L.teams) ensureCap(t);
   L.off = 'draft'; news('The draft is open.');
@@ -88,10 +89,10 @@ function aiDraftPick(t) {
   for (const id of L.draft) { const p = L.P[id]; let v = (t.id === L.user ? scoutedValue(p) : draftValue(p)) + need(p.pos) * w + rnd(-2.5, 2.5); if (t.id === L.user && t.draftPri && t.draftPri !== 'BPA' && p.pos === t.draftPri) v += 6; if (v > bv) { bv = v; best = p; } }
   return best;
 }
-function rookieDeal(pickIdx) { const r = Math.floor(pickIdx / 32), n = pickIdx % 32; const sal = r === 0 ? Math.max(1.4, 9.5 - n * 0.25) : r === 1 ? 1.6 : 1.0; return { sal: Math.round(sal * 10) / 10, yrs: 4 }; }
+function rookieDeal(pickIdx) { return { sal: ctRookieApy(pickIdx), yrs: 4 }; }   // rookie scale by draft slot (30_contracts.js)
 function doDraftPick(p) {
   const slot = L.draftOrder[L.draftPick]; const t = L.teams[slot.owner];
-  L.draft = L.draft.filter(x => x !== p.id); p.draft = false; p.tid = t.id; const d = rookieDeal(L.draftPick); setDeal(p, d.sal, d.yrs, 0.3);
+  L.draft = L.draft.filter(x => x !== p.id); p.draft = false; p.tid = t.id; ctRookieDeal(p, L.draftPick, slot.r);
   p.drafted = { y: L.year + 1, r: slot.r, pick: L.draftPick + 1, t: t.id, ovr: p.ovr, pot: p.pot }; p.rookieY = L.year + 1;
   t.roster.push(p.id); fixDepth(t);
   t.picks = t.picks.filter(pk => !(pk.y === L.year + 1 && pk.r === slot.r && pk.from === slot.from));
@@ -108,7 +109,7 @@ function finishDraft() {
 }
 // ---------- free agency ----------
 function faInterest(p, t) { return t.fanSup * 0.2 + pct(t) * 30 + t.coach.mot * 2 + (t.fac ? (t.fac.train + t.fac.weight) : 2); }
-function signFA(t, p, sal, yrs) { L.fa = L.fa.filter(x => x !== p.id); p.tid = t.id; setDeal(p, Math.round(sal * 10) / 10, yrs, yrs >= 2 ? (t.id === L.user ? 0.2 : 0.25) : 0); t.roster.push(p.id); fixDepth(t); assignNumbers(t); }
+function signFA(t, p, sal, yrs) { L.fa = L.fa.filter(x => x !== p.id); ctCfaSigned(t, p, sal); p.tid = t.id; setDeal(p, Math.round(sal * 10) / 10, yrs, yrs >= 2 ? (t.id === L.user ? 0.2 : 0.25) : 0); t.roster.push(p.id); fixDepth(t); assignNumbers(t); }
 function aiFreeAgency() {
   const fa = L.fa.map(id => L.P[id]).filter(Boolean).sort((a, b) => b.ovr - a.ovr);
   for (const p of fa) {
@@ -125,7 +126,7 @@ function signOffer(id, sal, yrs) {
   if (T.roster.length >= 53 && L.phase !== 'offseason') return { ok: false, msg: 'Your roster is full (53). Release someone first.' };
   if (capRoom(T) < sal) return { ok: false, msg: 'Not enough cap room.' };
   if (ownerPersona(T) === 'cheap' && capUsed(T) + sal > CAP * 0.92) return { ok: false, msg: `${T.owner.fn} ${T.owner.ln} won't approve spending past 92% of the cap.` };
-  const lean = (T.fanSup - 50) / 400 + (T.coach.mot - 5) / 50 + (yrs >= 3 ? 0.02 : 0);
+  const lean = (T.fanSup - 50) / 400 + (T.coach.mot - 5) / 50 + (yrs >= 3 ? 0.02 : 0) + (coachPerk('exe1') ? 0.05 : 0);
   if (sal < p.ask * (0.92 - lean) && !(sal >= p.ask * (0.85 - lean) && R() < 0.4)) return { ok: false, msg: `${p.ln} turned it down. Try closer to ${money(p.ask)}.` };
   signFA(T, p, sal, yrs); news(`Signed ${p.pos} ${p.fn} ${p.ln}: ${yrs} yr, ${money(sal)}/yr.`); gmReact('sign', p, sal); return { ok: true, msg: `Signed ${p.ln}.` };
 }
@@ -173,5 +174,6 @@ function startNewSeason() {
   ensureStaffAll(); L.scouting = null; L.plan = null; L.mock = null;
   genDraftClass(); makeSchedule();
   if (!L.ghost) { seasonGoals(T); news(`The ${L.year} season begins. The owner expects about ${T.expect} wins.`); ownerPreseason(T); }
+  foNewSeason();   // front office: dead money, option deadline, CPU cap check, coach XP (30_contracts.js)
   return { ok: true };
 }
