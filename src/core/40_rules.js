@@ -77,7 +77,7 @@ const yardsTxt = (o, P) => (P.spot ? 'spot foul' : o.half ? 'half the distance t
 // src/engine/20_play.js), each try at these odds (per chance to do it, times disc(awareness)). The officials then flag what they
 // see plainly: an event's sev (0..1) is how clear it was. Tuned against qa/penalty_rates.mjs (full CPU games).
 const TRY = {
-  hold: 0.04, rhold: 0.03,       // a beaten blocker hangs on (per beaten block; pass pro x1.25)
+  hold: 0.05, rhold: 0.03,       // a beaten blocker hangs on (per beaten block; pass pro x1.25)
   grab: 0.1,                     // a man DB being beaten downfield before the throw grabs him (one look a play)
   pi: 0.8, opi: 0.08,           // ball in the air: a beaten DB grabs an arm; a receiver shoves off a man who has position
   push: 0.02,                   // a receiver pushes off at the top of his break

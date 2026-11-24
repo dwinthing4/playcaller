@@ -1082,7 +1082,7 @@ class Play {
     if (!lineDrive) {
       if (def && (!off || def.d <= off.d + 0.25)) {
         const dA = def.p.A, ballhawk = def.p.tr.includes('ballhawk') ? 0.1 : 0;
-        const pInt = cl(0.1 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
+        const pInt = cl(0.115 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
         const r = this.r(); if (r < pInt) { result = 'int'; who = def.p; } else if (r < pInt + pPD || !off) { result = 'pbu'; who = def.p; }
       }
       if (result === 'inc' && off) {
