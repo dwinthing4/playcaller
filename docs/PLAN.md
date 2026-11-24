@@ -51,6 +51,12 @@ The build compiles the bundle, so duplicate top-level `const`/`let` names fail t
 ```
 The engine derives physics (mass, size, top speed, acceleration, cut grip, strength, tackle grip, hands, arm) from these.
 
+Measurables (src/league/72_combine.js): `msrOf(p)` gives height (+ eighths), weight, arm, hand, 40, 10 split, vertical, broad, bench, 3-cone and shuttle,
+read off his CURRENT ratings and body, so aging moves them together. `p.ms` = `{v:1, arm, hand, h8, oa, oj}` (filled from a hash of the id on load; never changes a rating).
+New players get drills first and spd/acc/agi/str/jmp read back from them (`msrGen`, called in genPlayer). Prospects: `p.comb` (combine/pro-day numbers, `sk` skipped drills, `pd` pro day),
+`p.combZ`/`p.combBump` (CPU draft stock). Role archetypes `rarchOf(p)`, comps `plkFor(p)` (pool `L.cpool`), draft-guide reports `dgrReport/dgrLatest` (`p.sc.dgs` = who filed the last one),
+training camp `L.camp` and private workouts `L.scouting.wo` (76_camp.js; mini-games in src/ui/47_camp.js).
+
 ### Team
 `{ id, abbr, city, name, c1, c2, depth:{POS:[pid...]}, roster:[pid...], offStyle, defStyle, oc, dc, ... }` (Playcaller shape).
 
