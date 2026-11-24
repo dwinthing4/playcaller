@@ -35,7 +35,7 @@ await wait(350); const hr2 = await page.evaluate(() => { const b = document.quer
 await page.evaluate(() => { const g = MATCH._G; g.pre = null; }); await page.keyboard.press('Space').catch(() => { });
 if (phone) await page.evaluate(() => { const g = MATCH._G; if (g.stage === 'pre') g.play.snap(); });
 await until(g => g.phase === 'live'); await wait(700);
-await page.evaluate(() => MATCH._.foul('OFS', 'D')); await wait(320); await shot('flag_thrown');
+await page.evaluate(() => { MATCH._G.penAsk = true; MATCH._.foul('OFS', 'D'); }); await wait(320); await shot('flag_thrown');
 await wait(500); await shot('flag_down');
 // let the AI finish the play (throw it for us)
 await page.evaluate(() => { const g = MATCH._G, pl = g.play; if (pl && pl.receivers && pl.receivers[0] && pl.canThrow && pl.canThrow()) pl.throwTo(pl.receivers[0]); });

@@ -698,7 +698,7 @@ function flagWatch(pl) {
       let code = EV2PEN[ev.k]; if (!code) continue; if (code === 'OH' && R() < 0.1) code = 'IUH'; if (code === 'DH' && R() < 0.3) code = 'IC';
       const byO = !!EV_BY_O[ev.k], tid = pl.ret ? (byO ? G.retPlay && G.retPlay.recv : G.retPlay && G.retPlay.kicker) : (byO ? G.cur.off : G.cur.def);
       if (tid == null || G.fouls.length >= 2 || G.fouls.some(f => f.code === code && f.by === tid)) continue;
-      if (R() >= RULES.chance(ev, { k: G.penK })) continue;
+      if (R() >= RULES.chance(ev, { k: G.penK }) * (G.fouls.some(f => f.by !== tid) ? 0.3 : 1)) continue;     // a flag on both sides (offsetting) is rare
       const pid = byO ? (ev.k === 'push' || ev.k === 'opi' ? ev.r : ev.b != null ? ev.b : ev.q) : ev.d;
       G.fouls.push({ code, by: tid, pid, x: ev.x, z: ev.z, spotYl: ev.z / YDm, t: ev.t });
       if (!G.sim) throwFlag(ev.x, ev.z);
@@ -739,7 +739,7 @@ function judge(res, info) {
   const list = (oF.length ? oF : dF).slice().sort((a, b) => foulRank(b) - foulRank(a)), f = list[0], st = standsOf(res), ac = acceptOf(f, res, st), offended = opp(f.by);
   const gain = (offended === off ? 1 : -1) * (ac.ep - st.ep), rec = ac.mode === 'stands' ? 'dec' : gain >= -0.05 ? 'acc' : 'dec';
   for (const x of list.slice(1)) countFoul(x, 0, 'declined');
-  if (ac.mode !== 'stands' && isU(offended) && G.mode === 'play' && !G.sim && !G.auto && (Math.abs(gain) < 1.0 || rec === 'dec')) {
+  if (ac.mode !== 'stands' && isU(offended) && G.mode === 'play' && !G.sim && !G.auto && (Math.abs(gain) < 1.0 || rec === 'dec' || G.penAsk)) {
     G.stage = 'flag'; penChoice(f, ac, st, rec, ch => { if (!G) return; closeOverlay(); const d = settle(f, res, info, ch === 'acc', ac, st); if (d >= 0) after(d, nextSnap); }); return -1; }
   return settle(f, res, info, rec === 'acc', ac, st);
 }
@@ -838,7 +838,7 @@ function fakeOpts(kind, tid) {
     const wg = take(T, ['TE'], 2), wg2 = take(T, ['FB', 'TE', 'RB'], 2); if (!hq || !kk || wg.length < 2 || wg2.length < 2) return null;
     O.push(E('QB', hq, -7, 0), E('K', kk, -9.5, -1.6), E('TE', wg[0], -1, -5.6), E('TE2', wg[1], -1, 5.6), E('SL', wg2[0], -1.6, -7.4), E('RB', wg2[1], -1.6, 7.4));
     op = run ? { id: 'fakeF', name: 'Fake field goal', side: 'O', form: 'Field goal', type: 'run', carrier: 'QB', scheme: 'outside', gap: 'D', rside: R() < 0.5 ? 'L' : 'R', routes: {} }
-      : { id: 'fakeF', name: 'Fake field goal pass', side: 'O', form: 'Field goal', type: 'pass', routes: { TE: 'flat', TE2: 'corner' } };      // the wings release, the rest stay in to protect the holder
+      : { id: 'fakeF', name: 'Fake field goal pass', side: 'O', form: 'Field goal', type: 'pass', routes: { TE: 'flat', TE2: 'flat', SL: 'stick' } };      // a quick throw to the flat: the wings leak out, the rest protect the holder
   }
   O = O.filter(Boolean); if (O.length !== 11) return null;
   // the other side: punt return (eight up, two jammers, a deep man) or field-goal block (everyone on the line)
