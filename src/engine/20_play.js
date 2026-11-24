@@ -376,13 +376,28 @@ class Play {
       if (inF) {                   // down the lane, squeezing toward the ball as he gets close but keeping his spacing (no two in the same lane); the kicker hangs back as the last man
         const prog = cl(1 - (d.p.z - L.z) / Math.max(10, R.kickZ - L.z), 0, 1), keep = R.kind === 'punt' ? 0.15 : lp(0.15, 0.4, Math.min(1, this.iq)), spread = lp(1, keep, prog);
         const tx = d.kicker ? lp(d.p.x, L.x, 0.3) : lp(0, L.x, 0.2 + 0.8 * prog) + d.lane * spread, tz = d.kicker ? Math.max(L.z + 22, d.p.z - 4) : d.safe ? Math.max(L.z + 11, d.p.z - 6) : L.z + (d.gunner ? 1.5 : 3);
-        const mx = tx - d.p.x, mz = tz - d.p.z, mm = Math.hypot(mx, mz) || 1, sp = d.kicker ? Math.min(d.vmax * 0.6, mm * 2) : d.vmax * (d.gunner ? 0.96 : 0.92);
+        const mx = tx - d.p.x, mz = tz - d.p.z, mm = Math.hypot(mx, mz) || 1, sp = d.kicker ? Math.min(d.vmax * 0.6, mm * 2) : d.vmax * (d.gunner ? 0.96 : R.kind === 'punt' ? 0.92 : 0.86);     // kickoff coverage runs hard but under control, so first contact comes past the wall
         if (d.bondBy) { this.pursueAI(d, dt, env, d.fit); continue; }
         locomote(d, v2(mx / mm * sp, mz / mm * sp), dt, env); slewHeading(d, Math.atan2(mx, mz), 6, dt); d.crouchT = 0.05; continue; }
       if (!c) { locomote(d, v2(), dt, env); continue; }
+      if (R.kind !== 'punt' && (d.kicker || d.safe) && c.unit === 'O' && this.koDeep(d, dt, env)) continue;
       this.pursueAI(d, dt, env, d.fit || 'attack');
     }
   }
+  // kickoff last line (the kicker, and the safety in front of him): stay between the returner and the goal line, giving ground as he comes,
+  // so a man who beats the first wave still has to beat someone in the open field; once he's close, the normal tackle approach takes over
+  koDeep(d, dt, env) {
+    const c = this.carrier, dx = c.p.x - d.p.x, dz = c.p.z - d.p.z, dist = Math.hypot(dx, dz), ahead = -dz, iq = Math.min(1, this.iq || 0.85);
+    if (dist < 4 || ahead < 1 || !d.upright()) return false;
+    // where he is going: his run line, bent toward the goal line; take the first point on it I can reach before him (a deep angle on a faster man)
+    const vm = Math.hypot(c.vel.x, c.vel.z), ux = vm > 2 ? c.vel.x / vm : 0, uz = vm > 2 ? Math.max(0.35, c.vel.z / vm) : 1, um = Math.hypot(ux, uz) || 1, sx = ux / um, sz = uz / um, cs = Math.max(c.vmax, vm);
+    let tx = c.p.x + sx * 30, tz = c.p.z + sz * 30;
+    for (let t = 0.3; t < 5; t += 0.15) { const px = c.p.x + sx * cs * t, pz = c.p.z + sz * cs * t; if (Math.hypot(px - d.p.x, pz - d.p.z) / (d.vmax * 0.97) <= t * (0.8 + 0.2 * iq)) { tx = px; tz = pz; break; } }
+    tx = cl(tx, -FIELD.halfW + 0.5, FIELD.halfW - 0.5); tz = Math.min(FIELD.goalZ + 2, tz);
+    const mx = tx - d.p.x, mz = tz - d.p.z, mm = Math.hypot(mx, mz) || 1, sp = Math.min(d.vmax, mm * 3);
+    locomote(d, mm > 0.3 ? v2(mx / mm * sp, mz / mm * sp) : v2(), dt, env); slewHeading(d, Math.atan2(dx, dz), 6, dt); d.crouchT = 0.18; return true;
+  }
+
 
   // ---------------- AI dispatch ----------------
   ai(dt, env) {
