@@ -9,7 +9,7 @@ function beginOffseason() {
   }
   // league history row
   let ru = null; if (L.playoff && L.playoff.elim) { const mx = Math.max(...Object.values(L.playoff.elim)); const k = Object.keys(L.playoff.elim).find(t => L.playoff.elim[t] === mx); if (k != null) ru = L.teams[k]; }
-  awards();
+  awards(); plkUpdate();                              // this season's notable players join the "plays like" pool (73_scoutx.js)
   const aw = L.awards[L.awards.length - 1] || {}; const P = id => { const p = L.P[id]; return p ? `${p.pos} ${p.fn} ${p.ln} (${L.teams[p.tid] ? L.teams[p.tid].abbr : ''})` : '—'; };
   L.lhist.push({ y: L.year, champ: champRec ? champRec.name : '—', ru: ru ? teamName(ru) : '—', mvp: P(aw.mvp), dpoy: P(aw.dpoy), you: `${T.w}-${T.l}` });
   // owner goals and verdict
@@ -101,6 +101,7 @@ function finishDraft() {
   while (L.draftPick < L.draftOrder.length) { const s = L.draftOrder[L.draftPick]; const p = aiDraftPick(L.teams[s.owner]); if (!p) break; doDraftPick(p); }
   for (const id of L.draft) { const p = L.P[id]; p.draft = false; p.ask = 0.9; p.sal = 0.9; p.base = 0.9; p.yrs = 1; p.rookieY = L.year + 1; L.fa.push(id); }
   L.draft = []; L.off = 'fa'; news('Free agency is open.'); gmFreeAgencyMemo();
+  tcampAnnounce();                                    // training camp opens with free agency (76_camp.js)
 }
 // ---------- free agency ----------
 function faInterest(p, t) { return t.fanSup * 0.2 + pct(t) * 30 + t.coach.mot * 2 + (t.fac ? (t.fac.train + t.fac.weight) : 2); }

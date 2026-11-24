@@ -361,13 +361,8 @@ function reveal(p, n, acc) {
   p.scout = Math.round(clamp(p.ovr + (p.scoutNoise || 0) * f, 30, 99)); p.scoutPot = Math.round(clamp(p.pot + (p.potNoise || 0) * f, p.scout, 99)); return got;
 }
 function projRound(p) { const rank = L.draft.map(id => L.P[id]).filter(Boolean).sort((a, b) => scoutedValue(b) - scoutedValue(a)).indexOf(p); return rank < 0 ? 7 : Math.min(7, Math.floor(rank / 32) + 1); }
-function scoutReportText(s, p, got) {
-  const prof = profAttrs(p).filter(k => p.sc.rev.includes(k)).map(k => [k, p.a[k]]).sort((a, b) => b[1] - a[1]);
-  const strengths = prof.slice(0, 2).map(([k, v]) => `${ATTR_NAME[k].toLowerCase()} (${v})`), concern = prof.slice(-1).map(([k, v]) => `${ATTR_NAME[k].toLowerCase()} (${v})`);
-  const pr = projRound(p); const potL = Math.max(p.scout, p.scoutPot - 4), potH = Math.min(99, p.scoutPot + 4);
-  const comb = p.comb ? ` Ran a ${p.comb.forty}.` : '';
-  return `${p.pos} ${p.fn} ${p.ln}, ${p.col}. ${strengths.length ? 'Wins with ' + strengths.join(' and ') + '.' : ''} ${concern.length && prof.length > 2 ? 'Concern: ' + concern[0] + '.' : ''}${comb} I have him around ${p.scout} now with a ceiling of ${potL}-${potH}. Projects as a round-${pr} pick.${p.arch && ARCH[p.arch] && p.sc.lvl >= 2 ? ' ' + ARCH[p.arch][1] : ''}`.replace(/\s+/g, ' ');
-}
+// draft-guide report (74_report.js): summary, strengths, weaknesses, projection, grade, through this scout's eyes
+function scoutReportText(s, p, got) { return `${p.pos} ${p.fn} ${p.ln}, ${p.col}. ${dgrFile(s, p)}`; }
 function scoutingWeek() {
   if (L.ghost || !L.scouts || !L.draft.length) return; const pri = L.scoutPri || { pos: [], ids: [] }; const lines = []; const seen = new Set();
   for (const s of L.scouts) {

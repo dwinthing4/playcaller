@@ -56,4 +56,4 @@ LG._t = { UT, teamName, capRoom, capUsed, expiring, resignPlayer, userOnClock, u
   applyMatchResult, userPlayoffGame, userGame, setFocus, upgradeFac, upgradePC, hireCoord, poach, jobSecurity, stories, storyGoal, sitOutSeason, acceptOffer, starterIds };
 Object.assign(LG._t, { teamLineup, rotInfo, rotRoles, rotSetPreset, rotSetShare, rotSetRole, rotToggleLock, rotSetOpt, rotReset, playerEndurance, rotSimLines });
 // player realism (72_combine.js, 73_scoutx.js, 74_camp.js): measurables, combine, role archetypes, comps, draft-guide reports, camp
-Object.assign(LG._t, { msrOf, msrGen, msrEnsure, msrRead, msrPct, cmbRun, cmbProDays, cmbRead, cmbScore, cmbTop, draftValue });
+Object.assign(LG._t, { msrOf, msrGen, msrEnsure, msrRead, msrPct, cmbRun, cmbProDays, cmbRead, cmbScore, cmbTop, draftValue, sxView, rarchOf, plkFor, plkUpdate, dgrReport, dgrLatest, dgrShort, tcampOpen, tcampState, tcampApply, tcampAuto, tcampLeft, pwoOpen, pwoApply, pwoLeft, reveal, scoutReportText });

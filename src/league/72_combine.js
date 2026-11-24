@@ -156,13 +156,26 @@ const CMB_W = { QB: { forty: .6, ten: .4, cone: .3, vert: .2 }, RB: { forty: 2, 
   OT: { ten: 1, cone: .8, shuttle: .8, broad: .6, bench: .8, forty: .4 }, OG: { ten: .9, cone: .6, shuttle: .7, bench: 1, broad: .5, forty: .3 }, C: { ten: .9, cone: .6, shuttle: .7, bench: 1, broad: .5, forty: .3 },
   DE: { ten: 1.6, forty: 1.2, cone: .9, broad: .7, vert: .5, bench: .6 }, DT: { ten: 1.4, forty: .6, bench: 1, broad: .6, shuttle: .5 }, LB: { forty: 1.5, ten: 1, cone: .8, shuttle: .6, vert: .5, broad: .5 },
   CB: { forty: 2.2, ten: 1, cone: .9, shuttle: .8, vert: .8, broad: .6 }, S: { forty: 1.8, ten: .8, cone: .8, shuttle: .6, vert: .8, broad: .6 }, K: {}, P: {} };
-function cmbScore(p) {
+// against the rest of this class at his position (st = per position + drill mean/sd of the class)
+function cmbScore(p, st) {
   const c = p.comb; if (!c) return null; const W = CMB_W[p.pos] || {}; let s = 0, w = 0;
-  for (const k in W) { if (c[k] == null) continue; const pc = msrPct(p.pos, k, c[k], c.wt); if (pc == null) continue; const z = clamp((pc - 50) / 34, -2.2, 2.2); s += z * W[k]; w += W[k]; }
+  for (const k in W) { if (c[k] == null) continue; const d = st && st[p.pos] && st[p.pos][k]; let z;
+    if (d && d.n >= 4 && d.sd > 0) z = (c[k] - d.m) / d.sd * (MS_LOWER_BETTER[k] ? -1 : 1); else { const pc = msrPct(p.pos, k, c[k], c.wt); if (pc == null) continue; z = (pc - 50) / 34; }
+    s += clamp(z, -2.5, 2.5) * W[k]; w += W[k]; }
   return w ? s / w : null;
 }
-// CPU boards overreact to workouts: a great 40 lifts a guy, a slow one sinks him (draftValue reads p.combBump)
-function cmbStock() { for (const id of L.draft || []) { const p = L.P[id]; if (!p) continue; const z = cmbScore(p); p.combZ = z == null ? null : Math.round(z * 100) / 100; p.combBump = z == null ? 0 : Math.round(clamp(z * 2.4, -4, 5) * 10) / 10; } }
+function cmbClassStats() {
+  const acc = {}; for (const id of L.draft || []) { const p = L.P[id], c = p && p.comb; if (!c) continue; for (const [k] of MS_DRILLS) if (c[k] != null) { const a = ((acc[p.pos] = acc[p.pos] || {})[k] = acc[p.pos][k] || []); a.push(c[k]); } }
+  const st = {}; for (const pos in acc) { st[pos] = {}; for (const k in acc[pos]) { const a = acc[pos][k], m = a.reduce((s, v) => s + v, 0) / a.length; st[pos][k] = { n: a.length, m, sd: Math.sqrt(a.reduce((s, v) => s + (v - m) * (v - m), 0) / a.length) }; } }
+  return st;
+}
+// CPU boards overreact to workouts: a great 40 lifts a guy, a slow one sinks him (draftValue reads p.combBump).
+// combZ = how he tested against his position in this class, scaled so the class spreads one unit wide
+function cmbStock() {
+  const st = cmbClassStats(), ps = (L.draft || []).map(id => L.P[id]).filter(Boolean), raw = ps.map(p => cmbScore(p, st)), got = raw.filter(z => z != null);
+  const sd = got.length > 5 ? Math.sqrt(got.reduce((s, z) => s + z * z, 0) / got.length) || 1 : 1;
+  ps.forEach((p, i) => { const z = raw[i] == null ? null : clamp(raw[i] / sd, -3, 3); p.combZ = z == null ? null : Math.round(z * 100) / 100; p.combBump = z == null ? 0 : Math.round(clamp(z * 2.4, -4, 5) * 10) / 10; });
+}
 // the top performers, for the news, the scouts' memo and the combine screen
 function cmbTop(k, n, pos) {
   const lower = MS_LOWER_BETTER[k]; return (L.draft || []).map(id => L.P[id]).filter(p => p && p.comb && p.comb[k] != null && (!pos || p.pos === pos))
