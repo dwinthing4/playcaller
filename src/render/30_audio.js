@@ -124,6 +124,7 @@ function prep(ctx, sync) {
 const irFor = (ctx, dome) => { const k = (dome ? 'irD' : 'irO') + ctx.sampleRate; return BUF[k] || (BUF[k] = irBuf(ctx, dome)); };
 let curve0 = null;
 function softCurve() { if (curve0) return curve0; const n = 4096, c = new Float32Array(n), k = 0.72; for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1, a = Math.abs(x); c[i] = Math.sign(x) * (a <= k ? a : k + (1 - k) * 0.98 * Math.tanh((a - k) / (1 - k))); } return (curve0 = c); }
+const kRate = x => { try { x.frequency.automationRate = 'k-rate'; x.Q.automationRate = 'k-rate'; x.gain.automationRate = 'k-rate'; } catch (e) { } return x; };
 const PW = new WeakMap();
 function voiceWave(ctx) { let w = PW.get(ctx); if (w) return w; const n = 48, re = new Float32Array(n), im = new Float32Array(n); for (let h = 1; h < n; h++) im[h] = Math.pow(h, -1.2) * (h % 2 ? 1 : 0.85); w = ctx.createPeriodicWave(re, im); PW.set(ctx, w); return w; }
 
@@ -160,7 +161,7 @@ function free(v) { if (!v.B.voices.has(v)) return; v.B.voices.delete(v); for (co
 const nd = (v, x) => { v.nodes.push(x); v.B.nodes++; dbg.peakN = Math.max(dbg.peakN, v.B.nodes); return x; };
 const fin = (x, d) => (typeof x === 'number' && isFinite(x) ? x : d);
 const gn = (v, g) => { const x = nd(v, v.B.ctx.createGain()); x.gain.value = fin(g, 0); return x; };
-const fl = (v, type, f, Q, gain) => { const x = nd(v, v.B.ctx.createBiquadFilter()); x.type = type; x.frequency.value = f; if (Q != null) x.Q.value = Q; if (gain != null) x.gain.value = gain; return x; };
+const fl = (v, type, f, Q, gain) => { const x = kRate(nd(v, v.B.ctx.createBiquadFilter())); x.type = type; x.frequency.value = f; if (Q != null) x.Q.value = Q; if (gain != null) x.gain.value = gain; return x; };
 const os = (v, type, f) => { const x = nd(v, v.B.ctx.createOscillator()); if (type === 'voice') x.setPeriodicWave(voiceWave(v.B.ctx)); else x.type = type; x.frequency.value = f; return x; };
 const pn = (v, p) => { const c = v.B.ctx; if (!c.createStereoPanner) return gn(v, 1); const x = nd(v, c.createStereoPanner()); x.pan.value = clamp(fin(p, 0), -1, 1); return x; };
 function run(v, x, t0, t1, off) { v.srcs++; v.end = Math.max(v.end, t1); x.onended = () => { if (--v.srcs <= 0) free(v); }; if (off != null) x.start(t0, off); else x.start(t0); x.stop(t1); return x; }
@@ -291,7 +292,7 @@ SFX.click = (B, t) => {
 function layer(B, buf, rate, list) { const c = B.ctx, s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = rate; list.push(s); return s; }
 function mkCrowd(B) {
   const c = B.ctx, Ly = { B, srcs: [], nodes: [], gains: [], last: {}, parts: {} };
-  const mk = x => { Ly.nodes.push(x); return x; }, g0 = () => { const x = mk(c.createGain()); Ly.gains.push(x); return x; }, F =(type, f, Q, gain) => { const x = mk(c.createBiquadFilter()); x.type = type; x.frequency.value = f; if (Q != null) x.Q.value = Q; if (gain != null) x.gain.value = gain; return x; };
+  const mk = x => { Ly.nodes.push(x); return x; }, g0 = () => { const x = mk(c.createGain()); Ly.gains.push(x); return x; }, F =(type, f, Q, gain) => { const x = kRate(mk(c.createBiquadFilter())); x.type = type; x.frequency.value = f; if (Q != null) x.Q.value = Q; if (gain != null) x.gain.value = gain; return x; };
   Ly.addParts = () => {      // whatever buffers are ready: the murmur arrives a moment after the first tap
     const t = c.currentTime + 0.02, P = Ly.parts, st = (s, max) => { mk(s); s.start(t, Math.random() * max); };
     if (BUF.pink && !P.bed) { P.bed = 1; Ly.bedLP = F('lowpass', 850, 0.6); Ly.bedPk = F('peaking', 320, 0.9, 4); Ly.bed = g0(); Ly.bed.gain.value = 0; const s = layer(B, BUF.pink, 1, Ly.srcs); chain(s, Ly.bedLP, Ly.bedPk, Ly.bed, B.crowd); st(s, 5);
@@ -314,7 +315,7 @@ function crowdSet(Ly, t, X, up, dn) {
 }
 function mkWx(B, wx) {
   const c = B.ctx, X = { srcs: [], nodes: [], gains: [], rain: null, wind: null, ww: null, mph: 0 }, mk = x => { X.nodes.push(x); return x; };
-  const t = c.currentTime + 0.02, F = (type, f, Q) => { const x = mk(c.createBiquadFilter()); x.type = type; x.frequency.value = f; x.Q.value = Q; return x; }, g0 = () => { const x = mk(c.createGain()); x.gain.value = 0; X.gains.push(x); return x; };
+  const t = c.currentTime + 0.02, F = (type, f, Q) => { const x = kRate(mk(c.createBiquadFilter())); x.type = type; x.frequency.value = f; x.Q.value = Q; return x; }, g0 = () => { const x = mk(c.createGain()); x.gain.value = 0; X.gains.push(x); return x; };
   if (wx && wx.weather === 'rain') { if (!BUF.rain) BUF.rain = rainBuf(c, 3, 32000); X.rain = g0(); const s = mk(layer(B, BUF.rain, 1, X.srcs)); chain(s, F('highpass', 520, 0.6), F('lowpass', 9500, 0.5), X.rain, B.wx); s.start(t, Math.random() * 2); X.rain.gain.setTargetAtTime(wx.heavy ? 0.16 : 0.11, t, 1.2); }
   const mph = wx && wx.wind ? +wx.wind.mph || 0 : 0; X.mph = mph;
   if (mph >= 6 && BUF.pink) { X.windBP = F('bandpass', 380, 0.7); X.wind = g0(); const s = mk(layer(B, BUF.pink, 0.45, X.srcs)); chain(s, X.windBP, X.wind, B.wx); s.start(t, Math.random() * 5);
