@@ -1513,7 +1513,7 @@ function altCalls(form, curId) {
   const best = (arr, sc) => { const a = form ? arr.filter(p => p.form === form) : arr, b = a.length ? a : arr; return b.slice().sort((x, y) => sc(y) - sc(x))[0] || null; };
   const QK = ['slant', 'hitch', 'stick', 'flat', 'out', 'screen', 'drag', 'curl', 'angle'];
   const run = best(pool.filter(p => p.type === 'run' && p.carrier !== 'QB' && !(p.paths && p.carrier && p.paths[p.carrier])), p => (p.scheme === 'zone' || p.scheme === 'outside' ? 1 : 0.5) - (p.id === curId ? 2 : 0) - (p.delay || p.scheme === 'draw' ? 0.6 : 0));
-  const quick = best(pool.filter(p => p.type === 'pass' && !p.deep && !p.pa), p => rts(p).filter(r => QK.includes(r)).length - rts(p).filter(r => DEEP_ROUTES[r]).length * 0.7 + (/Quick|Slant|Stick|Hitch|Mesh|Snag|Spot/.test(p.name) ? 1 : 0) - (p.id === curId ? 1.5 : 0));
+  const qs = p => rts(p).filter(r => QK.includes(r)).length - rts(p).filter(r => DEEP_ROUTES[r]).length * 0.7 + (/Quick|Slant|Stick|Hitch|Mesh|Snag|Spot/.test(p.name) ? 1 : 0) - (p.id === curId ? 1.5 : 0), quick = best(pool.filter(p => p.type === 'pass' && !p.deep && !p.pa), qs) || best(pool.filter(p => p.type === 'pass'), qs);
   const deep = best(pool.filter(p => p.type === 'pass' && p !== quick), p => (p.deep ? 3 : 0) + rts(p).filter(r => DEEP_ROUTES[r]).length + (p.pa ? 0.5 : 0) - (p.id === curId ? 1.5 : 0));
   const out = []; if (run) out.push({ lab: 'Run left', p: run, rside: 'L' }, { lab: 'Run right', p: run, rside: 'R' }); if (quick) out.push({ lab: 'Quick pass', p: quick }); if (deep) out.push({ lab: 'Deep shot', p: deep });
   return out;
