@@ -54,6 +54,7 @@ function finishResign() {
     if (p.age < 31 && p.ovr >= 68 && R() < 0.75) { setDeal(p, askingSalary(p), ri(1, 4), 0.2); } else releaseToFA(t, p, false);
   }
   for (const t of L.teams) ensureCap(t);
+  cmbProDays();                                       // prospects who skipped combine drills run them now (72_combine.js)
   L.off = 'draft'; news('The draft is open.');
 }
 // ---------- draft ----------
@@ -70,17 +71,12 @@ function genDraftClass() {
     L.P[p.id] = p; L.draft.push(p.id);
   }
 }
-function draftValue(p) { return (p.ovr + (p.scoutNoise || 0) * 0.6) * 0.55 + (p.pot + (p.potNoise || 0) * 0.6) * 0.45 + (p.pos === 'QB' ? 3 : 0) - (p.pos === 'K' || p.pos === 'P' ? 12 : 0); }
+function draftValue(p) { return (p.ovr + (p.scoutNoise || 0) * 0.6) * 0.55 + (p.pot + (p.potNoise || 0) * 0.6) * 0.45 + (p.pos === 'QB' ? 3 : 0) - (p.pos === 'K' || p.pos === 'P' ? 12 : 0) + (p.combBump || 0); }
 function scoutedValue(p) { return (p.scout || p.ovr) * 0.55 + (p.scoutPot || p.pot) * 0.45 + (p.pos === 'QB' ? 3 : 0) - (p.pos === 'K' || p.pos === 'P' ? 12 : 0); }
 function gradeStars(p) { const o = p.ovr; const s = o >= 73 ? 5 : o >= 67 ? 4 : o >= 61 ? 3 : o >= 55 ? 2 : 1; return clamp(s + (p.gnoise || 0), 1, 5); }
 function scouted(p) { return p.sc && p.sc.lvl >= 1; }
 function potKnown(p) { return p.sc && p.sc.lvl >= 2; }
-function runCombine() {
-  if (L.combineY === L.year) return; L.combineY = L.year;
-  for (const id of L.draft) { const p = L.P[id]; if (!p) continue; const a = p.a, n = () => gauss() * 0.6;
-    p.comb = { forty: +(4.28 + (99 - a.spd) * 0.021 + n() * 0.05).toFixed(2), vert: Math.round(26 + a.jmp * 0.16 + n() * 2), bench: Math.round(a.str * 0.33 + n() * 2), cone: +(6.55 + (99 - a.agi) * 0.017 + n() * 0.06).toFixed(2), shuttle: +(3.95 + (99 - a.acc) * 0.011 + n() * 0.04).toFixed(2) }; }
-  news('The scouting combine is complete. Measurables are posted for every prospect.');
-}
+function runCombine() { cmbRun(); }      // measurables, skipped drills and draft stock: 72_combine.js
 function aiDraftPick(t) {
   if (!t.draftStyle) t.draftStyle = pick(['need', 'bpa', 'balanced']); const w = t.draftStyle === 'need' ? 6 : t.draftStyle === 'bpa' ? 1 : 3;
   const need = pos => { const have = t.roster.filter(id => L.P[id].pos === pos).length; const st = (t.depth[pos] || [])[0]; const sv = st ? L.P[st].ovr : 40; return Math.max(0, POS_COUNTS[pos] - have) + (sv < 72 ? 1.5 : 0) + (sv < 65 ? 1.5 : 0); };

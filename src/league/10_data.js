@@ -148,7 +148,7 @@ function genPlayer(pos, q, age) {
   const nm = rname();
   const p = { id: nid(), fn: nm.fn, ln: nm.ln, pos, age: age || ri(22, 33), a, ovr: 0, pot: 0, sal: 1, yrs: 1, tid: null, num: 0, traits: [],
     col: pick(COLLEGES) + ' ' + pick(['University', 'State', 'A&M', 'Tech', 'College']), st: blankStats(), car: {}, hist: [], gl: [], inj: 0, lk: genLook(pos) };
-  ensureBody(p); p.ovr = calcOvr(p);
+  ensureBody(p); msrGen(p); p.ovr = calcOvr(p);        // msrGen (72_combine.js): measurables first, athletic ratings read off them
   const young = Math.max(0, 27 - p.age); p.pot = clamp(Math.round(p.ovr + young * rnd(0.4, 3.2) + (R() < 0.08 ? young * 1.6 : 0)), p.ovr, 99);
   p.dev = pick(['normal', 'normal', 'normal', 'normal', 'quick', 'slow', 'star']);   // development curve trait
   assignTraits(p); ensurePot(p); p.mor = Math.round(clamp(62 + gauss() * 9, 30, 90)); p.morLog = []; return p;
