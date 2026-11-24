@@ -59,7 +59,7 @@ function rarchOf(p, view) {
   if (best.k === 'run' && p.pos === 'DT' && (p.wt || 0) >= 325) Object.assign(best, { k: 'nose', n: 'Nose tackle', role: 'nose tackle' });
   return best;
 }
-function rarchTag(p) { if (!sxKnown(p)) return ''; const r = rarchOf(p); return r ? `<span class="rarch" title="Role">${r.n}</span>` : ''; }
+function rarchTag(p) { if (!sxKnown(p)) return ''; const r = rarchOf(p); if (!r || (p.traits || []).some(t => TRAITS[t] && TRAITS[t].n.toLowerCase() === r.n.toLowerCase())) return ''; return `<span class="rarch" title="Role">${r.n}</span>`; }
 // the rotation's role picker leans toward a player's archetype (25_rotation.js roleFit)
 const RARCH_ROT = { X: 'deep', Z: 'poss', SL: 'slot', SL2: 'slot', RZ: 'rz', PD: 'recv', GL: 'power', Y: 'recv', IN: 'block' };
 // the rotation asks this thousands of times a game, so remember the answer until his ratings or body change

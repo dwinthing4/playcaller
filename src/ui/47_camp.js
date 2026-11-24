@@ -282,9 +282,9 @@ function mgmOpen(pid, mode) {
 function mgmStart() { if (MGM.st !== 'ready') return; const ov = document.getElementById('mgOv'); if (ov) ov.hidden = true; MGM.st = 'count'; MGM.cd = 1.6; MGM.last = performance.now(); MGM.raf = requestAnimationFrame(mgmLoop); }
 function mgmLoop(now) {
   const cv = document.getElementById('mgCv'); if (!cv || !MGM.g) { mgmStop(); return; }
-  const dt = Math.min(0.05, (now - MGM.last) / 1000); MGM.last = now; const G = MGM.g;
+  let dt = Math.min(0.25, (now - MGM.last) / 1000); MGM.last = now; const G = MGM.g;
   if (MGM.st === 'count') { MGM.cd -= dt; if (MGM.cd <= 0) MGM.st = 'play'; }
-  else if (MGM.st === 'play') { G.t += dt; G.step(dt); if ((G.dur && G.t >= G.dur) || G.over) { mgmFrame(); mgmFinish(); return; } }
+  else if (MGM.st === 'play') { while (dt > 1e-4) { const h = Math.min(1 / 60, dt); dt -= h; G.t += h; G.step(h); if ((G.dur && G.t >= G.dur) || G.over) { mgmFrame(); mgmFinish(); return; } } }      // small fixed steps: same game on a slow phone
   mgmFrame(); MGM.raf = requestAnimationFrame(mgmLoop);
 }
 function mgmFrame(idle) {
