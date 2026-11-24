@@ -69,7 +69,9 @@ function fastGame(g, opt) {
   const U = { [H.id]: fsimUnits(H), [A.id]: fsimUnits(A) };
   const dif = DIFFS[L.diff] || DIFFS.pro, ub = T => (T.id === L.user && !L.ghost ? dif.user * 0.3 : 0) - ((T.id === H.id ? A : H).id === L.user && !L.ghost ? dif.ai * 0.12 : 0);
   const homeB = g.neutral ? 0 : 0.8;
-  const E = { [H.id]: fsimEdge(U[H.id], U[A.id], N, homeB * 0.5 + ub(H)), [A.id]: fsimEdge(U[A.id], U[H.id], N, -homeB * 0.5 + ub(A)) };
+  // travel (15_geo.js): geoTravelEdge is in the old sim's units (home field 1.5), this sim's home field is 0.8
+  const trv = tid => (typeof geoTravelEdge === 'function' ? (() => { try { return geoTravelEdge(g, tid) * 0.53; } catch (e) { return 0; } })() : 0);
+  const E = { [H.id]: fsimEdge(U[H.id], U[A.id], N, homeB * 0.5 + ub(H) + trv(H.id)), [A.id]: fsimEdge(U[A.id], U[H.id], N, -homeB * 0.5 + ub(A) + trv(A.id)) };
   const S = { q: 1, qlen, clock: qlen, RUN: clamp(qlen * 0.035, 3, 22), WARN: Math.min(120, qlen * 0.25), warned: {}, to: { [H.id]: 3, [A.id]: 3 }, score: { [H.id]: 0, [A.id]: 0 },
     poss: H.id, yl: 25, down: 1, togo: 10, runoff: 0, toChecked: false, pat: null, kickNext: null, freeKick: false, over: false, recvFirst: R() < 0.5 ? H.id : A.id, wasRunning: false };
   const st = {}; let buf = null;      // a snap's credits wait in buf until the play stands (a flag can wipe it out)
