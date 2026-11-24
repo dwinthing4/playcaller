@@ -572,7 +572,7 @@ class Play {
     const gun = q.p.z < this.losZ - 3.5, tx = q.p.x + (this.gapX > q.p.x ? 0.55 : -0.55), tz = q.p.z + (gun ? 0.55 : 0.35), dx = tx - rb.p.x, dz = tz - rb.p.z, m = Math.hypot(dx, dz) || 1, cap = rb.vmax * (gun ? 0.95 : 0.88);
     locomote(rb, v2(dx / m * Math.min(cap, m * 4 + 2), dz / m * Math.min(cap, m * 4 + 2)), dt, env); slewHeading(rb, Math.atan2(this.gapX - rb.p.x, this.losZ - rb.p.z), 8, dt);
     if (Math.hypot(rb.p.x - q.p.x, rb.p.z - q.p.z) < 1.2 && this.liveT > 0.1) { this.handed = true; this.carrier = rb; rb.role = 'carrier'; this.ball.state = 'held'; this.kind = 'run'; rb.ballSide = this.gapX > rb.p.x ? -1 : 1;
-      for (const d of this.D) d.runRead = this.t + d.recog * (this.op.pa ? 1.6 : 1); }
+      for (const d of this.D) d.runRead = this.t + (d.recog + 0.07) * (this.op.pa ? 1.6 : 1); }
   }
   // ball carrier AI: design gap behind the line, then field vision in the open
   runnerAI(c, dt, env) {
@@ -1082,12 +1082,12 @@ class Play {
     if (!lineDrive) {
       if (def && (!off || def.d <= off.d + 0.25)) {
         const dA = def.p.A, ballhawk = def.p.tr.includes('ballhawk') ? 0.1 : 0;
-        const pInt = cl(0.1 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
+        const pInt = cl(0.12 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
         const r = this.r(); if (r < pInt) { result = 'int'; who = def.p; } else if (r < pInt + pPD || !off) { result = 'pbu'; who = def.p; }
       }
       if (result === 'inc' && off) {
         let pc = off.p.hands + 0.07 - Math.max(0, off.d - 0.75) * 0.3;
-        if (def) pc -= cl(1 - def.d / 1.8, 0, 1) * cl(0.42 - battle * 0.3 - (off.p.tr.includes('hands') ? 0.1 : 0), 0.1, 0.62);
+        if (def) pc -= cl(1 - def.d / 1.8, 0, 1) * cl(0.5 - battle * 0.3 - (off.p.tr.includes('hands') ? 0.1 : 0), 0.1, 0.7);
         pc -= Math.max(0, Math.hypot(at.x - B.from.x, at.z - B.from.z) / YD - 20) * 0.014;     // a long ball comes in over the shoulder: harder to track and secure
         if (this.env.wet) pc -= this.env.snow ? 0.05 : 0.04; pc -= this.env.cold * 0.02;
         if (this.r() < cl(pc, 0.05, 0.97)) { result = 'catch'; who = off.p; } else result = off.d < 0.85 && !(def && def.d < 1.2) ? 'drop' : 'off';
@@ -1099,7 +1099,7 @@ class Play {
     if (result === 'catch' && Math.abs(who.p.x) > FIELD.halfW + 0.15) result = 'oobcatch';
     if (result === 'catch') {
       this.carrier = who; this.catcher = who; this.catchT = this.t; this.catchZ = who.p.z; who.role = 'carrier'; this.ball = { state: 'held', p: B.p, v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) };
-      who.ballSide = who.p.x > 0 ? 1 : -1; who.vel.x *= 0.65; who.vel.z *= 0.65; who.propK = 0.5; who.secureT = 0.25; this.contactZ = null;
+      who.ballSide = who.p.x > 0 ? 1 : -1; who.vel.x *= 0.55; who.vel.z *= 0.55; who.propK = 0.5; who.secureT = 0.25; this.contactZ = null;
       this.add(this.passer, 'pc'); this.add(who, 'rec'); this.note(who, true, 'Catch');
       for (const d of this.D) d.runRead = this.t + 0.06 + d.react * 0.3;
       this.emit(`Caught by ${who.name}`, 'good'); this.fx.push({ kind: 'grab', j: 200 });

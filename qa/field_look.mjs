@@ -26,8 +26,12 @@ const G = () => page.evaluate(() => { const g = MATCH._G; if (!g) return null; c
 const callPlay = async type => page.evaluate(t => { const cards = [...document.querySelectorAll('.sheet .pc[data-id]')]; const pick = cards.find(c => { const p = L.plays.find(x => x.id === c.dataset.id); return p && (!t || p.type === t) && !/Screen|Max/.test(p.name); }) || cards[0]; if (pick) pick.click(); return !!pick; }, type);
 // the CPU defense calls press man for the press look
 const pressOn = on => page.evaluate(on => { if (!window.__cpu0) window.__cpu0 = LG.cpuCall; LG.cpuCall = on ? (tid, side, ctx) => { if (side === 'D') { const p = L.plays.find(x => x.side === 'D' && x.cov === 'c1' && /Press/.test(x.name)) || L.plays.find(x => x.side === 'D' && x.cov === 'c1'); if (p) return p.id; } return window.__cpu0(tid, side, ctx); } : window.__cpu0; }, on);
+// the pick itself, as the engine's catch point does it (the defender nearest the catch point takes the ball)
+const forcePick = notMe => page.evaluate(notMe => { const pl = MATCH._G.play, B = pl.ball; if (B.state !== 'air' || !B.land) return null; const d = pl.D.filter(x => x.upright() && (!notMe || x !== pl.userD)).sort((a, b) => Math.hypot(a.p.x - B.land.x, a.p.z - B.land.z) - Math.hypot(b.p.x - B.land.x, b.p.z - B.land.z))[0];
+  pl.air = false; pl.carrier = d; d.role = 'carrier'; pl.ball = { state: 'held', p: { x: d.p.x, y: 1.2, z: d.p.z }, v: { x: 0, y: 0, z: 0 }, rot: { x: 0, y: 0, z: 0 }, spin: { x: 0, y: 0, z: 0 } }; pl.turnover = 'int'; pl.catchT = pl.t; pl.catchZ = d.p.z; pl.contactZ = null;
+  for (const o of pl.O) o.bond = null; for (const x of pl.D) { x.bondBy = null; x.wrapped = false; x.engaged = false; } pl.turnoverCtl(d); return d.label; }, notMe);
 const refTxt = () => page.evaluate(() => { const r = document.querySelector('.refc'); return r ? r.textContent : ''; });
-const did = { hard: false, fs: false, press: false, pick: false, dpick: false };
+const sk = !!process.env.ONLY_PICK, did = { hard: sk, fs: sk, press: sk, pick: false, dpick: false };     // ONLY_PICK=1: just the turnover checks
 await pressOn(false);
 let guard = 0;
 while (guard++ < 500 && !(did.hard && did.fs && did.press && did.pick && did.dpick)) {
@@ -68,7 +72,7 @@ while (guard++ < 500 && !(did.hard && did.fs && did.press && did.pick && did.dpi
       if (!pair) { await page.keyboard.press('Space'); await wait(4000); continue; }
       await page.keyboard.press('Space');
       for (let k = 0; k < 6; k++) { await wait(140); await shot('press_' + k); }
-      const st = await page.evaluate(() => { const pl = MATCH._G.play, r = pl.players.find(q => q.id === window.__pr), d = r.pressBy; return { res: r.hf ? r.hf.res : null, move: r.hf ? r.hf.move : null, rUp: r.upright(), dUp: d.upright(), dz: (r.p.z - pl.losZ) / 0.9144 }; });
+      const st = await page.evaluate(() => { const pl = MATCH._G.play, r = pl.players.find(q => q.id === window.__pr), d = r && r.pressBy; if (!d) return { res: null }; return { res: r.hf ? r.hf.res : null, move: r.hf ? r.hf.move : null, rUp: r.upright(), dUp: d.upright(), dz: (r.p.z - pl.losZ) / 0.9144 }; });
       check(!!st.res, `press: ${pair} and his corner hand-fight at the line (${st.res}, ${st.move})`); check(st.rUp && st.dUp, 'press: nobody falls');
       await page.evaluate(() => { R3D.camOverride = null; });
       did.press = true; await pressOn(false); await wait(3500); continue;
@@ -77,8 +81,7 @@ while (guard++ < 500 && !(did.hard && did.fs && did.press && did.pick && did.dpi
       await page.keyboard.press('Space');
       let air = false; for (let k = 0; k < 40 && !air; k++) { await wait(120); air = await page.evaluate(() => { const pl = MATCH._G.play; if (pl.ball.state === 'held' && pl.carrier === pl.qb && pl.liveT > 1.2 && pl.canThrow()) { const r = pl.receivers.filter(x => x.upright()).sort((a, b) => b.p.z - a.p.z)[0]; if (r) pl.throwTo(r); } return pl.ball.state === 'air'; }); }
       if (!air) { await wait(3000); continue; }
-      await page.evaluate(() => { const pl = MATCH._G.play, B = pl.ball, d = pl.D.filter(x => x.upright()).sort((a, b) => Math.hypot(a.p.x - B.land.x, a.p.z - B.land.z) - Math.hypot(b.p.x - B.land.x, b.p.z - B.land.z))[0]; d.p.x = B.land.x; d.p.z = B.land.z + 0.2; pl.resetFeet(d); window.__r0 = pl.rand; pl.rand = () => 0.0005; });
-      let picked = false; for (let k = 0; k < 40 && !picked; k++) { await wait(60); picked = await page.evaluate(() => { const pl = MATCH._G.play; if (pl.turnover === 'int' || pl.phase !== 'live') { pl.rand = window.__r0; return true; } return false; }); }
+      await forcePick(false);
       const s = await page.evaluate(() => { const pl = MATCH._G.play, u = pl.controlled(); return { int: pl.turnover === 'int', live: pl.phase === 'live', ctx: MATCH._.ctl().ctx, u: u ? u.unit + ' ' + u.posName : null }; });
       if (!s.int || !s.live) { console.log('(no pick this time: ' + JSON.stringify(s) + ')'); await wait(3000); continue; }
       check(s.u && s.u.startsWith('O'), `picked off: you take over a teammate (${s.u})`); check(s.ctx === 'd', `defense controls after the pick (${s.ctx})`); await shot('pick_takeover');
@@ -94,8 +97,7 @@ while (guard++ < 500 && !(did.hard && did.fs && did.press && did.pick && did.dpi
     await page.evaluate(() => { MATCH._G.play.snap(); });
     let air = false; for (let k = 0; k < 60 && !air; k++) { await wait(100); air = await page.evaluate(() => { const pl = MATCH._G.play; return pl.ball.state === 'air' && !pl.ball.away && !!pl.ball.target; }); if (await page.evaluate(() => MATCH._G.play.phase !== 'live')) break; }
     if (!air) { await wait(2500); continue; }
-    const info = await page.evaluate(() => { const pl = MATCH._G.play, B = pl.ball, d = pl.D.filter(x => x.upright() && x !== pl.userD).sort((a, b) => Math.hypot(a.p.x - B.land.x, a.p.z - B.land.z) - Math.hypot(b.p.x - B.land.x, b.p.z - B.land.z))[0]; d.p.x = B.land.x; d.p.z = B.land.z + 0.2; pl.resetFeet(d); window.__r0 = pl.rand; pl.rand = () => 0.0005; window.__ic = d.id; return d.label; });
-    let picked = false; for (let k = 0; k < 40 && !picked; k++) { await wait(60); picked = await page.evaluate(() => { const pl = MATCH._G.play; if (pl.turnover === 'int' || pl.phase !== 'live') { pl.rand = window.__r0; return true; } return false; }); }
+    const info = await forcePick(true);
     const s = await page.evaluate(() => { const pl = MATCH._G.play; return { int: pl.turnover === 'int', live: pl.phase === 'live', me: pl.userD && pl.userD.id, by: pl.carrier && pl.carrier.id, ctx: MATCH._.ctl().ctx }; });
     if (!s.int || !s.live) { await wait(2500); continue; }
     check(s.me === s.by, `your defense picks it off (${info}): you are running with the interceptor`); check(s.ctx === 'run', `ball-carrier controls after your pick (${s.ctx})`); await shot('dpick_run');
