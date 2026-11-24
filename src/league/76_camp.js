@@ -26,7 +26,7 @@ function tcampApply(pid, score, auto) {
   let cap = false; if (score >= 85) { ensurePot(p); for (const k of keys) if ((p.ap[k] || 0) < 99) { p.ap[k] = (p.ap[k] || p.a[k]) + 1; cap = true; } }
   if (score >= 70) moodAdd(p, 3, 'Strong training camp'); else if (score < 30) moodAdd(p, -2, 'Rough training camp');
   C.done[pid] = { s: score, auto: !!auto, ups, cap };
-  const prog = keys.map(k => `${ATTR_NAME[k]} ${Math.round(((p.xp || {})[k] || 0) * 100)}%`).join(', ');
+  const prog = keys.every(k => p.a[k] >= (p.ap[k] || 99)) ? 'nothing: he is at his ceiling in ' + keys.map(k => ATTR_NAME[k]).join(' and ') : keys.filter(k => p.a[k] < (p.ap[k] || 99)).map(k => `${ATTR_NAME[k]} ${Math.round(((p.xp || {})[k] || 0) * 100)}%`).join(', ');
   return { ok: true, score, ups, cap, msg: `${p.ln}: ${ups.length ? '+' + ups.length + ' ' + [...new Set(ups)].map(k => ATTR_NAME[k]).join(', ') : 'progress toward ' + prog}${cap ? ', higher ceiling' : ''}.` };
 }
 // the staff runs the rest of camp: the players who grow fastest first, average scores (a good head of development helps)
