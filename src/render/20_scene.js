@@ -507,8 +507,9 @@ function venueShadowAt(x, y, z) {     // the same test in JS (choosing the sun)
   if (t <= 0) return 1; const D = VSH.d, za = z + tx * l.z, xa = x + tz * l.x, h = tx < tz ? (za < D.x || za > D.y ? -9 : l.x > 0 ? B.y : B.x) : (Math.abs(xa) > D.z ? -9 : l.z > 0 ? B.w : B.z), s = 0.5 + 0.018 * t; return sstep(h - s, h + s, y + t * l.y);
 }
 const colX = v => (v.track ? 48.3 : XS);
-function venueBox(v) {
+function venueBox(v, at) {
   const S = v.stadium;
+  if (S === 'dome' && at && at.tod !== 'dome') return [-(XS + 22), XS + 22, ZA - 40, ZB + 40, 48, 48, 44, 44, ZA - 18, ZB + 18, 60];   // retractable roof open: the roof wings shade like a tall bowl
   if (S === 'bowl') return [-(XS + 14), XS + 14, ZA - 38, ZB + 38, 37, 37, 30.5, 30.5, ZA - 14, ZB + 14, 60];
   if (S === 'horseshoe') { const o1 = v.open === 'z1'; return [-(XS + 33), XS + 33, ZA - 33, ZB + 33, 26, 26, o1 ? 26 : 0, o1 ? 0 : 26, o1 ? ZA - 33 : ZA + 5, o1 ? ZB - 5 : ZB + 33, 70]; }
   if (S === 'retro') return [-(XS + 8), XS + 8, ZA - 22, ZB + 22, 30.5, 30.5, 12, 12, ZA + 4, ZB - 4, XS - 6];
@@ -996,16 +997,19 @@ function buildStadium(home, away) {
         for (let i = 0; i < run.length; i += 1) { const p = run[i]; if (i % 2) continue; const x = p.x + p.nx * 14.8, z = p.z + p.nz * 14.8; B.lamp.facing(new THREE.PlaneGeometry(3.2, 0.9), x, 36.0, z, x - p.nx * 6, 0, z - p.nz * 6, WHITE3, [1, 0.34]); glows.push([x - p.nx * 0.6, 35.6, z - p.nz * 0.6, 6.5]); } }
       for (const [z, ry] of [[ZB + 33, Math.PI], [ZA - 33, 0]]) { boardAt(0, 39, z, 36, 14, ry, false); for (const sx of [-14, 14]) B.st.box(1.2, 10, 1.2, sx, 27, z + (ry ? 1.4 : -1.4), T.dark); }
     } else {
-      // the roof: a ribbed shell from the rim to the crown, lit from below by rings of lamps
-      const rim = path.map(p => ({ x: p.x + p.nx * 41, z: p.z + p.nz * 41 })), K = coarse ? 8 : 12, pos = [], nor = [], uv = [], cs = [], idx = [], n = rim.length;
+      // the roof: a ribbed shell from the rim to the crown, lit from below by rings of lamps. A retractable roof that is open today
+      // (at.tod is not 'dome') has its centre panels rolled back: a slot of sky over the field, the board hung from a cross truss
+      const rim = path.map(p => ({ x: p.x + p.nx * 41, z: p.z + p.nz * 41 })), K = coarse ? 8 : 12, pos = [], nor = [], uv = [], cs = [], idx = [], n = rim.length, roofOpen = at.tod !== 'dome';
+      const slot = (a, b, c, d) => roofOpen && [a, b, c, d].every(j => Math.abs(pos[j * 3]) < 31 && Math.abs(pos[j * 3 + 2] - CZ) < 64);
       for (let k = 0; k <= K; k++) { const f = k / K, y = 37 + 33 * Math.sin(f * Math.PI / 2), s = 1 - f * 0.985, shade = 0.95 - 0.5 * f;
         for (let i = 0; i < n; i++) { const p = rim[i]; pos.push(p.x * s, y, CZ + (p.z - CZ) * s); uv.push(i / (n - 1) * 24, f * 3); cs.push(shade, shade, shade * 0.98); nor.push(0, -1, 0);
-          if (k && i) { const a = (k - 1) * n + i - 1, b = k * n + i - 1; idx.push(a, b, a + 1, a + 1, b, b + 1); } } }
+          if (k && i) { const a = (k - 1) * n + i - 1, b = k * n + i - 1; if (!slot(a, b, a + 1, b + 1)) idx.push(a, b, a + 1, a + 1, b, b + 1); } } }
       B.dome.raw(pos, nor, uv, cs, idx);
+      if (roofOpen) { B.st.box(96, 2.6, 3.4, 0, 63, CZ, T.steel); for (const sz of [-1, 1]) B.st.box(2.2, 2.2, 128, sz * 31.5, 61.5, CZ, T.steel); }   // the cross truss and the panel rails
       for (let i = 0; i < n; i += 3) { const p = rim[i], s = 0.86, x = p.x * s, z = CZ + (p.z - CZ) * s, y = 37 + 33 * Math.sin(0.14 * Math.PI / 2); B.lamp.facing(new THREE.PlaneGeometry(4, 1.6), x, y - 0.4, z, 0, 0, CZ, WHITE3, [1, 0.67]); glows.push([x * 0.99, y - 1, CZ + (z - CZ) * 0.99, 7]); }
       // centre-hung board over midfield
       B.st.box(26, 11, 16, 0, 44, CZ, T.black); for (const [x, z, ry, w] of [[0, CZ + 8.05, 0, 24], [0, CZ - 8.05, Math.PI, 24], [13.05, CZ, Math.PI / 2, 14], [-13.05, CZ, -Math.PI / 2, 14]]) { o3.position.set(x, 44, z); o3.rotation.set(0, ry, 0); o3.updateMatrix(); B.board.add(new THREE.PlaneGeometry(w, 9.5), o3.matrix); }
-      for (const sx of [-8, 8]) B.st.bar(V3(sx, 49.5, CZ), V3(sx, 70, CZ), 0.12, T.dark, 5);
+      for (const sx of [-8, 8]) B.st.bar(V3(sx, 49.5, CZ), V3(sx, roofOpen ? 62 : 70, CZ), 0.12, T.dark, 5);
     }
   } else if (S === 'horseshoe') {
     const path = rrPath(XS, ZA, ZB, 26, 5, v.open), prof = [[0, 0, 'pad'], [0, 1.4, 'conc'], [0.8, 1.4, 'seat'], [20, 10.5, 'conc'], [21, 10.5, 'rib'], [21, 12, 'dark'], [21, 12.8, 'seat2'], [36, 26, 'conc'], [37, 26, 'facade'], [37, 0, null]];
@@ -1149,7 +1153,7 @@ function stepWeather(dt) {
 function useVenue(home) {   // the look of this home team's ground today (cheap; the stands themselves are built in prepare)
   const v = venueOf(home), at = atmoOf(home, v), sig = v.sig + '|' + at.tod + '|' + at.weather + '|' + at.wk;
   if (VEN && VEN.sig === sig && VEN.tid === home.id) return VEN;
-  const prevAway = VEN ? VEN.away : null; VEN = { tid: home.id, v, at, sig, P: TOD[at.tod] || TOD.night, away: prevAway, box: venueBox(v) };
+  const prevAway = VEN ? VEN.away : null; VEN = { tid: home.id, v, at, sig, P: TOD[at.tod] || TOD.night, away: prevAway, box: venueBox(v, at) };
   const bx = VEN.box; Object.assign(VSH.a, { x: bx[0], y: bx[1], z: bx[2], w: bx[3] }); Object.assign(VSH.d, { x: bx[8], y: bx[9], z: bx[10] }); Object.assign(VSH.b, { x: bx[4], y: bx[5], z: bx[6], w: bx[7] });
   sunDir.copy(pickSun(at, VEN.P)); applyAtmo(); applyGround(home); lastField = '';
   return VEN;
@@ -1285,7 +1289,7 @@ const R = {
   applyWidth() { applyWidth(); },
   // venues: what a team's ground looks like (T.venue overrides any key of VENUE_OPTS), and what is on screen now
   venueOf(T) { return venueOf(T); }, VENUE_OPTS,
-  venueInfo() { return VEN ? Object.assign({}, VEN.v, { tod: VEN.at.tod, weather: VEN.at.weather, week: VEN.at.wk, sun: sunDir.toArray().map(v => +v.toFixed(2)) }) : null; },
+  venueInfo() { return VEN ? Object.assign({}, VEN.v, { tod: VEN.at.tod, weather: VEN.at.weather, week: VEN.at.wk, roofOpen: !!VEN.at.roofOpen, temp: VEN.at.temp, sun: sunDir.toArray().map(v => +v.toFixed(2)) }) : null; },
   _dbg() { return { fitK, sides: FW.sides.map(m => +m.position.x.toFixed(2)), bands: FW.bands.map(m => +m.position.x.toFixed(2)), fieldScale: fieldMesh && fieldMesh.scale.x, cam: camera.position.toArray().map(v => +v.toFixed(1)), fov: camera.fov }; },
   // sync the rigs to the players in a play (creates rigs for new pids, hides pids that left the field)
   setPlayers(play, teamOf, kitOf) {

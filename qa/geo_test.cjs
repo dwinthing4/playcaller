@@ -41,5 +41,26 @@ const L = G.L(); const pl = Object.values(L.P).slice(0, 2000), pipe = G.geoPipel
 console.log('hometown states (top 10):', Object.entries(pipe.st).sort((a, b) => b[1] - a[1]).slice(0, 10).map(e => e.join(' ')).join(', '));
 const draft = L.draft.map(id => L.P[id]); const cp = G.geoPipeline(draft, 'col');
 console.log('draft class by region:', JSON.stringify(cp.region), 'colleges', Object.keys(cp.col).length);
+// scouting trips: calendar, budget, a trip that files reports, a region move
+{
+  const T = LG._t, S = T.scoutTrips(), L = G.L();
+  ok(S && S.ev.length > 20, 'scouting calendar has events (' + (S && S.ev.length) + ')');
+  console.log('budget $' + S.budget + 'k; events:', S.ev.length, 'e.g.', S.ev.slice(0, 3).map(e => `wk${e.wk === 'post' ? 'post' : e.wk + 1} ${e.name} @ ${e.town}, ${e.st} (${e.ids.length} prospects)`).join(' | '));
+  ok(L.draft.every(id => { const p = L.P[id]; return p.region === G.geoCollege(p.col).region; }), 'prospect region = college region');
+  const s = L.scouts[0], ev = S.ev.find(e => e.wk === L.week && e.ids.length), r = T.scoutSend(ev.id, s.id); ok(r.ok, 'send scout: ' + r.msg);
+  const spent = S.spent; ok(spent > 0 && spent < 20, 'trip cost ' + spent);
+  const r2 = T.scoutSend(S.ev.find(e => e.wk === L.week && e !== ev).id, s.id); ok(!r2.ok, 'one trip a week: ' + r2.msg);
+  const tgt = (L.scouts[1].region === 'Southwest' ? 'Midwest' : 'Southwest'); ok(T.scoutMove(L.scouts[1].id, tgt).ok, 'move');
+  const before = ev.ids.map(id => (L.P[id].sc ? L.P[id].sc.lvl : 0));
+  const g = LG.currentUserGame(); if (g) LG.instantUserGame(); else LG.simWeek();
+  const after = ev.ids.map(id => (L.P[id].sc ? L.P[id].sc.lvl : 0));
+  ok(ev.done && after.filter((v, i) => v > before[i]).length >= Math.min(12, ev.ids.length), `trip reports filed (${before.join(',')} -> ${after.join(',')})`);
+  ok(L.scouts[1].region === tgt && !L.scouts[1].moveTo, 'region move took effect');
+  ok(L.inbox.some(m => m.title === 'Scouting trips'), 'trip inbox message');
+  // a whole season: every event settles by the offseason
+  LG.simToPlayoffs(); let k = 0; while (L.phase === 'playoffs' && k++ < 10) { if (LG._t.userPlayoffGame()) LG.instantUserGame(); else LG.simPlayoffRound(); }
+  const post = S.ev.find(e => e.wk === 'post'); ok(post && !T.scoutEvOpen(post), 'all-star games closed after the playoffs');
+  LG.offseasonNext(); ok(S.ev.every(e => e.done), 'all events settled at the first offseason report');
+}
 console.log(fails ? `${fails} FAILURES` : 'geo test passed');
 process.exit(fails ? 1 : 0);

@@ -55,3 +55,6 @@ LG._t = { UT, teamName, capRoom, capUsed, expiring, resignPlayer, userOnClock, u
   scoutingWeek, scoutState, meetProspect, proDay, hireScout, setScoutPri, ownerMeeting, ownerChoose, gmWeek, coordCall, cpuCall, cpuFourth, planSwap, planLock, scoutOpp, teamOvr, pct, restructure, franchiseTag, offerExtension, extAsk,
   applyMatchResult, userPlayoffGame, userGame, setFocus, upgradeFac, upgradePC, hireCoord, poach, jobSecurity, stories, storyGoal, sitOutSeason, acceptOffer, starterIds };
 Object.assign(LG._t, { teamLineup, rotInfo, rotRoles, rotSetPreset, rotSetShare, rotSetRole, rotToggleLock, rotSetOpt, rotReset, playerEndurance, rotSimLines });
+// geography, travel and scout trips (src/league/15_geo.js, the Scout travel section of 60_staff.js); travelEdge(g, tid) is a fast-sim edge in power points
+LG.travelEdge = (g, tid) => geoTravelEdge(g, tid); LG.travel = (g, tid) => geoTravel(g, tid);
+Object.assign(LG._t, { geoTeam, geoTravel, geoTravelEdge, geoTrips, geoCollege, geoHome, geoPipeline, scoutTrips, scoutSend, scoutRecall, scoutMove, scoutEvOpen });

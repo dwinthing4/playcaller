@@ -370,6 +370,7 @@ function scoutReportText(s, p, got) {
 }
 function scoutingWeek() {
   if (L.ghost || !L.scouts || !L.draft.length) return; const pri = L.scoutPri || { pos: [], ids: [] }; const lines = []; const seen = new Set();
+  scoutTravelWeek();   // region moves land and finished scouting trips report (Scout travel section below)
   for (const s of L.scouts) {
     const n = 2 + Math.floor(s.r / 4); const specPos = SPEC_POS[s.spec] || POS_LIST;
     const pool = L.draft.map(id => L.P[id]).filter(p => p && !seen.has(p.id) && (p.sc ? p.sc.lvl : 0) < 5);
@@ -390,4 +391,79 @@ function updateMock() {
   if (L.phase !== 'regular' || L.week < 4) return; const noise = Math.max(1.5, 10 - L.week * 0.45); const prev = L.mock ? Object.fromEntries(L.mock.map((m, i) => [m.pid, i])) : {};
   const ranked = L.draft.map(id => L.P[id]).filter(Boolean).map(p => ({ p, v: draftValue({ ovr: p.ovr + gauss() * noise, pot: p.pot + gauss() * noise, pos: p.pos }) })).sort((a, b) => b.v - a.v).slice(0, 32);
   const ord = projOrder(); L.mock = ranked.map((r, i) => ({ pid: r.p.id, tid: ord[i % ord.length].id, prev: prev[r.p.id] }));
+}
+
+// ================= Scout travel: regions, trips and the travel budget (the map is src/ui/65_map.js) =================
+// L.strav = { y, budget, spent, ev:[event], log:[] } for this season's draft class. An event is a college game, a regional
+// showcase or an after-season all-star game at a real town: { id, kind, wk, name, town, st, lat, lon, region, cols:[college], ids:[pid], sc, cost, done }.
+// wk = the league week it is played before (0-based), or 'post' (after the season, settled at the first offseason report).
+// Sending a scout costs travel money (from his base in his region to the event) and gets a close look at every prospect
+// there. Moving a scout to another region (s.moveTo) takes effect with the next weekly report.
+const SCOUT_SHOWS = [['Showcase', 5], ['Fall Showcase', 10]];
+const SCOUT_ALLSTAR = [['Gulf Coast Senior Classic', 'Mobile', 'AL', ['Southeast', 'Southwest']], ['Heartland All-Star Game', 'Indianapolis', 'IN', ['Midwest', 'Northeast']], ['Pacific Coast All-Star Game', 'San Diego', 'CA', ['West Coast', 'Southwest']]];
+function scoutBudgetFor(T) { const per = ownerPersona(T), f = facOf(T); return 80 + ({ cheap: -20, winnow: 15, patient: 5 }[per] || 0) + 10 * ((f.film || 1) - 1); }
+function scoutHub(region) { const h = GEO_REGION_HUB[region] || GEO_REGION_HUB.Midwest; return { lat: h[0], lon: h[1], town: h[2] }; }
+function scoutTripCost(s, ev) { return Math.round(3 + geoMiles(scoutHub(s.moveTo || s.region), ev) / 220); }
+function scoutTownAt(st, name) { const t = (GEO_TOWNS[st] || []).find(x => x[0] === name) || (GEO_TOWNS[st] || [])[0]; return t ? { town: t[0], st, lat: t[1], lon: t[2] } : { town: name, st, lat: 39, lon: -95 }; }
+// the season's calendar: two college games a week (the schools with the most prospects, in different regions), two showcases, three all-star games
+function scoutTrips() {
+  if (!L) return null; const T = UT(); geoSyncProspects();
+  if (L.strav && L.strav.y === L.year) return L.strav;
+  const S = L.strav = { y: L.year, budget: scoutBudgetFor(T), spent: 0, ev: [], log: [] }, draft = L.draft.map(id => L.P[id]).filter(Boolean);
+  const bySchool = {}; for (const p of draft) { const c = geoCollege(p.col); (bySchool[c.name] = bySchool[c.name] || { c, ids: [] }).ids.push(p.id); }
+  const val = id => draftValue(L.P[id]), schoolV = e => e.ids.reduce((a, id) => a + Math.max(0, val(id) - 50), 0);
+  const schools = Object.values(bySchool).sort((a, b) => schoolV(b) - schoolV(a)), used = {}, nW = (L.sched && L.sched.length) || 17;
+  let n = 0; const id = () => L.year * 1000 + (++n);
+  for (let wk = 0; wk < nW; wk++) {
+    const regs = SCOUT_REGIONS.slice().sort((a, b) => geoHash('wkreg|' + L.year + '|' + wk + a) - geoHash('wkreg|' + L.year + '|' + wk + b)).slice(0, 2);
+    for (const reg of regs) {
+      const pool = schools.filter(e => e.c.region === reg && (used[e.c.name] || 0) < 2); if (pool.length < 2) continue;
+      const home = pool[0], away = pool.slice(1).filter(e => !used['|' + home.c.name + '|' + e.c.name]).sort((a, b) => schoolV(b) - schoolV(a) + (geoMiles(home.c, a.c) - geoMiles(home.c, b.c)) * 0.004)[0];
+      const flip = geoHash('flip|' + home.c.name + wk) & 1, h = flip ? away : home, a = flip ? home : away; if (!away) continue; used[h.c.name] = (used[h.c.name] || 0) + 1; used[a.c.name] = (used[a.c.name] || 0) + 1; used['|' + h.c.name + '|' + a.c.name] = used['|' + a.c.name + '|' + h.c.name] = 1;
+      S.ev.push({ id: id(), kind: 'game', wk, name: `${a.c.name} at ${h.c.name}`, town: h.c.town, st: h.c.st, lat: h.c.lat, lon: h.c.lon, region: reg, cols: [a.c.name, h.c.name], ids: h.ids.concat(a.ids) });
+    }
+  }
+  SCOUT_SHOWS.forEach(([nm, wk], i) => { if (wk >= nW) return; for (const reg of SCOUT_REGIONS) { if ((geoHash('show|' + L.year + reg) + i) % 2) continue;
+    const ids = draft.filter(p => p.region === reg).sort((a, b) => draftValue(b) - draftValue(a)).slice(0, 14).map(p => p.id); if (ids.length < 5) continue;
+    const st = GEO_REGION_STATES[reg].split(' ').filter(s => GEO_TOWNS[s]).sort((a, b) => (GEO_TALENT[b] || 0) - (GEO_TALENT[a] || 0))[i % 2], t = scoutTownAt(st, (GEO_TOWNS[st][0] || [])[0]);
+    S.ev.push({ id: id(), kind: 'show', wk, name: `${reg} ${nm}`, town: t.town, st, lat: t.lat, lon: t.lon, region: reg, cols: [], ids }); } });
+  for (const [nm, town, st, regs] of SCOUT_ALLSTAR) { const t = scoutTownAt(st, town), ids = draft.filter(p => regs.includes(p.region) && p.pos !== 'K' && p.pos !== 'P').sort((a, b) => draftValue(b) - draftValue(a)).slice(0, 26).map(p => p.id);
+    S.ev.push({ id: id(), kind: 'allstar', wk: 'post', name: nm, town: t.town, st, lat: t.lat, lon: t.lon, region: GEO_STATE_REGION[st], cols: [], ids }); }
+  return S;
+}
+// is the event still ahead (a scout can still be sent)?
+function scoutEvOpen(ev) { if (!L || ev.done) return false; if (ev.wk === 'post') return L.phase === 'regular' || L.phase === 'playoffs'; return L.phase === 'regular' && L.week <= ev.wk; }
+function scoutBusy(sid, wk, except) { const S = scoutTrips(); return S ? S.ev.find(e => e.sc === sid && e.wk === wk && !e.done && e !== except) : null; }
+function scoutSend(evId, sid) {
+  const S = scoutTrips(), ev = S && S.ev.find(e => e.id === evId), s = (L.scouts || []).find(x => x.id === sid);
+  if (!ev || !s) return { ok: false, msg: 'Not found.' }; if (!scoutEvOpen(ev)) return { ok: false, msg: 'That one has been played.' };
+  if (ev.sc === sid) return scoutRecall(evId);
+  const busy = scoutBusy(sid, ev.wk, ev); if (busy) return { ok: false, msg: `${s.ln} is already going to ${busy.name}.` };
+  const cost = scoutTripCost(s, ev), refund = ev.sc != null ? ev.cost || 0 : 0;
+  if (S.spent - refund + cost > S.budget) return { ok: false, msg: `Not enough travel money ($${S.budget - S.spent}k left, the trip is $${cost}k).` };
+  S.spent += cost - refund; ev.sc = sid; ev.cost = cost; return { ok: true, msg: `${s.fn} ${s.ln} is going to ${ev.name} ($${cost}k).` };
+}
+function scoutRecall(evId) { const S = scoutTrips(), ev = S && S.ev.find(e => e.id === evId); if (!ev || ev.sc == null || !scoutEvOpen(ev)) return { ok: false }; S.spent = Math.max(0, S.spent - (ev.cost || 0)); ev.sc = null; ev.cost = 0; return { ok: true, msg: 'Trip cancelled, money back in the budget.' }; }
+function scoutMove(sid, region) {
+  const s = (L.scouts || []).find(x => x.id === sid); if (!s || !SCOUT_REGIONS.includes(region)) return { ok: false };
+  if (region === s.region) { delete s.moveTo; return { ok: true, msg: `${s.ln} stays in the ${region}.` }; }
+  s.moveTo = region; return { ok: true, msg: `${s.fn} ${s.ln} moves to the ${region} next week.` };
+}
+// weekly (top of scoutingWeek): region moves land, finished trips file their reports
+function scoutTravelWeek() {
+  if (!L || L.ghost || !L.scouts) return; const S = scoutTrips(); if (!S) return;
+  for (const s of L.scouts) if (s.moveTo) { s.region = s.moveTo; delete s.moveTo; }
+  const due = S.ev.filter(e => !e.done && (e.wk === 'post' ? L.phase === 'offseason' : L.phase !== 'regular' || e.wk < L.week));
+  const lines = [];
+  for (const ev of due) {
+    ev.done = true; const s = L.scouts.find(x => x.id === ev.sc); if (!s) continue;
+    const specPos = SPEC_POS[s.spec] || POS_LIST, ps = ev.ids.map(i => L.P[i]).filter(p => p && p.draft !== false && L.draft.includes(p.id)).sort((a, b) => draftValue(b) - draftValue(a)).slice(0, ev.kind === 'game' ? 12 : 16);
+    const seen = [];
+    for (const p of ps) { const acc = 0.2 + s.r * 0.035 + (specPos.includes(p.pos) && s.spec !== 'all' ? 0.08 : 0), got = reveal(p, 3 + (s.r >= 7 ? 1 : 0), acc);
+      let txt = ''; try { txt = scoutReportText(s, p, got); } catch (e) { txt = `${p.pos} ${p.fn} ${p.ln}.`; }
+      p.sc.reports.unshift({ y: L.year, w: L.week, by: s.fn + ' ' + s.ln, txt: `Seen live at ${ev.name}. ${txt}` }); p.sc.live = (p.sc.live || 0) + 1; seen.push(p); }
+    s.reports = (s.reports || 0) + seen.length; S.log.unshift({ w: L.week, ev: ev.name, by: s.ln, n: seen.length });
+    if (seen.length) lines.push(`<b>${esc(s.ln)}</b> at ${esc(ev.name)} (${esc(ev.town)}, ${ev.st}): saw ${seen.length} prospect${seen.length === 1 ? '' : 's'} up close: ${seen.map(p => `${p.pos} ${esc(p.fn[0])}. ${esc(p.ln)}`).join(', ')}.`);
+  }
+  if (lines.length) inbox('scout', 'Scouting trips', lines.join('<br><br>'), { html: true, actions: [{ label: 'Open the map', act: 'go', arg: 'map' }] });
 }
