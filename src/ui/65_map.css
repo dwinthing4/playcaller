@@ -1,0 +1,86 @@
+/* ===== Map screen (src/ui/65_map.js): a printed-map look in each UI style. Map tokens are set per style below. ===== */
+.mapscr{--mp-sea:#cddbe1;--mp-land:#fbfaf6;--mp-land2:#e4e2db;--mp-line:#b3b1aa;--mp-coast:#4b4e55;--mp-shadow:#b2c3ca;--mp-ink:#111316;--mp-halo:.55;--mp-inset:#9fb3bb}
+[data-style=program] .mapscr{--mp-sea:#e7dfca;--mp-land:#fcf9f0;--mp-land2:#efe8d6;--mp-line:#a89c82;--mp-coast:#1d1b17;--mp-shadow:#1d1b17;--mp-ink:#1d1b17;--mp-inset:#1d1b17}
+[data-style=varsity] .mapscr{--mp-sea:#2f4a3e;--mp-land:#efe5cc;--mp-land2:#c7b993;--mp-line:#a3926f;--mp-coast:#2b2118;--mp-shadow:#1c3027;--mp-ink:#2b2118;--mp-inset:#efe5cc}
+[data-style=night] .mapscr{--mp-sea:#0c0d0f;--mp-land:#222428;--mp-land2:#18191c;--mp-line:#3b3e44;--mp-coast:#70737a;--mp-shadow:#000;--mp-ink:#ebeae5;--mp-halo:.7;--mp-inset:#3b3e44}
+
+.mp-top{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.mp-hint{white-space:nowrap}
+.mp-grid{display:grid;grid-template-columns:1fr;gap:10px;align-items:start}
+.mp-frame{position:relative;padding:0;overflow:hidden;background:var(--mp-sea)}
+@media (min-width:1000px){.mp-grid{grid-template-columns:minmax(0,1.75fr) minmax(300px,1fr)}.mp-frame{position:sticky;top:calc(66px + var(--sat))}}
+.usmap{display:block;width:100%;height:auto;aspect-ratio:1000/630;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;background:var(--mp-sea)}
+.usmap:active{cursor:grabbing}
+@media (max-width:640px){.mp-frame{margin:0 -12px}.mp-hint{display:none}}
+.mp-zoom{position:absolute;right:8px;bottom:8px;display:flex;gap:4px}
+.mp-zoom button{min-width:38px;font-weight:700;background:var(--surf);color:var(--ink);box-shadow:0 0 0 1.5px var(--mp-coast)}
+@media (max-width:640px){.mp-zoom{right:6px;bottom:6px}.mapscr .mp-zoom button{min-height:32px;min-width:32px;padding:2px 8px;font-size:13px}}
+
+/* the paper */
+.usmap .sea{fill:var(--mp-sea)}
+.usmap .nb path{fill:var(--mp-land2);stroke:var(--mp-line);stroke-width:.8}
+.usmap .inset{fill:var(--mp-sea);stroke:var(--mp-inset);stroke-width:1;stroke-dasharray:4 3}
+.usmap .shadow path{fill:var(--mp-shadow);opacity:.55}
+[data-style=program] .usmap .shadow path{opacity:.9}
+.usmap .coast path{fill:none;stroke:var(--mp-coast);stroke-width:2.6;stroke-linejoin:round}
+.usmap .states path{fill:var(--mp-land);stroke:var(--mp-line);stroke-width:.9;stroke-linejoin:round}
+[data-style=program] .usmap .sea{fill:var(--mp-sea)}
+[data-style=varsity] .usmap .states path{stroke-dasharray:3 2}
+
+/* road trips */
+.usmap .arc{fill:none;stroke:var(--tca);stroke-width:2.4;stroke-dasharray:6 5;stroke-linecap:round;opacity:.95}
+[data-style=program] .usmap .arc,[data-style=varsity] .usmap .arc{stroke:var(--tcd)}
+.usmap .arc.done{stroke-dasharray:none;opacity:.45}
+.usmap .arc.selarc{stroke:var(--mp-ink);stroke-dasharray:2 4;stroke-width:2}
+.usmap .arc.trip{stroke:var(--mp-ink);stroke-width:2.2;stroke-dasharray:5 4}
+.usmap .arc.move{stroke:var(--mp-ink);stroke-width:1.6;stroke-dasharray:1 4;opacity:.7}
+
+/* markers (scaled to stay the same size on screen) */
+.usmap .mk{cursor:pointer}
+.usmap .mk .halo{opacity:var(--mp-halo)}
+.usmap .mk .dot{stroke-width:2.2}
+.usmap .mk.me .dot{stroke-width:3}
+.usmap .mk.me .halo{opacity:1;stroke:var(--mp-ink);stroke-width:1.6}
+.usmap .mk.sel .dot,.usmap .mk.sel .pin{stroke:var(--mp-ink);stroke-width:3}
+.usmap .mk.dim{opacity:.22}
+.usmap .mk text{font:700 7.2px/1 var(--cond);text-anchor:middle;letter-spacing:.02em;pointer-events:none}
+.usmap .mk .ab{font-size:7px}
+.usmap .mk.lab{pointer-events:none;cursor:default}
+.usmap .rl{font:800 13px/1 var(--head);letter-spacing:.12em;paint-order:stroke;stroke:var(--mp-land);stroke-width:3.5px;stroke-linejoin:round}
+.usmap .pin{stroke:var(--mp-coast);stroke-width:1.4}
+.usmap .pin.pp{fill:var(--acc)}
+.usmap .cn{fill:#10141c;font-size:7.5px}
+.usmap .stn{fill:var(--mp-ink);font:800 10px/1 var(--num);paint-order:stroke;stroke:var(--mp-land);stroke-width:2.5px}
+.usmap .ev{fill:var(--surf);stroke:var(--mp-ink);stroke-width:1.6}
+.usmap .ev.allstar{fill:#ffcf3f}.usmap .ev.show{fill:#9fd2c5}
+.usmap .ev.booked{stroke-width:3;stroke:var(--tca)}
+.usmap .evt{fill:#10141c;font-size:7px}
+.usmap .sct{fill:var(--mp-ink);stroke:var(--mp-land);stroke-width:1.6}
+.usmap .sci{fill:var(--mp-land);font-size:9px}
+
+/* side cards */
+.mp-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.mp-card h3{margin-bottom:8px}
+.mp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:4px 0 8px}
+.mp-stats div{display:flex;flex-direction:column;background:var(--fill);padding:7px 8px 6px;border-radius:var(--r)}
+.mp-stats b{font:var(--num-w) 1.35rem/1 var(--num)}
+.mp-stats span{font:var(--cond-w) 11px/1.1 var(--cond);text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);margin-top:3px}
+.mp-trips td{padding-top:4px;padding-bottom:4px}
+.mp-legend{display:flex;flex-wrap:wrap;gap:4px}
+.mp-legend .chip i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.mp-dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:10px 0}
+.mp-dl dt{font:var(--cond-w) 12px/1.5 var(--cond);text-transform:uppercase;letter-spacing:.05em;color:var(--ink2)}
+.mp-dl dd{margin:0;font-size:14px}
+.mp-sc{padding:8px 0;border-top:1px solid var(--rule)}
+.mp-sc:first-of-type{border-top:0;padding-top:0}
+.mp-sc .row{gap:8px}
+.mp-sc select{font-size:13px;margin-left:4px}
+.mp-send{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.mp-evs td{vertical-align:top}
+.mp-bar{display:grid;grid-template-columns:minmax(80px,38%) 1fr 30px;align-items:center;gap:8px;font-size:13px;margin:3px 0}
+.mp-bar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mp-bar i{display:block;height:9px;background:var(--acc);border-radius:var(--r);min-width:2px}
+.mp-bar b{text-align:right;font-family:var(--num)}
+/* the travel + forecast line on the matchup card */
+.geoline{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;margin:8px 0 2px;opacity:.92}
+.geoline b{font:var(--cond-w) 12px/1 var(--cond);text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
