@@ -22,7 +22,7 @@ function tcampApply(pid, score, auto) {
   const T = UT(), p = L.P[pid], C = tcampState();
   if (!p || p.tid !== T.id) return { ok: false, msg: 'He is not on your roster.' }; if (!tcampOpen()) return { ok: false, msg: 'Training camp is closed.' };
   if (C.done[pid]) return { ok: false, msg: `${p.ln} already went through camp.` }; if (tcampLeft() <= 0) return { ok: false, msg: 'Camp is full.' };
-  score = Math.round(clamp(score, 0, 100)); const keys = tcampKeys(p), ups = giveXP(p, T, tcampXp(score), keys, null, 'training camp');
+  score = Math.round(clamp(score, 0, 100)); const keys = tcampKeys(p), ups = giveXP(p, T, tcampXp(score) * (p.age <= 25 && typeof coachPerk === 'function' && coachPerk('dev2') ? 1.25 : 1), keys, null, 'training camp');
   let cap = false; if (score >= 85) { ensurePot(p); for (const k of keys) if ((p.ap[k] || 0) < 99) { p.ap[k] = (p.ap[k] || p.a[k]) + 1; cap = true; } }
   if (score >= 70) moodAdd(p, 3, 'Strong training camp'); else if (score < 30) moodAdd(p, -2, 'Rough training camp');
   C.done[pid] = { s: score, auto: !!auto, ups, cap };

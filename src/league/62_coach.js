@@ -2,14 +2,14 @@
 // draft hits), levels up, and gets one perk point per level to spend in four branches of four tiers. coachPerk(id) is the one getter
 // every system checks; it is always false for CPU teams, exhibitions and a coach between jobs. Effects are modest on purpose.
 // Pending perks (the system they boost is being built elsewhere): mot4 via LG.coachEdge(tid, ctx) for the match, dev2's training
-// camp part, str4 (audibles, replay challenges). Their getters work now.
+// camp part, str4 (replay challenges). Their getters work now.
 const CTREE = {
   mot: ['Motivator', [['mot1', 'Pep talk', 'Pep talks lift morale 50% more.'], ['mot2', 'Fresh legs', 'Players get their stamina back 12% faster.'],
     ['mot3', 'Chemistry', 'After each game, morale is never left below 40, so nobody sulks into a holdout.'], ['mot4', 'Never quit', 'Down 8 or more in the 4th quarter, your players play 2 points better.']]],
   dev: ['Developer', [['dev1', 'Teacher', 'Players 25 and under earn weekly XP 10% faster.'], ['dev2', 'Offseason program', 'Players 25 and under grow 10% more each offseason, and 25% more at training camp.'],
     ['dev3', 'Veteran care', 'Players 29 and older lose 25% less each offseason.'], ['dev4', 'Star maker', 'Players 24 and under get an extra 4% breakout chance each offseason.']]],
   str: ['Strategist', [['str1', 'Film junkie', 'Review one more play in the film room each week.'], ['str2', 'Disguise', 'CPU defenses read your repeated plays 25% slower.'],
-    ['str3', 'Clock master', 'Timeouts rest your players twice as much.'], ['str4', 'Sideline genius', 'One extra audible each game, and replay challenges win 15% more often.']]],
+    ['str3', 'Clock master', 'Timeouts rest your players twice as much.'], ['str4', 'Sideline genius', 'Your audibles never cause a false start in a loud stadium, and replay challenges win 15% more often.']]],
   exe: ['Executive', [['exe1', 'Negotiator', 'Free agents and extensions accept slightly lower offers.'], ['exe2', 'Cap wizard', 'One extra June 1 cut a year, and restructures convert 90% of base salary instead of 75%.'],
     ['exe3', 'Scout network', 'Scout reports get 20% closer to the truth.'], ['exe4', 'Dealmaker', 'CPU teams value your trade offers 6% more.']]],
 };

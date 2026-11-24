@@ -306,7 +306,7 @@ function buildOpts(op, dp, flip, noRot) {
     if (l.notes && l.notes.length && (G.mode === 'watch' || isU(T.id))) tick(l.notes.slice(0, 2).join(' · '));
     return l.map(s => ({ slot: s.slot, pos: s.pos, rp: P(s.pid != null ? s.pid : s.id), dx: s.dx, dy: s.dy })).filter(e => e.rp); };
   const fat = {}; if (G.rot) for (const pid in G.rot.E) fat[pid] = clamp(G.rot.E[pid], 0.35, 1);
-  const bonus = (T, side) => { const c = T.coach, co = side === 'O' ? T.oc : T.dc; return clamp((c ? ((side === 'O' ? c.off : c.def) - 5) * 0.5 : 0) + (co && co.r != null ? (co.r - 5) * 0.35 : 0) + (T.id === G.hid ? 0.6 : 0), -4, 5); };
+  const bonus = (T, side) => { const c = T.coach, co = side === 'O' ? T.oc : T.dc; return clamp((c ? ((side === 'O' ? c.off : c.def) - 5) * 0.5 : 0) + (co && co.r != null ? (co.r - 5) * 0.35 : 0) + (T.id === G.hid ? 0.6 : 0) + (has('coachEdge') ? LG.coachEdge(T.id, ctxFor(T.id, side)) : 0), -4, 6); };   // coachEdge: the Never quit perk (62_coach.js)
   const userSide = G.mode === 'play' ? (isU(off) ? 'O' : isU(def) ? 'D' : null) : null;
   const film = isU(off) ? filmFor(op) : null, scout = isU(off) ? qbScout() : null;
   return { losZ: G.yl * YDm, ballX: G.ballX, down: G.down, togo: G.togo, op: Object.assign({}, op, { flip: !!flip }), dp: film || scout ? Object.assign({}, dp, film ? { film } : {}, scout ? { scout } : {}) : dp,
@@ -1029,7 +1029,7 @@ function doAct(a) {
   if (lnAct(a)) return;      // Audible, Motion, Calls: the panels at the line
   const pl = G.play; if (!pl) return; const inp = pl.input;
   if (a === 'snap' && G.stage === 'pre') snapCall(pl);
-  else if (a === 'audible' && G.stage === 'pre') { if (G.userSide === 'O' && G.noise > 0.5) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); } G.stage = 'call'; R3D.overlay(null); G.keepO = G.userSide === 'D' && G.cur ? G.cur.op : null; G.keepFlip = G.keepO && pl.op ? !!pl.op.flip : null; showSheet(G.userSide); }
+  else if (a === 'audible' && G.stage === 'pre') { if (G.userSide === 'O' && audLoudRisk()) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); } G.stage = 'call'; R3D.overlay(null); G.keepO = G.userSide === 'D' && G.cur ? G.cur.op : null; G.keepFlip = G.keepO && pl.op ? !!pl.op.flip : null; showSheet(G.userSide); }
   else if (a === 'switch') { if (G.stage === 'pre') { const ds = pl.D.slice().sort((a, b) => Math.hypot(a.p.x - pl.ballX, a.p.z - pl.losZ) - Math.hypot(b.p.x - pl.ballX, b.p.z - pl.losZ)), i = ds.indexOf(pl.userD); pl.userD = ds[(i + 1) % ds.length]; /* nearest the ball first, then outward */ G.userSlot = pl.userD.slot; } else { pl.switchDefender(); if (pl.userD) G.userSlot = pl.userD.slot; } }
   else if (a === 'away') { slingEnd(false); pl.throwAwayUser(); }
   else if (a === 'tackle') inp.tackle = true;
@@ -1563,13 +1563,15 @@ function audPanel() {
 function audGo(a) {
   const pl0 = G.play, op = altOp(a), fresh = buildOpts(op, G.cur.dp, !!a.flip);      // (the same seed, crowd and weather as the call it replaces)
   const o2 = Object.assign({}, fresh, { seed: pl0.o.seed, weather: pl0.o.weather, wx: pl0.o.wx, off: Object.assign({}, fresh.off, { bonus: pl0.o.off.bonus }), def: Object.assign({}, fresh.def, { bonus: pl0.o.def.bonus }) });
-  if (G.noise > 0.5) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); }
+  if (audLoudRisk()) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); }
   G.pre = preRoll(o2);      // the new call has to reach everybody: in a loud building that is a gamble (RULES.preSnap, ctx.audible)
   if (!lnSwap(o2, op)) return;
   if (has('noteCall')) { try { LG.noteCall(G.user, op.id, ctxFor(G.user, 'O')); } catch (e) { } }
   lnClose(); if (!G.audLoud) tick(`Audible: ${a.lab.toLowerCase()} · ${op.name}`); buzz(15);
 }
-function audBook() { lnClose(); if (G.noise > 0.5) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); } G.stage = 'call'; if (glOk) R3D.overlay(null); G.keepO = null; G.hqFull = true; showSheet('O'); }
+// a loud road crowd makes an audible risky, unless your coach has the Sideline genius perk (str4, 62_coach.js)
+function audLoudRisk() { return G.noise > 0.5 && !(typeof LG !== 'undefined' && LG.coachPerk && LG.coachPerk('str4')); }
+function audBook() { lnClose(); if (audLoudRisk()) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); } G.stage = 'call'; if (glOk) R3D.overlay(null); G.keepO = null; G.hqFull = true; showSheet('O'); }
 function motPanel() {
   const pl = G.play, ms = pl.O.filter(p => !p.ol && p !== pl.qb && p.role !== 'rb' && (p.posName === 'WR' || p.posName === 'TE' || p.role === 'route')).sort((a, b) => b.p.x - a.p.x);
   return `<div class="lh"><b>Motion</b><button class="on x" data-ln="x" aria-label="Close">✕</button></div><div class="lsub">Watch the defense: a man who runs with him means man coverage. If they all slide over, it is zone.</div>
