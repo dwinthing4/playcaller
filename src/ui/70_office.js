@@ -76,9 +76,10 @@ function ctDealTag(p) { return p.rk ? (p.rk.on ? '<span class="tag dtag">Option 
 function ctDealNote(p) { return p.rk ? (p.rk.on ? ' · option year' : ` · round ${p.rk.r} rookie deal${p.rk.opt === 'yes' ? `, option picked up (${money(p.rk.price)} in ${p.rk.y + 4})` : p.rk.opt === 'no' ? ', option declined' : ''}`) : ''; }
 function ctCutModal(id) {
   const p = L.P[id], T = UT(); if (!p || p.tid !== T.id) return; const a = ctSplit(p, false), b = ctSplit(p, true), j1 = ctJ1Left(T), canJ1 = j1 > 0 && (p.prYrs || 0) > 1;
+  const saves = d => { const s = ctR(p.sal - d); return s > 0.05 ? `Saves ${money(s)} of cap now.` : s < -0.05 ? `Costs ${money(-s)} more cap now than keeping him.` : 'Saves no cap now.'; };
   modal(`<div class="row">${bustC(p, 48)}<div class="sp"><h2 style="margin:0">Release ${esc(pname(p))}?</h2><div class="small mute">${p.pos} · ${p.ovr} OVR · cap hit ${money(p.sal)} · ${p.yrs} yr left</div></div><button class="sm ghost" onclick="closeModal()" aria-label="Close">✕</button></div>
-   <div class="cutopt"><div class="sp"><b>Cut now</b><div class="small">${money(a.now)} dead money this year. Saves ${money(p.sal - a.now)} of cap.</div></div><button class="bad" onclick="closeModal();uiRes(releasePlayer(${id},false))">Cut</button></div>
-   <div class="cutopt ${canJ1 ? '' : 'off'}"><div class="sp"><b>June 1 cut</b><div class="small">${canJ1 ? `${money(b.now)} this year, ${money(b.next)} next year. Saves ${money(p.sal - b.now)} now. ${j1} left this year.` : j1 <= 0 ? 'No June 1 cuts left this year.' : 'Only helps when his bonus runs past this year.'}</div></div><button class="bad" ${canJ1 ? '' : 'disabled'} onclick="closeModal();uiRes(releasePlayer(${id},true))">June 1 cut</button></div>
+   <div class="cutopt"><div class="sp"><b>Cut now</b><div class="small">${money(a.now)} dead money this year. ${saves(a.now)}</div></div><button class="bad" onclick="closeModal();uiRes(releasePlayer(${id},false))">Cut</button></div>
+   <div class="cutopt ${canJ1 ? '' : 'off'}"><div class="sp"><b>June 1 cut</b><div class="small">${canJ1 ? `${money(b.now)} this year, ${money(b.next)} next year. ${saves(b.now)} ${j1} left this year.` : j1 <= 0 ? 'No June 1 cuts left this year.' : 'Only helps when his bonus runs past this year.'}</div></div><button class="bad" ${canJ1 ? '' : 'disabled'} onclick="closeModal();uiRes(releasePlayer(${id},true))">June 1 cut</button></div>
    <div class="row" style="margin-top:8px"><button onclick="closeModal()">Keep him</button></div>`);
 }
 VIEWS.contracts = function () {

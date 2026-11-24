@@ -5,7 +5,7 @@
 .ctpts b{font:var(--num-w) 2rem/1 var(--num);padding-top:var(--disp-pt);color:var(--gold)}.ctpts span{font:var(--cond-w) 11px/1.2 var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);text-align:center}
 .ctree{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);margin-top:10px}
 @media (min-width:640px){.ctree{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (min-width:1180px){.ctree{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (min-width:1480px){.ctree{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .ctbr{display:flex;flex-direction:column;gap:6px}
 .ctperk{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--r);background:var(--fill);border-left:4px solid var(--rule);min-height:64px}
 .ctperk b{display:block;font-size:14px}.ctperk .small{line-height:1.3}

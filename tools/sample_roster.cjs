@@ -15,7 +15,8 @@ const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const logo = (c1, c2) => { const A = hex(c1), B = hex(c2); return pngRGBA(64, 64, (x, y) => { const dx = x - 31.5, dy = y - 31.5, r = Math.hypot(dx, dy); if (r > 30) return [0, 0, 0, 0]; if (r > 26) return [...B, 255]; if (r > 24) return [20, 20, 24, 255];
   const chev = Math.abs(dx) * 0.9 + 6 > (dy + 14) && Math.abs(dx) * 0.9 - 2 < (dy + 14) && dy < 12; return chev ? [...B, 255] : [...A, 255]; }); };
 // a placeholder head-and-shoulders silhouette (stands in for a photo the user would add)
-const photo = (bg, fg) => { const A = hex(bg), B = hex(fg); return pngRGBA(48, 48, (x, y) => { const head = Math.hypot(x - 24, y - 18) < 9, body = y > 30 && Math.hypot((x - 24) * 0.75, y - 50) < 16; return head || body ? [...B, 255] : [...A, 255]; }); };
+const photo = (bg, fg) => { const A = hex(bg), B = hex(fg), S = 96, inside = (x, y) => Math.hypot(x - 48, y - 38) < 18 || (y > 62 && Math.hypot((x - 48) * 0.72, y - 104) < 36);
+  return pngRGBA(S, S, (x, y) => { let k = 0; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if (inside(x + (i + 0.5) / 4, y + (j + 0.5) / 4)) k++; const t = k / 16, g = 1 - y / S * 0.25; return [0, 1, 2].map(c => Math.round((A[c] * (1 - t) + B[c] * t) * (t ? 1 : g))).concat(255); }); };
 const P = (first, last, pos, num, age, ovr, extra) => Object.assign({ first, last, pos, num, age, ratings: ovr ? { ovr } : undefined }, extra || {});
 const file = {
   format: 'playcaller-roster', version: 1, name: 'Sample: two made-up teams', author: 'Playcaller', created: '2026-11-24',
