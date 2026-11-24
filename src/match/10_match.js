@@ -124,17 +124,27 @@ function startGame() {
   banner('KICKOFF', `${TM(G.recvFirst).name} receive`, 'good', 1500);
   after(1300, () => doKickoff(opp(G.recvFirst)));
 }
+// kickoffs: deep (the usual), squib (a low skipper: no big return, but a shorter field), onside (a live ball at 10 yards: about 1 in 10 when
+// they expect it, half the time as a surprise). The kicking unit picks: you on the power bar, the CPU by the score and the clock.
 function doKickoff(kicker, free, q) {
   const recv = opp(kicker), KT = TM(kicker), k = P(has('depthPick') ? LG.depthPick(KT, 'K', 0) : null), kp = k ? k.a.kpw : 70;
   G.freeKick = false; G.stage = 'kick';
-  const visual = glOk && !G.sim && G.mode !== 'instant';
+  const visual = glOk && !G.sim && G.mode !== 'instant', from = free ? 20 : 35, wy = RULES.kickYds(kickWx(kicker)), user = userCalls(kicker) && !G.sim, kind = user ? null : kickKindFor(kicker, free);
   if (visual) {
-    const from = free ? 20 : 35, spec = qq => { const dist = clamp(57 + (kp - 60) * 0.3 + (qq != null ? (qq - 0.6) * 16 : gauss() * 5) - (free ? 8 : 0), 38, 80);
-      return { landYd: Math.max(-9, 100 - from - dist), hang: clamp(3.75 + (kp - 60) / 90 + (qq != null ? (qq - 0.5) * 0.6 : gauss() * 0.25), 3.2, 4.8), x: gauss() * 6 }; };
-    if (userCalls(kicker)) { if (retPlay('kickoff', kicker, 0, 0, 4, from, true)) return kickPower('kickoff', k, qq => { const sp = spec(qq); kickGo(sp.landYd, sp.x, sp.hang); }); }
+    const drift = -windFor(kicker).x * 0.35, spec = qq => { const dist = clamp(57 + (kp - 60) * 0.3 + (qq != null ? (qq - 0.6) * 16 : gauss() * 5) - (free ? 8 : 0) + wy, 38, 80);
+      return { landYd: Math.max(-9, 100 - from - dist), hang: clamp(3.75 + (kp - 60) / 90 + (qq != null ? (qq - 0.5) * 0.6 : gauss() * 0.25), 3.2, 4.8), x: clamp(gauss() * 6 + drift, -20, 20) }; };
+    if (user) { if (retPlay('kickoff', kicker, 0, 0, 4, from, true)) return kickPower('kickoff', k, (qq, kk) => kickoffGo(kicker, free, kk || 'deep', qq, spec), kickKindFor(kicker, free)); }
+    else if (kind !== 'deep' || kobRoll(k, null)) { const k2 = kind !== 'deep' ? kind : 'oob'; if (retPlay('kickoff', kicker, 0, 0, 4, from, true)) { const pl = G.play; return after(1100, () => { if (G && G.play === pl) kickoffGo(kicker, free, k2, null, spec); }); } }
     else { const sp = spec(null); if (retPlay('kickoff', kicker, sp.landYd, sp.x, sp.hang, from)) return; }
   }
-  const tb = !free && R() < clamp(0.38 + (kp - 60) * 0.012, 0.2, 0.85), deep = tb ? 72 : clamp(60 + gauss() * 5 - (free ? 12 : 0), 45, 70);
+  const kk = kind || 'deep';
+  if (kk === 'deep' && kobRoll(k, null)) return kickOOB(kicker);
+  if (kk === 'onside') { const exp = onsideExpected(recv, kicker), got = R() < onsideOdds(exp, k), spot = from + Math.round(10 + R() * 3); noteOnside(kicker);
+    G.pbp.push(`${qTxt(G.q)} ${clockTxt(G.clock)} ${KT.abbr} onside kick: recovered by ${got ? KT.abbr : TM(recv).abbr}`); G.clock = Math.max(0, G.clock - 3);
+    banner(got ? 'ONSIDE KICK!' : 'ONSIDE KICK', `${got ? KT.name : TM(recv).name} recover`, isU(got ? kicker : recv) ? 'good' : 'bad', 1800); return after(1800, () => got ? setPossession(kicker, spot, 'Onside') : setPossession(recv, 100 - spot, 'kick')); }
+  if (kk === 'squib') { const ret = clamp(Math.round(30 + gauss() * 5), 15, 48), muff = R() < 0.015; G.clock = Math.max(0, G.clock - 5);
+    banner(muff ? 'LOOSE BALL!' : `SQUIB · ${TM(recv).abbr} ${ret}`, muff ? `${KT.name} recover` : 'Fielded on the hop', '', 1500); return after(1500, () => muff ? setPossession(kicker, 100 - ret, 'kick') : setPossession(recv, ret, 'kick')); }
+  const tb = !free && R() < clamp(0.38 + (kp - 60) * 0.012 + wy * 0.02, 0.15, 0.88), deep = tb ? 72 : clamp(60 + gauss() * 5 - (free ? 12 : 0) + wy, 45, 70);
   const RT = TM(recv), rid = has('depthPick') ? LG.depthPick(RT, 'WR', 2) : null, ret = clamp(Math.round(23 + gauss() * 7 + (free ? 9 : 0) + (R() < 0.06 ? 18 : 0)), 5, 60), retTD = !tb && R() < 0.01, muff = !tb && !retTD && R() < 0.008;
   kickoffVisual(kicker, deep, () => {
     if (tb) { banner('TOUCHBACK', `${TM(recv).name} start at the 25`, '', 1500); return after(1500, () => setPossession(recv, 25, 'kick')); }
@@ -143,6 +153,38 @@ function doKickoff(kicker, free, q) {
     if (muff) { banner('FUMBLE!', `${KT.name} recover the kickoff`, isU(kicker) ? 'good' : 'bad', 2000); return after(2000, () => setPossession(kicker, 100 - ret, 'kick')); }
     banner(`RETURN TO THE ${ret > 50 ? 100 - ret : ret}`, `${pnm(rid)} brings it back`, '', 1500); after(1500, () => setPossession(recv, ret, 'kick'));
   });
+}
+// the kick is away (a played-out return): deep through kickGo, squib and onside through the engine's own kick types
+function kickoffGo(kicker, free, kind, qq, spec) {
+  const k = kickerOf(kicker, 'K'), pl = G.play, recv = opp(kicker);
+  if (kind === 'oob' || (kind === 'deep' && kobRoll(k, qq))) return kickOOB(kicker);
+  if (kind === 'onside' || kind === 'squib') {
+    const expect = kind === 'onside' && onsideExpected(recv, kicker), sp = PHYS.KICKS[kind](R() < 0.5 ? -1 : 1, qq != null ? qq : 0.5 + R() * 0.45, 100 - (free ? 20 : 35)); if (kind === 'onside') noteOnside(kicker);
+    if (pl && pl.kickSpecial && pl.kickSpecial(kind, sp.x, sp.landYd * YDm, sp.hang, expect)) { if (G.retPlay) Object.assign(G.retPlay, { landYd: sp.landYd, hang: sp.hang, special: kind }); G.stage = 'live'; G.preT = G.time; tick(kind === 'onside' ? (expect ? 'Onside kick! They were ready for it' : 'Surprise onside kick!') : 'A squib kick along the ground'); return; }
+  }
+  const sp = spec(qq); kickGo(sp.landYd, sp.x, sp.hang);
+}
+// which kickoff the kicking team wants: onside when it needs the ball back late, a squib to keep it away from a dangerous returner late in a half
+function kickKindFor(kicker, free) {
+  if (free || G.pat) return 'deep'; const sd = G.score[kicker] - G.score[opp(kicker)], late4 = G.q >= 4 ? G.clock / G.qlen : 9;
+  if (sd < 0 && sd >= -16 && late4 < (sd >= -8 ? 0.28 : 0.5)) return 'onside';
+  if (sd < 0 && G.q >= 3 && R() < 0.006) return 'onside';                                         // the odd surprise
+  const rr = TM(opp(kicker)).roster && retThreat(opp(kicker)), lateH = (G.q === 2 || G.q >= 4) && G.clock < G.qlen * 0.15;
+  if ((lateH && sd >= 0 && R() < 0.45) || (rr && R() < 0.15)) return 'squib';
+  return 'deep';
+}
+function retThreat(tid) { const T = TM(tid); return (T.roster || []).map(P).some(p => p && ['WR', 'RB', 'CB'].includes(p.pos) && p.a.spd >= 92 && p.a.elu >= 86); }
+// the receiving team is ready (the hands team is on) when the kicking team trails late, or has already tried one today
+function onsideExpected(recv, kicker) { const sd = G.score[kicker] - G.score[recv]; return (G.q >= 4 && sd < 0 && G.clock < G.qlen * 0.55) || !!(G.onsides && G.onsides[kicker]); }
+function noteOnside(kicker) { (G.onsides = G.onsides || {})[kicker] = ((G.onsides || {})[kicker] || 0) + 1; }
+function onsideOdds(expect, k) { return clamp((expect ? 0.11 : 0.52) + (k ? (k.a.kac - 70) / 600 : 0), 0.04, 0.65); }       // measured in the engine (qa/onside_test.cjs)
+// a kickoff that sails out of bounds: the receiving team takes it at its 40
+function kobRoll(k, qq) { const p = qq != null ? (qq < 0.08 ? 0.5 : qq < 0.16 ? 0.15 : 0.003) : 0.006 * RULES.disc(k ? k.a.kac : 65); return R() < p; }
+function kickOOB(kicker) {
+  const recv = opp(kicker), k = kickerOf(kicker, 'K'), f = { code: 'KOB', by: kicker, pid: k ? k.id : null }; G.retPlay = null; G.fouls = [];
+  countFoul(f, 5, 'accepted'); G.pbp.push(`${qTxt(G.q)} ${clockTxt(G.clock)} ${TM(kicker).abbr} kickoff out of bounds: ${TM(recv).abbr} ball at the 40`);
+  const sx = R() < 0.5 ? -1 : 1, fin = () => { if (!G) return; throwFlag(sx * (FIELD.halfW - 0.5), 35 * YDm + 52 * YDm); refCall(f, { yds: 0, text: `${TM(recv).abbr} ball at the 40` }, 'accepted'); after(2800, () => setPossession(recv, 40, 'kick')); };
+  kickoffVisual(kicker, 52, fin, sx * (FIELD.halfW + 3));
 }
 function setPossession(tid, yl, why) {
   if (G.drive) closeDrive(why || 'Turnover');
@@ -370,12 +412,12 @@ function kickVisual(kind, tid, info, done) {
   G.stage = 'kick'; G.kickAnim = { t: 0, dur, start, end, apex, kind, done, pl };
 }
 // kickoff: the ball flies from the kicking team's 35 deep toward the return man; the stand-in "play" holds no players
-function kickoffVisual(kicker, landYds, done) {
+function kickoffVisual(kicker, landYds, done, endX) {
   if (!glOk || G.sim || G.mode === 'instant') return done();
   const losZ = 35 * YDm, pl = { players: [], poses: {}, fx: [], O: [], D: [], receivers: [], ball: { state: 'air', p: { x: 0, y: 0.3, z: losZ }, rot: { x: 0, y: 0, z: 0 } }, phase: 'pre', losZ, ballX: 0, pass: false, thrown: false, carrier: null, qb: null, liveT: 0, deadT: 0, events: [], input: { x: 0, z: 0 }, userD: null, result: null, updatePoses() {}, step() {}, controlled() { return null; }, snap() {} };
   G.play = pl; G.userSide = null; actsFor('none'); R3D.overlay(null); el.say.classList.remove('show');
   R3D.setPlayers(pl, () => TM(kicker), () => G.kits[kicker] || {}); R3D.setField(TM(kicker), TM(opp(kicker)), G.H, losZ, losZ, true, 1);
-  G.stage = 'kick'; G.kickAnim = { t: 0, dur: 2.6, start: { x: 0, y: 0.3, z: losZ }, end: { x: gauss() * 4, y: 0.4, z: Math.min(FIELD.goalZ + 8, losZ + landYds * YDm) }, apex: 20, kind: 'punt', done, pl };
+  G.stage = 'kick'; G.kickAnim = { t: 0, dur: 2.6, start: { x: 0, y: 0.3, z: losZ }, end: { x: endX != null ? endX : gauss() * 4, y: 0.4, z: Math.min(FIELD.goalZ + 8, losZ + landYds * YDm) }, apex: 20, kind: 'punt', done, pl };
 }
 function kickFrame(dt) {
   const K = G.kickAnim, pl = K.pl; K.t += dt * (G.speed || 1); const u = Math.min(1, K.t / K.dur), s = K.start, e = K.end;
@@ -392,10 +434,10 @@ function kickAim(kind, tid, fg, k, done) {
   G.kscene = S; G.stage = 'kick'; hideSheet(); closeOverlay();
   const kac = k ? k.a.kac : 70, kpw = k ? k.a.kpw : 70, ax = S.start.x, az = S.start.z, pz = S.posts, PX = 2.82;
   const a1 = Math.atan2(-PX - ax, pz - az), a2 = Math.atan2(PX - ax, pz - az), lo = Math.min(a1, a2), hi = Math.max(a1, a2), mid = (lo + hi) / 2, amp = (hi - lo) / 2 * 2.5 + 0.03;
-  const hz = 0.42 * (1 + (90 - kac) / 45) * (1 + (fg.d || 30) / 55), per = 1 / clamp(hz, 0.3, 2.2);
-  G.kaim = { t0: performance.now(), mid, amp, per, lo, hi, ax, az, pz, kac, kpw, fg, done, kind, tid, theta: mid };
-  const rng = Math.round(40 + kpw * 0.2), far = (fg.d || 30) > rng;
-  el.kbar.innerHTML = `<div class="kt"><b>${kind === 'xp' ? 'Extra point' : (fg.d || 0) + '-yard field goal'}</b><span>${k ? esc(k.fn[0] + '. ' + k.ln) + ' · ' : ''}KPW ${kpw} · KAC ${kac} · range ~${rng} yds${far ? ' · <em>beyond his range</em>' : ''}</span></div><div class="kh">Stop the needle inside the green</div><button class="pri big on" data-kick="1">KICK</button>`;
+  const hz = 0.42 * (1 + (90 - kac) / 45) * (1 + (fg.d || 30) / 55), per = 1 / clamp(hz, 0.3, 2.2), kw = kickWx(tid), wsh = clamp(kw.cross * 0.0042 * ((fg.d || 30) / 35), -0.06, 0.06), wyd = RULES.kickYds(kw);
+  G.kaim = { t0: performance.now(), mid: mid - wsh, amp, per, lo: lo - wsh, hi: hi - wsh, wsh, wyd, ax, az, pz, kac, kpw, fg, done, kind, tid, theta: mid };
+  const rng = Math.round(40 + kpw * 0.2 + wyd), far = (fg.d || 30) > rng;
+  el.kbar.innerHTML = `<div class="kt"><b>${kind === 'xp' ? 'Extra point' : (fg.d || 0) + '-yard field goal'}</b><span>${k ? esc(k.fn[0] + '. ' + k.ln) + ' · ' : ''}KPW ${kpw} · KAC ${kac} · range ~${rng} yds${far ? ' · <em>beyond his range</em>' : ''}${wxKickTxt(tid, true)}</span></div><div class="kh">Stop the needle inside the green</div><button class="pri big on" data-kick="1">KICK</button>`;
   el.kbar.classList.add('show', 'on');
   R3D.camOverride = { pos: [ax * 0.7, 7.5, az - 10], look: [ax * 0.2, 0.5, az + (pz - az) * 0.62], fov: 48 };
 }
@@ -405,9 +447,9 @@ function kickAimFrame() {
 }
 function kickAimGo() {
   const A = G.kaim; if (!A) return; G.kaim = null; R3D.kickAim(null); el.kbar.classList.remove('show', 'on'); R3D.camOverride = null; buzz(20);
-  const th = A.theta + gauss() * (100 - A.kac) / 2600, rng = 40 + A.kpw * 0.2, d = A.fg.d || 30, short = d > rng + 3 || (d > rng && R() < 0.5);
-  const tol = 0.003, inside = th >= A.lo + tol && th <= A.hi - tol, doink = !inside && (Math.abs(th - A.lo) < 0.012 || Math.abs(th - A.hi) < 0.012);
-  const good = !short && (inside || (doink && R() < 0.45)), miss = good ? null : short ? 'short' : th > A.hi ? 'wide left' : 'wide right';
+  const th = A.theta + (A.wsh || 0) + gauss() * (100 - A.kac) / 2600, rng = 40 + A.kpw * 0.2 + (A.wyd || 0), d = A.fg.d || 30, short = d > rng + 3 || (d > rng && R() < 0.5);
+  const lo0 = A.lo + (A.wsh || 0), hi0 = A.hi + (A.wsh || 0), tol = 0.003, inside = th >= lo0 + tol && th <= hi0 - tol, doink = !inside && (Math.abs(th - lo0) < 0.012 || Math.abs(th - hi0) < 0.012);
+  const good = !short && (inside || (doink && R() < 0.45)), miss = good ? null : short ? 'short' : th > hi0 ? 'wide left' : 'wide right';
   const ez = A.pz + 6, end = short ? { x: A.ax + Math.tan(th) * (A.pz - 3 - A.az), y: 0.3, z: A.pz - 3 } : { x: A.ax + Math.tan(th) * (ez - A.az), y: 5 + R() * 3, z: ez };
   if (doink) after(700, () => tick(good ? 'Off the upright... and in!' : 'Doink! Off the upright'));
   A.done({ good, miss, end, doink });
@@ -460,6 +502,8 @@ function retWhistle(pl) {
   const k = kind === 'punt' ? 'PUNT' : 'KICK', u = isU(recv);
   G.pbp.push(`${qTxt(G.q)} ${clockTxt(G.clock)} ${TM(kicker).abbr} ${kind === 'punt' ? 'punt' : 'kickoff'}: ${res.text || res.type}`);
   if (G.fouls && G.fouls.length && retFoul(R, res, spot)) return;
+  if (R.special === 'onside' && res.type === 'fumbleLost') { banner('ONSIDE KICK!', `${TM(kicker).name} recover`, u ? 'bad' : 'good', 2200); G.pbp.push(`${TM(kicker).abbr} recover the onside kick`); return after(2200, () => setPossession(kicker, clamp(100 - spot, 1, 99), 'Onside')); }
+  if (R.special === 'onside' && res.type !== 'td') { const y = clamp(Math.round(spot), 1, 99); banner('ONSIDE KICK', `${TM(recv).name} recover`, u ? 'good' : 'bad', 1800); return after(1800, () => setPossession(recv, y, 'kick')); }
   if (res.type === 'fumbleLost') { G.ts[recv].to++; if (spot <= 0) { banner('FUMBLE — TOUCHDOWN', `${TM(kicker).name} recover in the end zone`, u ? 'bad' : 'good', 2400); G.poss = kicker; return after(2300, () => score(kicker, 6, 'Fumble recovery TD', true)); } banner('MUFFED!', `${TM(kicker).name} recover`, u ? 'bad' : 'good', 2000); return after(2000, () => setPossession(kicker, clamp(100 - spot, 1, 99), 'Fumble')); }
   if (res.type === 'deftd') { banner('TOUCHDOWN', `${TM(kicker).name} take it back`, u ? 'bad' : 'td', 2400); G.poss = kicker; return after(2300, () => score(kicker, 6, 'Fumble return TD', true)); }
   if (res.td) { banner(`${k} RETURN TD!`, `${who} takes it the distance`, u ? 'td' : 'bad', 2600); buzz(u ? 120 : 30); G.poss = recv; return after(2400, () => score(recv, 6, `${kind === 'punt' ? 'Punt' : 'Kick'} return TD`, true)); }
@@ -471,14 +515,18 @@ function retWhistle(pl) {
   after(1500, () => setPossession(recv, y, kind === 'punt' ? 'Punt' : 'kick'));
 }
 // your kickoff or punt: stop the power needle in the green for a full-strength kick (accuracy slows the needle)
-function kickPower(kind, k, done) {
-  G.stage = 'kick'; hideSheet(); const kac = k ? k.a.kac : 65, kpw = k ? k.a.kpw : 65, t0 = performance.now(); let stopped = false, pos = 0;
+function kickPower(kind, k, done, pick0) {
+  G.stage = 'kick'; hideSheet(); const kac = k ? k.a.kac : 65, kpw = k ? k.a.kpw : 65, t0 = performance.now(); let stopped = false, pos = 0, pick = pick0 || 'deep';
   const spd = clamp(1.25 - kac / 200, 0.7, 1.1) * 1.4;
-  el.kbar.innerHTML = `<div class="kt"><b>${kind === 'punt' ? 'Punt' : 'Kickoff'}</b><span>${k ? esc(k.fn[0] + '. ' + k.ln) + ' · ' : ''}KPW ${kpw} · KAC ${kac}</span></div><div class="kpow"><i></i></div><button class="pri big on" data-kick="1">KICK</button>`;
+  el.kbar.innerHTML = `<div class="kt"><b>${kind === 'punt' ? 'Punt' : 'Kickoff'}</b><span>${k ? esc(k.fn[0] + '. ' + k.ln) + ' · ' : ''}KPW ${kpw} · KAC ${kac}${wxKickTxt(kind === 'punt' ? G.poss : opp(G.retPlay ? G.retPlay.recv : opp(G.poss)))}</span></div>${kind === 'kickoff' ? `<div class="kk3">${[['deep', 'Deep'], ['squib', 'Squib'], ['onside', 'Onside']].map(([v, t], i) => `<button class="on${v === pick ? ' sel' : ''}" data-kk="${v}">${t}<small>${i + 1}</small></button>`).join('')}</div>` : ''}<div class="kpow"><i></i></div><button class="pri big on" data-kick="1">KICK</button>`;
   el.kbar.classList.add('show', 'on'); const nd = el.kbar.querySelector('.kpow i');
+  G.kpick = v => { pick = v; el.kbar.querySelectorAll('[data-kk]').forEach(b => b.classList.toggle('sel', b.dataset.kk === v)); }; el.kbar.querySelectorAll('[data-kk]').forEach(b => b.onpointerdown = e => { e.preventDefault(); e.stopPropagation(); G.kpick(b.dataset.kk); });
   const anim = () => { if (stopped || !G) return; const ph = ((performance.now() - t0) / 1000 * spd) % 2; pos = ph < 1 ? ph : 2 - ph; nd.style.left = (pos * 100) + '%'; requestAnimationFrame(anim); }; anim();
-  G.kpow = () => { if (stopped) return; stopped = true; G.kpow = null; el.kbar.classList.remove('show', 'on'); buzz(20); const q = 1 - Math.abs(pos - 0.82) / 0.82; setTimeout(() => done(clamp(q, 0, 1)), 150); };
+  G.kpow = () => { if (stopped) return; stopped = true; G.kpow = null; el.kbar.classList.remove('show', 'on'); buzz(20); const q = 1 - Math.abs(pos - 0.82) / 0.82; G.kpick = null; setTimeout(() => done(clamp(q, 0, 1), pick), 150); };
 }
+function wxKickTxt(tid, aim) { if (!G.wx || G.wx.dome) return ''; const kw = kickWx(tid), m = G.wx.wind ? G.wx.wind.mph : 0; if (m < 4 && G.wx.weather === 'clear' && G.wx.temp >= 40) return ''; const al = kw.along, cr = kw.cross;
+  const w = m < 4 ? '' : ` · wind ${m} mph ${Math.abs(al) > Math.abs(cr) * 1.4 ? (al > 0 ? 'at his back' : 'in his face') : `${cr > 0 ? 'right to left' : 'left to right'}${aim ? `: aim ${cr > 0 ? 'right' : 'left'} of the posts` : ''}`}`;
+  return w + (G.wx.temp < 40 ? ` · ${G.wx.temp}° cold` : '') + (G.wx.weather !== 'clear' ? ` · ${G.wx.weather}` : ''); }
 function kickerOf(tid, pos) { const id = has('depthPick') ? LG.depthPick(TM(tid), pos, 0) : null; return P(id); }
 function clockOut() { if (G.runoff > 0 && G.clock - G.runoff <= 0 && !G.pat) { G.clock = 0; G.runoff = 0; hideSheet(); banner('CLOCK RUNS OUT', '', '', 1300); after(1300, nextSnap); return true; } return false; }
 function punt(tid, pq) {
@@ -486,12 +534,12 @@ function punt(tid, pq) {
   G.stage = 'kick'; G.toChecked = false; G.clock = Math.max(0, G.clock - G.runoff); G.runoff = 0; const recv = opp(tid), pp = kickerOf(tid, 'P'), kp = pp ? pp.a.kpw : 65;
   const visual = glOk && !G.sim && G.mode !== 'instant';
   if (visual && pq == null && userCalls(tid)) { if (retPlay('punt', tid, 40, 0, 4.2, 100 - G.yl, true)) return kickPower('punt', pp, qq => punt(tid, qq)); return kickPower('punt', pp, qq => punt(tid, qq)); }
-  const dist = Math.round(clamp(41 + (kp - 70) * 0.25 + (pq != null ? (pq - 0.6) * 14 + gauss() * 2 : gauss() * 5.5), 22, 68)), land = G.yl + dist; G.clock = Math.max(0, G.clock - (visual ? 1 : 6));
+  const dist = Math.round(clamp(41 + (kp - 70) * 0.25 + (pq != null ? (pq - 0.6) * 14 + gauss() * 2 : gauss() * 5.5) + RULES.kickYds(kickWx(tid)), 22, 70)), land = G.yl + dist; G.clock = Math.max(0, G.clock - (visual ? 1 : 6));
   if (pp) { addSt(pp.id, 'pnt', 1); addSt(pp.id, 'pnty', dist); }
   G.pbp.push(`${qTxt(G.q)} ${clockTxt(G.clock)} ${TM(tid).abbr} punts ${dist} yds`);
   closeDrive('Punt');
   // played out: the gunners run down, the return man fields it (or fair-catches it, or lets it bounce inside his 10)
-  if (visual) { const landR = 100 - land, hang = clamp(4.0 + (kp - 65) / 70 + (pq != null ? (pq - 0.5) * 0.5 : gauss() * 0.3), 3.3, 5.0), lx = gauss() * 5;
+  if (visual) { const landR = 100 - land, hang = clamp(4.0 + (kp - 65) / 70 + (pq != null ? (pq - 0.5) * 0.5 : gauss() * 0.3), 3.3, 5.0), lx = clamp(gauss() * 5 - windFor(tid).x * 0.35, -20, 20);
     if (G.play && G.play.ret && G.play.phase === 'pre') { kickGo(landR, lx, hang); return; }
     if (retPlay('punt', tid, landR, lx, hang, 100 - G.yl)) return;
     if (landR < 9 && land < 99) { const roll = Math.max(0, landR - Math.round(rnd(0, 6))); return kickVisual('punt', tid, { dist: Math.min(dist, 100 - G.yl + 5) }, () => { if (roll <= 0) { banner('PUNT · TOUCHBACK', `${dist}-yard punt`, '', 1700); return after(1700, () => setPossession(recv, 20, 'Punt')); } banner(`PUNT · DOWNED AT THE ${roll}`, `${dist}-yard punt`, isU(tid) ? 'good' : '', 1700); after(1700, () => setPossession(recv, roll, 'Punt')); }); } }
@@ -506,7 +554,7 @@ function punt(tid, pq) {
 function fieldGoal(tid, quality, aimR) {
   if (quality == null && clockOut()) return;
   G.stage = 'kick'; G.toChecked = false; G.clock = Math.max(0, G.clock - G.runoff); G.runoff = 0;
-  const fg = has('fgProb') ? LG.fgProb(tid, Math.round(G.yl)) : { p: clamp(1.1 - (117 - G.yl) / 60, 0.05, 0.95), d: Math.round(117 - G.yl) }, k = kickerOf(tid, 'K');
+  const fg = fgOdds(tid, G.yl), k = kickerOf(tid, 'K');
   if (quality == null && userCalls(tid) && !G.sim) { if (glOk && G.mode !== 'instant') return kickAim('fg', tid, fg, k, r => fieldGoal(tid, 1, r)); return kickMeter(fg, q2 => fieldGoal(tid, q2), k); }
   const p = quality == null ? fg.p : clamp(fg.p + (quality - 0.7) * 0.5, 0.02, 0.995), good = aimR ? aimR.good : R() < p, dist = fg.d;
   G.clock = Math.max(0, G.clock - 4); if (k) { addSt(k.id, 'fga', 1); if (good) addSt(k.id, 'fgm', 1); }
@@ -519,7 +567,7 @@ function fieldGoal(tid, quality, aimR) {
   });
 }
 function kickXP(tid, aimR) {
-  G.stage = 'kick'; const fg = has('fgProb') ? LG.fgProb(tid, 85) : { p: 0.94 }, k = kickerOf(tid, 'K');
+  G.stage = 'kick'; const fg = (has('fgProb') && fgOdds(tid, 85)) || { p: 0.94 }, k = kickerOf(tid, 'K');
   if (!aimR && userCalls(tid) && !G.sim && glOk && G.mode !== 'instant') return kickAim('xp', tid, { d: 33, p: fg.p }, k, r => kickXP(tid, r));
   const good = aimR ? aimR.good : R() < fg.p;
   if (k) { addSt(k.id, 'xpa', 1); if (good) addSt(k.id, 'xpm', 1); }
@@ -588,7 +636,7 @@ function condHud() {
   if (key !== condKey) { condKey = key; el.wxc.classList.toggle('show', show);
     el.wxc.title = w.dome ? 'Indoors: no wind or weather' : `${w.weather === 'clear' ? (w.tod === 'overcast' ? 'Overcast' : 'Clear') : w.weather === 'rain' ? 'Rain: slick footing, wet ball' : 'Snow: slick footing, shorter kicks'} · ${w.temp}°F · wind ${mph} mph`;
     el.wxc.innerHTML = `${wxIcon(w)}<b>${w.dome ? 'DOME' : w.temp + '°'}</b>${w.dome ? '' : mph < 2 ? '<span class="wd">CALM</span>' : `<span class="wd">${ang == null ? '' : `<i style="transform:rotate(${Math.round(ang)}deg)">${ARROW}</i>`}${mph}<small>MPH</small></span>`}`; }
-  const n = show && G.stage !== 'kick' ? crowdNoise(G.poss) : 0, lvl = n < 0.12 ? 0 : Math.min(5, Math.ceil(n * 5)), ck = lvl + '|' + (n >= 0.7);
+  const n = show && G.stage !== 'kick' && !(pl && pl.ret) && !G.kickAnim ? crowdNoise(G.poss) : 0, lvl = n < 0.12 ? 0 : Math.min(5, Math.ceil(n * 5)), ck = lvl + '|' + (n >= 0.7);
   if (ck !== crowdKey) { crowdKey = ck; el.crowd.classList.toggle('show', lvl > 0); el.crowd.classList.toggle('loud', n >= 0.7); el.crowd.querySelectorAll('i').forEach((x, i) => x.classList.toggle('on', i < lvl)); }
 }
 
@@ -918,6 +966,7 @@ function onKey(e) {
   if (G.stage === 'kick' && G.kickCb && (c === 'Space' || c === 'Enter')) { e.preventDefault(); G.kickCb(); return; }
   if (G.kaim && (c === 'Space' || c === 'Enter')) { e.preventDefault(); kickAimGo(); return; }
   if (G.kpow && (c === 'Space' || c === 'Enter')) { e.preventDefault(); G.kpow(); return; }
+  if (G.kpow && G.kpick) { const m = { Digit1: 'deep', Digit2: 'squib', Digit3: 'onside' }[c]; if (m) { e.preventDefault(); G.kpick(m); return; } }
   if (G.penWait) { const k = c === 'KeyA' ? 'acc' : c === 'KeyD' ? 'dec' : c === 'Space' || c === 'Enter' ? G.penRec : null; if (k) { e.preventDefault(); G.penWait(k); } return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'PageUp', 'PageDown'].includes(c)) e.preventDefault();
   // camera keys work any time in a game
@@ -1091,7 +1140,7 @@ function renderSheet() {
   const forms = [...new Set(pool.map(p => p.form))];
   const f = s.filter, shown = f === 'coach' ? (picks.length ? [] : pool) : pool.filter(p => f === 'all' || (f === 'run' && p.type === 'run') || (f === 'pass' && p.type === 'pass') || (f === 'blitz' && p.blitz && p.blitz.length) || (f === 'man' && MAN_COVERAGES[p.cov]) || (f === 'zone' && p.side === 'D' && !MAN_COVERAGES[p.cov]) || p.form === f);
   const chips = (side === 'O' ? [['coach', 'Coach picks'], ['all', 'All'], ['run', 'Run'], ['pass', 'Pass']] : [['coach', 'Coach picks'], ['all', 'All'], ['blitz', 'Blitz'], ['man', 'Man'], ['zone', 'Zone']]).concat(forms.map(x => [x, x]));
-  const fg = has('fgProb') ? LG.fgProb(G.user, Math.round(G.yl)) : null, late = G.q >= 4 || G.q === 2, lead = G.score[G.user] - G.score[opp(G.user)];
+  const fg = has('fgProb') ? fgOdds(G.user, G.yl) : null, late = G.q >= 4 || G.q === 2, lead = G.score[G.user] - G.score[opp(G.user)];
   const clockNote = G.runoff > 0 && G.clock - G.runoff <= 0 ? `<div class="small" style="color:var(--bad);margin-top:4px">The clock runs out before the snap unless you call timeout.</div>` : '';
   const four = side === 'O' && G.down === 4 && has('cpuFourth') ? LG.cpuFourth(G.user, ctxFor(G.user, 'O')) : null, fourTxt = four ? ` On 4th down I'd ${four === 'go' ? 'go for it' : four === 'fg' ? 'kick the field goal' : 'punt it'}.` : '';
   const who = cc && cc.who ? cc.who : null, say = (cc && cc.say ? cc.say : 'Your call, coach.') + fourTxt;

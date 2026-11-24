@@ -48,7 +48,9 @@ await page.evaluate(() => { const g = MATCH._G; if (g.stage === 'pre') { const b
 await wait(700); await shot('false_start_flag'); await wait(900); await shot('false_start_call');
 // an onside kick (ours), lined up and in the air
 await wait(2500);
-const onside = await page.evaluate(() => { const g = MATCH._G; if (!MATCH._.onside) return false; g.timers = []; g.play = null; g.retPlay = null; g.kickNext = null; g.pat = null; MATCH._.onside(g.user, true); return true; });
-if (onside) { await wait(1200); await shot('onside_lined_up'); await page.keyboard.press('Space').catch(() => { }); await page.evaluate(() => { const g = MATCH._G; if (g.kpow) g.kpow(); }); await wait(900); await shot('onside_in_air'); await wait(1600); await shot('onside_scrum'); await until(g => g.phase === 'dead' || g.stage === 'call', 9000); await wait(900); await shot('onside_result'); }
+await page.evaluate(() => { const g = MATCH._G; g.timers = []; g.play = null; g.retPlay = null; g.kickNext = null; g.pat = null; g.fouls = []; MATCH._.doKickoff(g.user); });
+await until(g => g.kpow, 8000); await page.evaluate(() => MATCH._G.kpick && MATCH._G.kpick('onside')); await wait(700); await shot('onside_lined_up');
+await page.evaluate(() => { const g = MATCH._G; if (g.kpow) g.kpow(); }); await wait(650); await shot('onside_in_air'); await wait(1100); await shot('onside_scrum');
+await until(g => g.phase === 'dead' || g.stage === 'call', 9000); await wait(600); await shot('onside_result');
 console.log(which, errs.length ? 'ERRORS:\n  ' + errs.join('\n  ') : 'no console errors');
 await browser.close();

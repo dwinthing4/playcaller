@@ -256,14 +256,56 @@ class Play {
     this.phase = 'live'; this.liveT = 0; this.air = true; this.carrier = null;
     // deep in the end zone he takes a knee; a punt inside his 9 he lets bounce (it is downed where it stops)
     this.kneel = R.kind === 'kickoff' ? land.z < -3 * YD : land.z < 0; this.letGo = R.kind === 'punt' && !this.kneel && land.z < 9 * YD;
+    if (R.onside || R.squib) this.kneel = this.letGo = false;
     for (const p of this.O) if (p.wallD != null) p.wall = v2(lp(p.wallX, land.x, 0.35) * 0.8, land.z + p.wallD);
     if (R.wait) { ret.p = v2(cl(land.x + this.gauss() * 1.2, -FIELD.halfW + 1, FIELD.halfW - 1), Math.min(land.z - 3 - this.r() * 2, ret.p.z)); this.resetFeet(ret); }
     this.ball = { state: 'air', p: V3(x0, y0, z0), v: V3((land.x - x0) / T, (yL - y0 + 0.5 * G * T * T) / T, (land.z - z0) / T), t: 0, T, land, target: ret, ret: true, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(x0, z0), fromZ: z0 }; this.windUp(this.ball, 1);
     this.fx.push({ kind: 'snap' });
   }
+  // onside (o.expect: the hands team is ready for it) or squib: kicked from the tee, then a live ball on the ground
+  kickSpecial(kind, landX, landZ, hang, expect) { if (!this.ret || this.phase !== 'pre') return false; if (kind === 'onside') this.ret.onside = { expect: !!expect }; else this.ret.squib = true; return this.kickNow(landX, landZ, hang); }
+  kickBounce() {        // it comes down and takes a hop: onside kicks pop up and die, squibs skip on toward the return team
+    const B = this.ball, R = this.ret, on = !!R.onside; this.air = false;
+    this.ball = { state: 'loose', p: V3(B.p.x, 0.4, B.p.z), v: V3(this.gauss() * (on ? 1.2 : 1.6), on ? 2.6 + this.r() * 2.2 : 1.5 + this.r() * 1.5, on ? -(0.6 + this.r() * 1.6) : -(1.6 + this.r() * 2)), rot: V3(0, 0, 0), spin: V3(8, 4, 8), looseT: on ? 0.1 : 0.2 };
+    this.emit(on ? 'Onside! It is a live ball' : 'A squib: it bounces around', 'info');
+  }
+  squibField(p) {       // the return team picks up the bouncing squib and goes
+    this.squibHeld = true; this.carrier = p; this.returner = p; this.qb = p; p.role = 'carrier'; p.secureT = 0.3; p.propK = 0.6; p.ballSide = p.p.x > 0 ? 1 : -1; this.catchT = this.t;
+    this.ball = { state: 'held', p: V3(p.p.x, 1.0, p.p.z), v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; for (const q of this.D) q.runRead = this.t; this.emit(`${p.name} fields the squib`, 'info');
+  }
+  squibAI(dt, env) {    // the squib bounces around: two up-men go get it, the rest of the return team takes a man; the coverage stays in its lanes and squeezes
+    const B = this.ball, uc = this.controlled(), bx = B.p.x, bz = B.p.z, dist = p => Math.hypot(p.p.x - bx, p.p.z - bz), near = this.O.slice().sort((a, b) => dist(a) - dist(b)).slice(0, 2);
+    const go = (p, tx, tz, k) => { const dx = tx - p.p.x, dz = tz - p.p.z, m = Math.hypot(dx, dz) || 1, v = Math.min(p.vmax * k, m * 2.6); locomote(p, m > 0.15 ? v2(dx / m * v, dz / m * v) : v2(), dt, env); };
+    for (const p of this.O) {
+      if (p === uc && this.userDriven(p)) { this.userMove(p, dt, env); continue; }
+      if (near.includes(p)) { go(p, bx, bz, 0.85); slewHeading(p, Math.atan2(bx - p.p.x, bz - p.p.z), 7, dt); p.crouchT = 0.3; continue; }
+      if (p === this.returner) { go(p, bx, Math.min(bz - 5, p.p.z), 0.7); continue; }
+      const d = p.retMan; if (d && d.upright() && !p.bond) { const gx = bx - d.p.x, gz = bz - d.p.z, gm = Math.hypot(gx, gz) || 1; go(p, d.p.x + gx / gm * 1.1, d.p.z + gz / gm * 1.1, 0.95); slewHeading(p, Math.atan2(d.p.x - p.p.x, d.p.z - p.p.z), 6, dt); continue; }
+      this.blockerAI(p, dt, env);
+    }
+    for (const d of this.D) {
+      if (d === uc && this.userDriven(d)) { this.userMove(d, dt, env); continue; }
+      if (d.bondBy) { this.pursueAI(d, dt, env, d.fit || 'attack'); continue; }
+      go(d, d.kicker ? lp(d.p.x, bx, 0.3) : lp(d.lane != null ? d.lane : d.p.x, bx, 0.55), d.kicker ? Math.max(bz + 18, d.p.z - 4) : bz + 2, d.kicker ? 0.6 : 0.95); slewHeading(d, Math.atan2(bx - d.p.x, bz - d.p.z), 6, dt); d.crouchT = 0.08;
+    }
+  }
+  onsideAI(dt, env) {   // everybody goes for the ball; a surprised return team was turning to block and reacts late
+    const B = this.ball, R = this.ret, uc = this.controlled(), c = this.carrier, L = B.state === 'air' && B.land ? B.land : v2(B.p.x, B.p.z);
+    for (const p of this.players) {
+      if (p === uc && this.userDriven(p)) { this.userMove(p, dt, env); continue; }
+      if (c) { if (c === p) this.runnerAI(p, dt, env); else if (p.unit !== c.unit) this.pursueAI(p, dt, env, 'attack'); else locomote(p, v2(), dt, env); continue; }
+      const kick = p.unit === 'D', late = !kick && !R.onside.expect && this.liveT < 0.8 + (75 - (p.A.awr || 60)) / 180;
+      let tx = L.x, tz = L.z, sp = p.vmax * (kick ? 0.97 : 0.95);
+      if (late) { tx = p.p.x; tz = p.p.z - 4; sp = p.vmax * 0.55; }
+      else if (!kick && p === this.returner && B.state === 'air') tz = Math.min(L.z - 3, p.p.z);
+      else if (kick && p.kicker) { tx = lp(p.p.x, L.x, 0.5); tz = Math.max(L.z + 6, p.p.z - 2); }
+      const dx = tx - p.p.x, dz = tz - p.p.z, m = Math.hypot(dx, dz) || 1, v = Math.min(sp, m * 3); locomote(p, m > 0.15 ? v2(dx / m * v, dz / m * v) : v2(), dt, env); slewHeading(p, Math.atan2(B.p.x - p.p.x, B.p.z - p.p.z), 7, dt); p.crouchT = m < 3 ? 0.35 : 0.1;
+    }
+  }
   kickNow(landX, landZ, hang) { if (!this.ret || this.phase !== 'pre') return false; Object.assign(this.ret, { landX, landZ, hang, wait: false }); this.ret.wait = true; this.launchKick(this.ret); this.ret.wait = false; return true; }
   fairCatchCall() { if (this.ret && this.ret.kind === 'punt' && this.air && !this.fairCatch) { this.fairCatch = true; this.emit(`${this.returner.name} waves for a fair catch`, 'info'); return true; } return false; }
   retCatch() {
+    if (this.ret.onside || this.ret.squib) return this.kickBounce();
     const B = this.ball, r = this.returner, d = Math.hypot(r.p.x - B.p.x, r.p.z - B.p.z); this.air = false;
     if (this.kneel) { this.carrier = r; this.ball = { state: 'held', p: B.p, v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; this.endPlay('touchback', R_TB(this.ret.kind), r, -1); return; }
     if (this.letGo) { const z = B.land.z - (1 + this.r() * 5) * YD; this.ball = { state: 'dead', p: V3(B.land.x, 0.15, Math.max(z, -1)), v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; this.endPlay('downed', 'Downed', null, z < 0 ? -1 : z); return; }
@@ -275,6 +317,8 @@ class Play {
     for (const q of this.D) q.runRead = this.t; this.emit(`${r.name} fields it`, 'info');
   }
   retAI(dt, env) {
+    if (this.ret.onside) return this.onsideAI(dt, env);
+    if (this.ret.squib && this.ball.state === 'loose' && !this.squibHeld) return this.squibAI(dt, env);
     const c = this.carrier, B = this.ball, uc = this.controlled(), inF = this.air && B.state === 'air', R = this.ret, ret = this.returner, L = B.land || v2(ret.p.x, ret.p.z);
     for (const p of this.O) {
       if (p === uc && this.userDriven(p)) { this.userMove(p, dt, env); continue; }
@@ -932,7 +976,7 @@ class Play {
       if (B.p.y < 0.11 && B.v.y < 0) { B.p.y = 0.11; B.v.y = -B.v.y * 0.42; const a = (this.r() - 0.5) * 1.4, cs = Math.cos(a), sn = Math.sin(a), vx = B.v.x * cs - B.v.z * sn, vz = B.v.x * sn + B.v.z * cs; B.v.x = vx * 0.7; B.v.z = vz * 0.7; B.spin = V3((this.r() - 0.5) * 18, (this.r() - 0.5) * 8, (this.r() - 0.5) * 18); if (Math.abs(B.v.y) < 0.4) { B.v.y = 0; const k = Math.exp(-3 * dt * 10); B.v.x *= k; B.v.z *= k; } }
       B.looseT = (B.looseT || 0) + dt;
       if (Math.abs(B.p.x) > FIELD.halfW || B.p.z < -10 * YD || B.p.z > FIELD.goalZ + 10 * YD) { this.endPlay('oob', 'Fumble rolls out of bounds', this.fumbler ? this.fumbler : null, B.p.z, { fumbleOOB: true }); return; }
-      if (B.looseT > 0.25 && B.p.y < 0.8) { for (const p of shuffle(this.players.slice())) { if (!(p.upright() || p.bal === 'fall') || Math.hypot(p.p.x - B.p.x, p.p.z - B.p.z) > 0.8) continue; if (this.r() < dt * (3 + p.A.awr / 30 + p.A.agi / 60)) { this.recoverFumble(p); return; } } }
+      if (B.looseT > 0.25 && B.p.y < 0.8) { for (const p of shuffle(this.players.slice())) { if (!(p.upright() || p.bal === 'fall') || Math.hypot(p.p.x - B.p.x, p.p.z - B.p.z) > 0.8) continue; if (this.ret && p.unit === 'D' && (this.ret.onside || this.ret.squib) && B.p.z > this.ret.kickZ - 10 * YD) continue; if (this.ret && this.ret.squib && p.unit === 'O' && this.liveT < this.ret.hang + 0.4) continue; /* a kick has to go 10 yards before the kicking team may touch it */ if (this.r() < dt * (3 + p.A.awr / 30 + p.A.agi / 60)) { this.recoverFumble(p); return; } } }
       if (B.looseT > 6) this.recoverFumble(this.players.slice().sort((a, b) => Math.hypot(a.p.x - B.p.x, a.p.z - B.p.z) - Math.hypot(b.p.x - B.p.x, b.p.z - B.p.z))[0]);
     }
   }
@@ -993,6 +1037,7 @@ class Play {
     this.emit(`FUMBLE! ${c.name} loses it`, 'bad'); this.fx.push({ kind: 'hit', j: J, at: V3(c.p.x, 1, c.p.z) });
   }
   recoverFumble(p) {
+    if (this.ret && this.ret.squib && p && p.unit === 'O' && !this.squibHeld) return this.squibField(p);
     if (!p) return; const unit = p.unit, offRec = unit === 'O';
     this.emit(`${offRec ? 'Recovered by the offense' : 'Defense recovers'}: ${p.name}`, offRec ? 'info' : 'bad');
     if (!offRec) this.note(p, true, 'Recovered a fumble');
@@ -1318,4 +1363,9 @@ class Play {
   }
 }
 PHYS.Play = Play; PHYS.DIFF = DIFF;
+// onside and squib kicks: where they come down (the return team's yard line) and the hang time. side: which sideline he aims for; q: the kick's quality 0..1
+PHYS.KICKS = {
+  onside: (side, q, kickYd, rand = Math.random) => ({ x: side * (5 + rand() * 9), landYd: kickYd - (11.2 + (1 - q) * 2.5 + rand() * 1.8), hang: 0.85 + q * 0.3 + rand() * 0.2 }),
+  squib: (side, q, kickYd, rand = Math.random) => ({ x: side * rand() * 10, landYd: kickYd - (38 + q * 5 + rand() * 4), hang: 1.7 + rand() * 0.3 }),
+};
 })();
