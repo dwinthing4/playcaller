@@ -98,6 +98,8 @@ function resignPlayer(id, yrs, sal) {
   if (capRoom(T) + p.sal < sal) return { ok: false, msg: 'Not enough cap room.' };
   setDeal(p, sal, yrs, yrs >= 3 ? 0.2 : 0); p.resigned = L.year; news(`Re-signed ${p.pos} ${p.fn} ${p.ln}: ${yrs} yr, ${money(sal)}/yr.`); return { ok: true, msg: 'Re-signed.' };
 }
+// base salary in cap year capYear()+i (the option year pays the option price)
+function ctYearBase(p, i) { return p.rk && p.rk.opt === 'yes' && !p.rk.on && capYear() + i >= p.rk.y + 4 ? p.rk.price : kBase(p); }
 // ---------- trades: the old team keeps the bonus ----------
 function ctTradeDead(p) { return p ? ctR((p.pr || 0) * Math.max(0, p.prYrs || 0)) : 0; }
 function ctTradeMove(from, p) { const d = ctTradeDead(p); if (d > 0) ctDeadAdd(from, d, capYear(), p, 'Traded'); p.pr = 0; p.prYrs = 0; syncSal(p); }

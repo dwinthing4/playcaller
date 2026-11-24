@@ -502,6 +502,7 @@ function drawBustSuit(x, p, T) {   // coaches and staff: suit and tie, a team qu
   });
 }
 function drawBust(x, p, T) {
+  if (p.photo && !p.coach && BUST_photo(x, p, T)) return;   // a photo from a roster file (86_roster.js)
   const lk = ensureLook(p); if (p.coach && !p.headonly) { drawBustSuit(x, p, T); return; }
   const K = T ? (T.kit || T) : null; const c1 = K ? (K.c1 || K.jersey) : '#4a5878', c2 = K ? (lum(K.c2 || K.trim) < 0.12 && lum(c1) < 0.2 ? '#d9d9d9' : (K.c2 || K.trim)) : '#cfd6e6';
   BUST_cached(x, BUST_key(p, lk, c1, c2), x => {
