@@ -118,59 +118,28 @@ function makeSchedule() {
 function userGame(week) { const wk = L.sched[week]; if (!wk) return null; return wk.find(g => g.h === L.user || g.a === L.user) || null; }
 function currentUserGame() { return L.phase === 'playoffs' ? userPlayoffGame() : L.phase === 'regular' ? userGame(L.week) : null; }
 
-// ---------- fast ratings sim (non-user games, instant results) ----------
+// ---------- game results: stats, standings ----------
 function addStat(pid, k, v) { const p = L.P[pid]; if (!p) return; if (!p.st || !('gp' in p.st)) p.st = blankStats(); p.st[k] = (p.st[k] || 0) + v; }
 function poisson(l) { let k = 0, p = 1; const e = Math.exp(-l); do { k++; p *= R(); } while (p > e); return k - 1; }
+// every game not played live runs through the play-by-play sim (22_fastsim.js) on the league's quarter length
 function simGame(g) {
-  const H = L.teams[g.h], A = L.teams[g.a]; const ph = teamPower(H), pa = teamPower(A);
-  const side = (T, O, D, home) => {
-    const edge = (O.off - D.def) + (home ? 1.5 : 0) + (T.id === L.user ? DIFFS[L.diff].user * 0.3 : 0);
-    const drives = ri(10, 12); let pts = 0, tds = 0, fgs = 0;
-    for (let i = 0; i < drives; i++) { const r = R(); const pTD = clamp(0.22 + edge * 0.012, 0.06, 0.45), pFG = clamp(0.16 + edge * 0.004, 0.08, 0.24);
-      if (r < pTD) { tds++; pts += R() < 0.94 ? 7 : 6; } else if (r < pTD + pFG) { fgs++; pts += 3; } }
-    const style = OFF_STYLES[T.offStyle];
-    const passY = Math.max(60, Math.round(rnd(170, 290) * (style.pass / 0.55) * 0.85 + edge * 5 + gauss() * 30));
-    const rushY = Math.max(20, Math.round(rnd(80, 150) * ((1 - style.pass) / 0.45) + edge * 3 + gauss() * 20));
-    const ptd = Math.round(tds * style.pass * 1.05); const rtd = Math.max(0, tds - ptd);
-    return { pts, tds, fgs, passY, rushY, ptd, rtd, int: poisson(clamp(0.85 - edge * 0.03, 0.2, 2)), sacks: poisson(clamp(2.3 - edge * 0.05, 0.6, 5)) };
-  };
-  const hs = side(H, ph, pa, true), as = side(A, pa, ph, false);
-  if (hs.pts === as.pts && R() < 0.85) (R() < 0.55 ? hs : as).pts += 3;
+  const H = L.teams[g.h], A = L.teams[g.a], r = fastGame(g);
+  g.hs = r.hs; g.as = r.as; g.done = true; g.bx = r.box;
   const lines = {};
-  for (const [T, s, D] of [[H, hs, A], [A, as, H]]) distStats(T, s, D, lines);
-  g.hs = hs.pts; g.as = as.pts; g.done = true;
+  for (const pid in r.st) { if (!L.P[pid]) continue; lines[pid] = r.st[pid]; for (const k in r.st[pid]) addStat(+pid, k, r.st[pid][k]); }
+  for (const T of [H, A]) for (const id of T.roster) if (available(id)) addStat(id, 'gp', 1);
+  for (const T of [H, A]) if (T.id === L.user && !L.ghost) { const p = {}; for (const id of T.roster) if (r.snaps[id]) p[id] = r.snaps[id]; const me = T === H ? r.t.h : r.t.a, th = T === H ? r.t.a : r.t.h; T.rotLast = { y: L.year, w: L.week, O: me.plays, D: th.plays, p, live: 0 }; }
   for (const pid in lines) recordGameLine(L.P[pid], lines[pid]);
   finishGame(g, lines);
-  return g;
-}
-function distStats(T, s, D, lines) {
-  const ln = (pid, k, v) => { if (pid == null) return; addStat(pid, k, v); const o = lines[pid] || (lines[pid] = {}); o[k] = (o[k] || 0) + v; };
-  const d = (pos, i) => (T.depth[pos] || []).filter(available)[i]; const dd = (pos, i) => (D.depth[pos] || []).filter(available)[i];
-  for (const id of T.roster) if (available(id)) addStat(id, 'gp', 1);
-  const SR = rotSimLines(T), DS = rotSimDef(D);      // snap shares decide who plays, who gets the carries and the targets
-  for (const id in SR.snaps) ln(+id, 'snaps', SR.snaps[id]);
-  const qb = d('QB', 0); const att = Math.round(s.passY / 7.1 + rnd(-3, 3)); ln(qb, 'pa', att); ln(qb, 'pc', Math.round(att * rnd(.58, .7))); ln(qb, 'py', s.passY); ln(qb, 'ptd', s.ptd); ln(qb, 'pint', s.int);
-  for (let i = 0; i < s.int; i++) { const id = dd(pick(['CB', 'CB', 'S', 'S', 'LB']), ri(0, 1)); if (id) { ln(id, 'int', 1); ln(id, 'pd', 1); } }
-  const rcv = SR.rcv; let left = s.ptd;
-  for (const [id, f] of rcv) { if (!id) continue; const y = Math.round(s.passY * f * rnd(.7, 1.3)); ln(id, 'recy', y); ln(id, 'rec', Math.max(0, Math.round(y / 11.5))); ln(id, 'tgt', Math.round(y / 8)); if (left > 0 && R() < f * 2.2) { ln(id, 'rectd', 1); left--; } }
-  if (left > 0) ln(d('WR', 0), 'rectd', left);
-  const rush = SR.rush.concat([[qb, .1]]); let rl = s.rtd;
-  for (const [id, f] of rush) { if (!id) continue; const y = Math.round(s.rushY * f); ln(id, 'ry', y); ln(id, 'ra', Math.max(1, Math.round(y / 4.3))); if (rl > 0 && R() < f * 1.3) { ln(id, 'rtd', 1); rl--; } }
-  if (rl > 0) ln(SR.gl ?? d('RB', 0), 'rtd', rl);
-  const k = d('K', 0); ln(k, 'fgm', s.fgs); ln(k, 'fga', s.fgs + (R() < .3 ? 1 : 0)); ln(k, 'xpm', s.tds); ln(k, 'xpa', s.tds);
-  const p = d('P', 0); const np = ri(2, 6); ln(p, 'pnt', np); ln(p, 'pnty', np * ri(42, 50));
-  // tackles and sacks follow the defensive snap shares (a rotating lineman gets his share)
-  const TKW = { LB: [15, [7, 5, 3, 3, 2, 2, 2]], S: [9, [5, 4, 3, 2]], CB: [10, [4, 4, 2.5, 2, 1.5, 1.5]], DE: [6, [3, 3, 2, 2]], DT: [4, [2, 2, 1.5, 1.5]] };
-  for (const pos in TKW) { const g = DS[pos], [tot, rw] = TKW[pos], w = g.order.map((id, i) => g.e[i] * rw[Math.min(i, rw.length - 1)]), sw = w.reduce((a, b) => a + b, 0); if (sw > 0) g.order.forEach((id, i) => { if (w[i] > 0) ln(id, 'tk', Math.max(0, Math.round(tot * w[i] / sw * rnd(.5, 1.5)))); }); }
-  const skBy = pos => { const g = DS[pos], w = g.order.map((id, i) => g.e[i] * [1, .9, .6, .5, .4][Math.min(i, 4)]); let r = R() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return g.order[i]; } return g.order[0]; };
-  for (let i = 0; i < s.sacks; i++) { const id = skBy(pick(['DE', 'DE', 'DE', 'DT', 'LB'])); if (id) ln(id, 'sk', 1); }
+  return r;
 }
 function finishGame(g, lines) {
   const H = L.teams[g.h], A = L.teams[g.a];
   H.pf += g.hs; H.pa += g.as; A.pf += g.as; A.pa += g.hs;
   const po = L.phase === 'playoffs';
   if (g.hs > g.as) win(H, A, po); else if (g.as > g.hs) win(A, H, po); else if (!po) { H.tie++; A.tie++; H.coach.t++; A.coach.t++; H.streak = A.streak = 0; }
-  L.results.push({ y: L.year, w: L.week, po, h: g.h, a: g.a, hs: g.hs, as: g.as });
+  L.results.push(Object.assign({ y: L.year, w: L.week, po, h: g.h, a: g.a, hs: g.hs, as: g.as }, g.bx && g.bx.q > 4 ? { ot: 1 } : {}));
+  glLog(g, lines);      // a game-log line for every player who dressed (24_gamelog.js)
   for (const T of [H, A]) if (T.id === L.user && !L.ghost) userAfterGame(T, g, lines || {});
   // injuries for teams not played live
   if (!g.live) for (const T of [H, A]) if (R() < 0.35) { const id = pick(T.roster); const p = L.P[id]; if (p && !p.inj) { const t = pick(INJ_TYPES); p.inj = Math.max(1, ri(t[1], t[2]) - ((T.fac && T.fac.train || 1) >= 4 ? 1 : 0)); p.injType = t[0]; if (T.id === L.user) { news(`${p.pos} ${p.fn} ${p.ln} injured (${p.injType}, ${p.inj} wk).`); } } }

@@ -55,3 +55,5 @@ LG._t = { UT, teamName, capRoom, capUsed, expiring, resignPlayer, userOnClock, u
   scoutingWeek, scoutState, meetProspect, proDay, hireScout, setScoutPri, ownerMeeting, ownerChoose, gmWeek, coordCall, cpuCall, cpuFourth, planSwap, planLock, scoutOpp, teamOvr, pct, restructure, franchiseTag, offerExtension, extAsk,
   applyMatchResult, userPlayoffGame, userGame, setFocus, upgradeFac, upgradePC, hireCoord, poach, jobSecurity, stories, storyGoal, sitOutSeason, acceptOffer, starterIds };
 Object.assign(LG._t, { teamLineup, rotInfo, rotRoles, rotSetPreset, rotSetShare, rotSetRole, rotToggleLock, rotSetOpt, rotReset, playerEndurance, rotSimLines });
+// league sim, game logs, box scores, schedule, history (22_fastsim.js, 24_gamelog.js, 26_schedule.js, 95_history.js)
+Object.assign(LG._t, { fastGame, fsimNorm, glParse, glSeason, simGame });
