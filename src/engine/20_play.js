@@ -526,7 +526,7 @@ class Play {
     // receivers are thrown to in rhythm: at the top of the last break, not while they are still stemming; vertical routes need time to clear
     const ready = r => { const n = r.route ? r.route.length : 0; if (r.routeName === 'screen' || r.routeName === 'flat') return true; if (r.deepR && this.liveT < 2.05) return false; if (n <= 1) return this.liveT > (r.deepR ? 2.1 : 1.3); return r.ri >= n - 1; };
     // a longer ball hangs in the air, so it needs a bigger window; a QB under duress sees less
-    const tryR = (r, th, any) => { if (!r || !r.upright() || (!any && !ready(r))) return false; const o = this.openness(q, r); if (o.d > this.maxThrow(q)) return false; const deepK = Math.max(0, o.d - 15) * 0.12; if (o.open >= th + deepK) { q.windup = wt; q.windTarget = r; q.throwAnim = 0.45; return true; } return false; };
+    const tryR = (r, th, any) => { if (!r || !r.upright() || (!any && !ready(r))) return false; const o = this.openness(q, r); if (o.d > this.maxThrow(q)) return false; const deepK = Math.max(0, o.d - 15) * 0.16; if (o.open >= th + deepK) { q.windup = wt; q.windTarget = r; q.throwAnim = 0.45; return true; } return false; };
     if (op.name && /Screen/.test(op.name)) { const s = this.receivers.find(r => r.routeName === 'screen'); if (s && this.liveT > t0 + 0.25 && tryR(s, 0.6)) return; }
     if (idx < this.reads.main.length && !pressured) { if (tryR(this.reads.main[idx], need)) return; }
     if (pressured || idx >= this.reads.main.length) {
@@ -534,7 +534,7 @@ class Play {
       for (const r of this.reads.main) if (tryR(r, pressured ? 0.2 : -0.3, false)) return;
       if (pressured && q.A.spd > 72 && this.r() < 0.025 * (q.A.spd - 60) / 20) { this.scramble = true; this.emit(`${q.name} takes off`, 'info'); return; }
       // nothing there: smart QBs throw it away, others hold on and take the sack; nobody forces it into coverage
-      if (this.liveT > 4.6 || pr < 0.95) { if (q.bailT === undefined) q.bailT = this.r() < 0.25 + awr / 200 ? 0 : 9;
+      if (this.liveT > 3.6 || pr < 1.15) { if (q.bailT === undefined) q.bailT = this.r() < 0.4 + awr / 250 ? 0 : 9;
         if (q.bailT === 0) { q.windup = wt; q.windTarget = 'away'; q.throwAnim = 0.45; } }
     }
   }
@@ -559,7 +559,7 @@ class Play {
   windupFor(q) { return cl(0.25 - q.A.awr * 0.0015, 0.1, 0.22); }
   // how far a throw strays: distance, accuracy rating, a throw at the edge of his arm, pressure (awareness keeps him calm), throwing on the move
   throwSigma(q, d, pressure, user) {
-    const A = q.A, gen = q.tr.includes('general') ? 0.65 : 1, base = 0.22 + d * 0.024 + Math.max(0, d - 24) * 0.017, strain = 1 + Math.max(0, d / (q.range || 55) - 0.78) * 1.6;
+    const A = q.A, gen = q.tr.includes('general') ? 0.65 : 1, base = 0.22 + d * 0.03 + Math.max(0, d - 16) * 0.03, strain = 1 + Math.max(0, d / (q.range || 55) - 0.78) * 1.6;
     const press = 1 + pressure * cl(1.95 - A.awr / 100, 0.9, 1.6) * gen, moving = len2(q.vel) > 3 ? 1.08 + Math.max(0, 88 - A.tha) / 110 + Math.max(0, 80 - A.awr) / 250 : 1;
     return base * (q.accK || 0.9) * strain * press * moving * (user ? 0.75 : 1);
   }
@@ -1013,7 +1013,7 @@ class Play {
     const r = this.spotTarget(L, T), high = this.contestedAt(L, T), vy = ((high ? 1.8 : 1.3) - hand.y + 0.5 * G * T * T) / T;
     this.ball = { state: 'air', p: { ...hand }, v: V3((L.x - hand.x) / T, vy, (L.z - hand.z) / T), t: 0, T, land: L, target: r, high, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z), fromZ: q.p.z }; this.windUp(this.ball, 1);
     this.air = true; this.thrown = true; this.throwT = this.t; this.passer = q; this.carrier = null; this.add(q, 'pa'); if (r) this.add(r, 'tgt');
-    for (const d of this.D) d.react = cl(0.36 - d.A.awr / 500 - (d.posName === 'S' ? 0.06 : 0) + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.45);
+    for (const d of this.D) d.react = cl(0.31 - d.A.awr / 500 - (d.posName === 'S' ? 0.06 : 0) + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.45);
     this.emit(r ? `${q.name} throws for ${r.name}` : `${q.name} lets it fly`, 'info'); this.fx.push({ kind: 'throw' }); this.relEv(q);
   }
   // will a defender be on top of the catch point when the ball gets there? then it is a jump ball, thrown up higher
@@ -1044,7 +1044,7 @@ class Play {
     const high = this.contestedAt(L, T), catchH = high ? 1.8 : 1.3, dx = L.x - hand.x, dz = L.z - hand.z, vy = (catchH - hand.y + 0.5 * G * T * T) / T;
     this.ball = { state: 'air', p: { ...hand }, v: V3(dx / T, vy, dz / T), t: 0, T, land: L, target: r, high, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z), fromZ: q.p.z }; this.windUp(this.ball, this.windComp(q));
     this.air = true; this.thrown = true; this.throwT = this.t; this.passer = q; this.carrier = null; this.add(q, 'pa'); this.add(r, 'tgt');
-    for (const d of this.D) d.react = cl(0.36 - d.A.awr / 500 - (d.posName === 'S' ? 0.06 : 0) + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.45);
+    for (const d of this.D) d.react = cl(0.31 - d.A.awr / 500 - (d.posName === 'S' ? 0.06 : 0) + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.45);
     this.emit(`${q.name} throws for ${r.name}`, 'info'); this.fx.push({ kind: 'throw' }); this.relEv(q);
   }
   throwAway(q) { if (this.flagEv && !this.ret && q.p.z < this.losZ && Math.abs(q.p.x - this.ballX) < 4.2 && this.pressureOn(q) > 0.25) this.flagEv.push({ k: 'grd', t: this.liveT, q: q.pid, x: q.p.x, z: q.p.z, awr: q.A.awr });
@@ -1082,17 +1082,17 @@ class Play {
     if (!lineDrive) {
       if (def && (!off || def.d <= off.d + 0.25)) {
         const dA = def.p.A, ballhawk = def.p.tr.includes('ballhawk') ? 0.1 : 0;
-        const pInt = cl(0.05 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
+        const pInt = cl(0.1 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
         const r = this.r(); if (r < pInt) { result = 'int'; who = def.p; } else if (r < pInt + pPD || !off) { result = 'pbu'; who = def.p; }
       }
       if (result === 'inc' && off) {
         let pc = off.p.hands + 0.07 - Math.max(0, off.d - 0.75) * 0.3;
         if (def) pc -= cl(1 - def.d / 1.8, 0, 1) * cl(0.42 - battle * 0.3 - (off.p.tr.includes('hands') ? 0.1 : 0), 0.1, 0.62);
-        pc -= Math.max(0, Math.hypot(at.x - B.from.x, at.z - B.from.z) / YD - 22) * 0.011;     // a long ball comes in over the shoulder: harder to track and secure
+        pc -= Math.max(0, Math.hypot(at.x - B.from.x, at.z - B.from.z) / YD - 20) * 0.014;     // a long ball comes in over the shoulder: harder to track and secure
         if (this.env.wet) pc -= this.env.snow ? 0.05 : 0.04; pc -= this.env.cold * 0.02;
         if (this.r() < cl(pc, 0.05, 0.97)) { result = 'catch'; who = off.p; } else result = off.d < 0.85 && !(def && def.d < 1.2) ? 'drop' : 'off';
         // a contested ball that gets away can be tipped up and picked: the defender at the catch point has a shot at the carom
-        if (result !== 'catch' && def && def.d < 1.3 && this.r() < 0.18 * (1.3 - def.d) * (0.6 + def.p.A.hnd / 150)) { result = 'int'; who = def.p; }
+        if (result !== 'catch' && def && def.d < 1.3 && this.r() < 0.25 * (1.3 - def.d) * (0.6 + def.p.A.hnd / 150)) { result = 'int'; who = def.p; }
       }
     }
     this.air = false;
@@ -1234,7 +1234,7 @@ class Play {
     const o = a.unit === 'O' ? a : b, d = o === a ? b : a; if (d.unit !== 'D' || o.unit !== 'O') return;
     if (o === this.passer && this.throwT != null) { if (j < 80) return; const dt = this.t - this.throwT; if (dt < 0.12 || this.seen('l' + d.pid)) return;
       // a hit a beat after the release is part of the play; one well after it is roughing
-      this.fev({ k: 'late', d: d.pid, q: o.pid, dt, j, x: o.p.x, z: o.p.z, sev: cl((dt - 0.38) / 0.3, 0, 1) * (j > 220 ? 1 : 0.75), awr: d.A.awr }); return; }
+      this.fev({ k: 'late', d: d.pid, q: o.pid, dt, j, x: o.p.x, z: o.p.z, sev: cl((dt - 0.42) / 0.3, 0, 1) * (j > 220 ? 1 : 0.75), awr: d.A.awr }); return; }
     const B = this.ball, r = B.target; if (!this.air || B.state !== 'air' || !B.land || B.away || o !== r || !r || r.unit !== 'O') return;
     const tl = B.T - B.t; if (tl < 0.05 || tl > 1.1) return;
     const lx = B.land.x - r.p.x, lz = B.land.z - r.p.z, ld = Math.hypot(lx, lz) || 1, ahead = ((d.p.x - r.p.x) * lx + (d.p.z - r.p.z) * lz) / ld, catchable = ld < 2.6;
@@ -1338,9 +1338,9 @@ class Play {
     const vn = (r.vel.x - d.vel.x) * nx + (r.vel.z - d.vel.z) * nz; if (vn >= 0) return true;
     const dIn = d.vel.x * nx + d.vel.z * nz, rIn = -(r.vel.x * nx + r.vel.z * nz), past = r.p.z > this.losZ + 5 * YD;
     // the defender ran through him downfield: he is knocked off his line (stumbles, stays up) and that is illegal contact
-    const knock = past && !fight && dIn > rIn + 2 && -vn > 3.5 && !r.grabbedBy, kr = fight ? 0.55 : knock ? 0.5 : 0.2;
+    const knock = past && !fight && dIn > rIn + 2.5 && -vn > 4 && !r.grabbedBy, kr = fight ? 0.55 : knock ? 0.5 : 0.2;
     r.vel.x -= nx * vn * kr; r.vel.z -= nz * vn * kr; d.vel.x += nx * vn * (1 - kr); d.vel.z += nz * vn * (1 - kr);
-    if (knock) { r.om.x += nx * 0.7; r.om.z += nz * 0.7; if (!this.seen('k' + d.pid)) this.fev({ k: 'ic', d: d.pid, r: r.pid, x: d.p.x, z: d.p.z, dz: (r.p.z - this.losZ) / YD, sev: cl((-vn - 3.5) / 3, 0.3, 1), awr: d.A.awr }); }
+    if (knock) { r.om.x += nx * 0.7; r.om.z += nz * 0.7; if (!this.seen('k' + d.pid)) this.fev({ k: 'ic', d: d.pid, r: r.pid, x: d.p.x, z: d.p.z, dz: (r.p.z - this.losZ) / YD, sev: cl((-vn - 4.2) / 3, 0.3, 1), awr: d.A.awr }); }
     return true;
   }
   // a receiver on his route and a teammate (a lineman, a crossing receiver), or two defenders in coverage, before the throw:
@@ -1450,7 +1450,7 @@ class Play {
         adv = (Ab.rbk * 0.7 + Ab.str * 0.3 + (b.tr.includes('mauler') ? 6 : 0)) / (Ad.bsh * 0.7 + Ad.str * 0.3) * massK;
         if (!d.dl) adv *= 1.1; if (!b.ol) adv *= (b.posName === 'TE' || b.posName === 'FB') ? 0.95 : 0.85;
         // an even run block holds past ~2.5 s about two times in three; a dominant tackle wins early more often
-        d.shedNeed = (1.45 + 2.8 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9) * (this.ret ? (this.ret.kind === 'punt' ? 1.0 : 1.2) : 1);     // return blocks are open-field shields: harder to shed in time
+        d.shedNeed = (1.75 + 2.8 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9) * (this.ret ? (this.ret.kind === 'punt' ? 1.0 : 1.2) : 1);     // return blocks are open-field shields: harder to shed in time
         if (!b.ol && this.catchT) d.shedNeed *= 0.5;      // a skill player blocking in space is a stalk, not a drive block: it holds a second or so
       }
       if (d === this.userD) d.shedNeed *= 0.75;      // user can fight off a block faster by working the stick
