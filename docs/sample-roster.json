@@ -1,0 +1,250 @@
+{
+ "format": "playcaller-roster",
+ "version": 1,
+ "name": "Sample: two made-up teams",
+ "author": "Playcaller",
+ "created": "2026-11-24",
+ "note": "Everyone in this file is made up. Players are listed in depth-chart order within each position. Ratings are optional.",
+ "teams": [
+  {
+   "abbr": "HBR",
+   "city": "Harbor City",
+   "name": "Gulls",
+   "colors": {
+    "primary": "#1d3478",
+    "secondary": "#f2c230",
+    "helmet": "#1d3478"
+   },
+   "logo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABf0lEQVR42u2bsRXCMAxEGYKChh0oGI75GIkFoKILINt3Jymc33Nr+38rkFjy4eDmJmuP++UZ6X8HvCshKOh2MtjgZUWMLPp4PIV6GxEo4FUhbcDP11uolxYxCh6FHpGRJiEKvgodlSGVkA2fKiECzwb/JoIqoSK8VEJV+KiEXcNTJSjg3+OWlKCCV0mA7T4DniFhKQqYu//rdTY9Cpi7H/3CS42CbHi2hBQBs4cecgGMZ3/15Ef6W4De/SgcW4JcwMzOMqIhRcAKCFrCkIBs+HQJqwKQC0eOJRHAeH5RY9IFMP/KEGNTBSje6FbnoAlQwCPmoghQgSPmhQpQ7joqGmACKsDPrAUioBL8qATI22A1+KgE2LdARfiIBLqAKnkBuoCtQarAf5IwfTgasVgNfksC/EywMviWCJgAdFJEmSucTo50SIhS02OdowCWIO0YBbDkaKfagPY1Aq4SqQzvIimXyblQ0qWyLpZ2ubwvTPjKjC9N+dqcL0766qzbTtsLeYyVIiQKkPUAAAAASUVORK5CYII=",
+   "coach": {
+    "first": "Dana",
+    "last": "Whitfield"
+   },
+   "oc": {
+    "first": "Marco",
+    "last": "Bellamy"
+   },
+   "dc": {
+    "first": "Ruth",
+    "last": "Okafor"
+   },
+   "players": [
+    {
+     "first": "Jordan",
+     "last": "Example",
+     "pos": "QB",
+     "num": 12,
+     "age": 27,
+     "ratings": {
+      "ovr": 82
+     },
+     "photo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAl0lEQVR42u3Xuw2AMBAE0a2HHmiMEiiIHqgKUgLAFpx0H09w+bzIa03zcmQ+AQAAAAAAAAAut29r88ICeuKtEfKIt0TIK94KIc94CwQAAAAAAAAw9ktcYguVWKMl/gN8KQEAAABgTEDKLWSxQi0wihD+B6JI4V8gihrfi1Dk+B6Eose3EMoQ/4ZQlvgnRD1A5Pg7BABvwAmON+6+BUGfhwAAAABJRU5ErkJggg==",
+     "comp": "A pocket passer who wins with timing"
+    },
+    {
+     "first": "Casey",
+     "last": "Placeholder",
+     "pos": "QB",
+     "num": 7,
+     "age": 24,
+     "ratings": {
+      "ovr": 66
+     }
+    },
+    {
+     "first": "Mason",
+     "last": "Sample",
+     "pos": "RB",
+     "num": 26,
+     "age": 25,
+     "ratings": {
+      "ovr": 78
+     },
+     "photo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAl0lEQVR42u3Xuw2AMBAE0a2HHmiAUiiBEmgaUgLAFpx0H09w+bzIa03zdmQ+AQAAAAAAAAAut69L88ICeuKtEfKIt0TIK94KIc94CwQAAAAAAAAw9ktcYguVWKMl/gN8KQEAAABgTEDKLWSxQi0wihD+B6JI4V8gihrfi1Dk+B6Eose3EMoQ/4ZQlvgnRD1A5Pg7BABvwAn9dNaUhYBMWwAAAABJRU5ErkJggg=="
+    },
+    {
+     "first": "Theo",
+     "last": "Fictional",
+     "pos": "WR",
+     "num": 11,
+     "age": 26,
+     "ratings": {
+      "ovr": 80
+     },
+     "comp": "Quick feet, strong hands in traffic"
+    },
+    {
+     "first": "Avery",
+     "last": "Madeup",
+     "pos": "WR",
+     "num": 84,
+     "age": 23,
+     "ratings": {
+      "ovr": 72
+     }
+    },
+    {
+     "first": "Quinn",
+     "last": "Notreal",
+     "pos": "TE",
+     "num": 88,
+     "age": 28,
+     "ratings": {
+      "ovr": 74
+     }
+    },
+    {
+     "first": "Rowan",
+     "last": "Testcase",
+     "pos": "OT",
+     "num": 71,
+     "age": 29,
+     "ratings": {
+      "ovr": 79
+     }
+    },
+    {
+     "first": "Emery",
+     "last": "Draftman",
+     "pos": "DE",
+     "num": 94,
+     "age": 25,
+     "ratings": {
+      "ovr": 81
+     }
+    },
+    {
+     "first": "Sasha",
+     "last": "Inventa",
+     "pos": "LB",
+     "num": 52,
+     "age": 27,
+     "ratings": {
+      "ovr": 77
+     }
+    },
+    {
+     "first": "Blake",
+     "last": "Storybook",
+     "pos": "CB",
+     "num": 24,
+     "age": 24,
+     "ratings": {
+      "ovr": 76
+     }
+    },
+    {
+     "first": "Kai",
+     "last": "Lorem",
+     "pos": "S",
+     "num": 31,
+     "age": 26
+    },
+    {
+     "first": "Drew",
+     "last": "Ipsum",
+     "pos": "K",
+     "num": 3,
+     "age": 30,
+     "ratings": {
+      "ovr": 75
+     }
+    }
+   ]
+  },
+  {
+   "abbr": "PRE",
+   "city": "Pine Ridge",
+   "name": "Elks",
+   "colors": {
+    "primary": "#2f5d3a",
+    "secondary": "#f2efe6",
+    "helmet": "#24472c"
+   },
+   "logo": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABf0lEQVR42u2bsRECMQwEKYKALsjphfZJmaEBiMgekO27k/ScZ5za3rUe/i35cHBzk7XH/faM9L8D3pUQFHQ7GWzwsiJGFn08nkK9jQgU8KqQNuDn6yXUS4sYBY9Cj8hIkxAFX4WOypBKyIZPlRCBZ4N/E0GVUBFeKqEqfFTCruGpEhTw73FLSlDBqyTAdp8Bz5CwFAXM3f/1OpseBczdj37hpUZBNjxbQoqA2UMPuQDGs7968iP9LUDvfhSOLUEuYGZnGdGQImAFBC1hSEA2fLqEVQHIhSPHkghgPL+oMekCmH9liLGpAhRvdKtz0AQo4BFzUQSowBHzQgUodx0VDTABFeBn1gIRUAl+VALkbbAafFQC7FugInxEAl1AlbwAXcDWIFXgP0mYPhyNWKwGvyUBfiZYGXxLBEwAOimizBVOJ0c6JESp6bHOUQBLkHaMAlhytFNtQPsaAVeJVIZ3kZTL5Fwo6VJZF0u7XN4XJnxlxpemfG3OFyd9ddZtp+0FYD4wXmjLrRMAAAAASUVORK5CYII=",
+   "coach": {
+    "first": "Glen",
+    "last": "Harrow"
+   },
+   "players": [
+    {
+     "first": "Riley",
+     "last": "Imaginary",
+     "pos": "QB",
+     "num": 9,
+     "age": 30,
+     "ratings": {
+      "ovr": 79
+     }
+    },
+    {
+     "first": "Morgan",
+     "last": "Pretend",
+     "pos": "HB",
+     "num": 22,
+     "age": 23,
+     "ratings": {
+      "ovr": 74
+     }
+    },
+    {
+     "first": "Jesse",
+     "last": "Nobody",
+     "pos": "WR",
+     "num": 1,
+     "age": 25,
+     "ratings": {
+      "ovr": 77
+     }
+    },
+    {
+     "first": "Parker",
+     "last": "Unknown",
+     "pos": "LT",
+     "num": 77,
+     "age": 31,
+     "ratings": {
+      "ovr": 76
+     }
+    },
+    {
+     "first": "Reese",
+     "last": "Anon",
+     "pos": "EDGE",
+     "num": 91,
+     "age": 26,
+     "ratings": {
+      "ovr": 80
+     }
+    },
+    {
+     "first": "Hayden",
+     "last": "Fakename",
+     "pos": "MLB",
+     "num": 45,
+     "age": 28,
+     "ratings": {
+      "ovr": 75
+     }
+    },
+    {
+     "first": "Skyler",
+     "last": "Mockup",
+     "pos": "FS",
+     "num": 29,
+     "age": 24,
+     "ratings": {
+      "ovr": 73
+     }
+    },
+    {
+     "first": "Logan",
+     "last": "Standin",
+     "pos": "P",
+     "num": 8,
+     "age": 27
+    }
+   ]
+  }
+ ]
+}

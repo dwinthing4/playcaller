@@ -58,3 +58,4 @@ Object.assign(LG._t, { teamLineup, rotInfo, rotRoles, rotSetPreset, rotSetShare,
 // front office (30_contracts.js, 62_coach.js): coach perks for the match (LG.coachPerk('str4'), LG.coachEdge(tid, ctx) -> rating points), internals for tests
 Object.assign(LG, { coachPerk: id => coachPerk(id), coachEdge: (tid, ctx) => coachEdge(tid, ctx) });
 Object.assign(LG._t, { capYear, ctSplit, ctDeadFor, ctJ1Left, ctOptPrice, ctOptOpen, optionDecide, ctTradeDead, ctRookieApy, coachTree, coachXP, coachLearn, coachRespec, coachPerk, coachCanLearn, CTREE, deadIfCut, kBase, execTrade, finishResign });
+Object.assign(LG._t, { rfParse, rfMatch, rfPlan, rfApply, rfExport, imgGet, imgPut, IMG: () => IMGS });
