@@ -50,12 +50,8 @@ function depthPick(t, pos, idx, used) {
   for (const fp of FALLBACK[pos] || []) { const fl = (t.depth[fp] || []).filter(id => !used.has(id) && available(id)); if (fl.length) return fl[fl.length - 1]; }
   const any = t.roster.filter(id => !used.has(id) && available(id)); return any[0] ?? t.roster.find(id => !used.has(id));
 }
-function starters(t, formKey, side) {
-  const F = side === 'O' ? OFF_FORMS[formKey] || OFF_FORMS.Shotgun : DEF_FORMS[formKey] || DEF_FORMS['4-3']; const used = new Set(); const out = [];
-  const slots = side === 'O' ? F.slots.concat(OL_SLOTS) : F.slots;
-  for (const s of slots) { const id = depthPick(t, s[1], s[2], used); used.add(id); out.push({ slot: s[0], pos: s[1], pid: id, id, dx: s[3], dy: s[4] }); }
-  return out;
-}
+// the base lineup for a formation: depth chart + player roles (where each receiver lines up). Per-snap rotation: teamLineup in 25_rotation.js
+function starters(t, formKey, side) { return teamLineup(t, formKey, side, null, null); }
 function starterIds(T) { const out = new Set(); const take = (pos, n) => (T.depth[pos] || []).slice(0, n).forEach(id => out.add(id)); take('QB', 1); take('RB', 1); take('WR', 3); take('TE', 1); take('OT', 2); take('OG', 2); take('C', 1); take('DE', 2); take('DT', 2); take('LB', 3); take('CB', 3); take('S', 2); take('K', 1); take('P', 1); return out; }
 function teamPower(t) {
   const top = (pos, n) => { const ids = (t.depth[pos] || []).filter(id => available(id)).slice(0, n); const v = ids.map(id => L.P[id].ovr); while (v.length < n) v.push(45); return v; };
@@ -151,20 +147,23 @@ function distStats(T, s, D, lines) {
   const ln = (pid, k, v) => { if (pid == null) return; addStat(pid, k, v); const o = lines[pid] || (lines[pid] = {}); o[k] = (o[k] || 0) + v; };
   const d = (pos, i) => (T.depth[pos] || []).filter(available)[i]; const dd = (pos, i) => (D.depth[pos] || []).filter(available)[i];
   for (const id of T.roster) if (available(id)) addStat(id, 'gp', 1);
-  for (const id of starterIds(T)) ln(id, 'snaps', ri(48, 66));
+  const SR = rotSimLines(T), DS = rotSimDef(D);      // snap shares decide who plays, who gets the carries and the targets
+  for (const id in SR.snaps) ln(+id, 'snaps', SR.snaps[id]);
   const qb = d('QB', 0); const att = Math.round(s.passY / 7.1 + rnd(-3, 3)); ln(qb, 'pa', att); ln(qb, 'pc', Math.round(att * rnd(.58, .7))); ln(qb, 'py', s.passY); ln(qb, 'ptd', s.ptd); ln(qb, 'pint', s.int);
   for (let i = 0; i < s.int; i++) { const id = dd(pick(['CB', 'CB', 'S', 'S', 'LB']), ri(0, 1)); if (id) { ln(id, 'int', 1); ln(id, 'pd', 1); } }
-  const rcv = [[d('WR', 0), .32], [d('WR', 1), .24], [d('TE', 0), .16], [d('WR', 2), .13], [d('RB', 0), .11], [d('TE', 1), .04]]; let left = s.ptd;
+  const rcv = SR.rcv; let left = s.ptd;
   for (const [id, f] of rcv) { if (!id) continue; const y = Math.round(s.passY * f * rnd(.7, 1.3)); ln(id, 'recy', y); ln(id, 'rec', Math.max(0, Math.round(y / 11.5))); ln(id, 'tgt', Math.round(y / 8)); if (left > 0 && R() < f * 2.2) { ln(id, 'rectd', 1); left--; } }
   if (left > 0) ln(d('WR', 0), 'rectd', left);
-  const rush = [[d('RB', 0), .72], [d('RB', 1), .18], [qb, .1]]; let rl = s.rtd;
+  const rush = SR.rush.concat([[qb, .1]]); let rl = s.rtd;
   for (const [id, f] of rush) { if (!id) continue; const y = Math.round(s.rushY * f); ln(id, 'ry', y); ln(id, 'ra', Math.max(1, Math.round(y / 4.3))); if (rl > 0 && R() < f * 1.3) { ln(id, 'rtd', 1); rl--; } }
-  if (rl > 0) ln(d('RB', 0), 'rtd', rl);
+  if (rl > 0) ln(SR.gl ?? d('RB', 0), 'rtd', rl);
   const k = d('K', 0); ln(k, 'fgm', s.fgs); ln(k, 'fga', s.fgs + (R() < .3 ? 1 : 0)); ln(k, 'xpm', s.tds); ln(k, 'xpa', s.tds);
   const p = d('P', 0); const np = ri(2, 6); ln(p, 'pnt', np); ln(p, 'pnty', np * ri(42, 50));
-  const tkl = [['LB', 0, 7], ['LB', 1, 5], ['S', 0, 5], ['S', 1, 4], ['CB', 0, 4], ['CB', 1, 4], ['LB', 2, 3], ['DE', 0, 3], ['DE', 1, 3], ['DT', 0, 2], ['DT', 1, 2], ['CB', 2, 2]];
-  for (const [pos, i, n] of tkl) { const id = dd(pos, i); if (id) ln(id, 'tk', Math.max(0, Math.round(n * rnd(.5, 1.5)))); }
-  for (let i = 0; i < s.sacks; i++) { const id = dd(pick(['DE', 'DE', 'DE', 'DT', 'LB']), ri(0, 1)); if (id) ln(id, 'sk', 1); }
+  // tackles and sacks follow the defensive snap shares (a rotating lineman gets his share)
+  const TKW = { LB: [15, [7, 5, 3, 3, 2, 2, 2]], S: [9, [5, 4, 3, 2]], CB: [10, [4, 4, 2.5, 2, 1.5, 1.5]], DE: [6, [3, 3, 2, 2]], DT: [4, [2, 2, 1.5, 1.5]] };
+  for (const pos in TKW) { const g = DS[pos], [tot, rw] = TKW[pos], w = g.order.map((id, i) => g.e[i] * rw[Math.min(i, rw.length - 1)]), sw = w.reduce((a, b) => a + b, 0); if (sw > 0) g.order.forEach((id, i) => { if (w[i] > 0) ln(id, 'tk', Math.max(0, Math.round(tot * w[i] / sw * rnd(.5, 1.5)))); }); }
+  const skBy = pos => { const g = DS[pos], w = g.order.map((id, i) => g.e[i] * [1, .9, .6, .5, .4][Math.min(i, 4)]); let r = R() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return g.order[i]; } return g.order[0]; };
+  for (let i = 0; i < s.sacks; i++) { const id = skBy(pick(['DE', 'DE', 'DE', 'DT', 'LB'])); if (id) ln(id, 'sk', 1); }
 }
 function finishGame(g, lines) {
   const H = L.teams[g.h], A = L.teams[g.a];

@@ -7,7 +7,7 @@ function applyMatchResult(g, result) {
   for (const T of [H, A]) for (const id of T.roster) if (available(id)) addStat(id, 'gp', 1);
   for (const pid in (result.snaps || {})) { addStat(+pid, 'snaps', result.snaps[pid]); (lines[pid] = lines[pid] || {}).snaps = result.snaps[pid]; }
   for (const inj of (result.injuries || [])) { const p = L.P[inj.pid]; if (p) { p.inj = Math.max(p.inj || 0, inj.weeks || 1); p.injType = inj.type || 'injury'; if (p.tid === L.user) news(`${p.pos} ${p.fn} ${p.ln} (${p.injType}) is out ${p.inj} wk.`); } }
-  g.hs = result.hs; g.as = result.as; g.done = true; g.live = true; g.played = true;
+  g.hs = result.hs; g.as = result.as; g.done = true; g.live = true; g.played = true; rotRecord(g, result);
   for (const pid in lines) recordGameLine(L.P[pid], lines[pid]);
   finishGame(g, lines);
   const T = UT(); applyGameXP(T, result.snaps, result.perf); closeFilm(result.perf);

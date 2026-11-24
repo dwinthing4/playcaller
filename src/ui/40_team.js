@@ -84,16 +84,53 @@ function extendModal(id) { const p = L.P[id]; const ask = extAsk(p), ya = extYea
 VIEWS.depth = function () {
   const T = UT(); const side = SUB.depthSide; const forms = side === 'O' ? OFF_FORMS : side === 'D' ? DEF_FORMS : null; if (forms && !forms[SUB.depthForm]) SUB.depthForm = Object.keys(forms)[0];
   const posList = side === 'O' ? OFF_POS : side === 'D' ? DEF_POS : ['K', 'P'];
-  const st = forms ? starters(T, SUB.depthForm, side) : [];
+  const st = forms ? starters(T, SUB.depthForm, side) : [], snaps = side !== 'S' && SUB.depthMode === 'snaps';
   return `<div class="row"><h2 style="margin:0">Depth chart</h2><span class="sp"></span><button class="sm" onclick="fixDepth(UT(),true);saveGame();render()">Auto-sort by overall</button></div>
-  <p class="mute small">Starters change with each formation: the 3rd WR for Shotgun, the FB for I-Form, extra corners for Nickel and Dime. Injured and redshirted players are skipped.</p>
+  <p class="mute small">${snaps ? 'Roles set where a player lines up and which routes he gets: on a pass play the deep threat takes the deepest outside route and the slot keeps the short and option routes. Share is how often he plays when the formation has a spot for him. Under 72% stamina a player takes a breather until he is back to 86%; lock a player in to keep him out there.'
+    : 'Starters change with each formation: the 3rd WR for Shotgun, the FB for I-Form, extra corners for Nickel and Dime. Injured and redshirted players are skipped. Who lines up where, snap shares and breathers: Roles &amp; snaps.'}</p>
   <div class="row" style="margin-bottom:8px"><div class="seg">${[['O', 'Offense'], ['D', 'Defense'], ['S', 'Special']].map(([k, n]) => `<button class="${side === k ? 'on' : ''}" onclick="SUB.depthSide='${k}';SUB.depthForm='${k === 'O' ? 'Shotgun' : '4-3'}';render()">${n}</button>`).join('')}</div>
-  ${forms ? `<select onchange="SUB.depthForm=this.value;render()">${Object.keys(forms).map(f => `<option value="${f}" ${f === SUB.depthForm ? 'selected' : ''}>${forms[f].lab}</option>`).join('')}</select>` : ''}</div>
+  ${forms ? `<select onchange="SUB.depthForm=this.value;render()" aria-label="Formation">${Object.keys(forms).map(f => `<option value="${f}" ${f === SUB.depthForm ? 'selected' : ''}>${forms[f].lab}</option>`).join('')}</select>` : ''}
+  ${side !== 'S' ? `<div class="seg dmode">${[['order', 'Depth order'], ['snaps', 'Roles &amp; snaps']].map(([k, n]) => `<button class="${(snaps ? 'snaps' : 'order') === k ? 'on' : ''}" onclick="SUB.depthMode='${k}';render()">${n}</button>`).join('')}</div>` : ''}</div>
   ${forms ? `<div class="panel tight"><b>On the field: ${forms[SUB.depthForm].lab}</b><div class="small" style="margin-top:6px">${st.map(s => { const p = L.P[s.pid]; return `<span class="tag">${s.slot}: ${p ? esc(p.ln) + ' ' + p.ovr : '-'}${p && p.pos !== s.pos ? ' (fill-in)' : ''}</span>`; }).join('')}</div></div>` : ''}
-  <div class="depthgrid">${posList.map(depthBlock).join('')}</div>`;
+  ${snaps ? rotOptsPanel(T, side) : ''}
+  <div class="depthgrid${snaps ? ' snaps' : ''}">${snaps ? posList.filter(p => ROT_GROUPS.includes(p)).concat(posList.filter(p => !ROT_GROUPS.includes(p))).map(rotBlock).join('') : posList.map(depthBlock).join('')}</div>`;
 };
-function depthBlock(pos) { const T = UT(); const ids = T.depth[pos] || [];
-  return `<div class="panel tight"><h3>${pos}</h3><table class="mini">${ids.map((id, i) => { const p = L.P[id]; return `<tr><td class="mute">${i + 1}</td><td class="click" onclick="showPlayer(${id})">${esc(pname(p))}${p.inj ? ' <b style="color:var(--bad)">INJ</b>' : ''}${p.redshirt ? ' <span class="rk rs">RS</span>' : ''}</td><td>${ovrTag(p.ovr)}</td><td style="white-space:nowrap"><button class="sm" onclick="moveDepth('${pos}',${i},-1)" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button><button class="sm" onclick="moveDepth('${pos}',${i},1)" ${i === ids.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button></td></tr>`; }).join('')}</table></div>`; }
+function depthBlock(pos) { const T = UT(); const ids = T.depth[pos] || [], I = ROT_GROUPS.includes(pos) ? rotInfo(T, pos) : null;
+  return `<div class="panel tight"><h3>${pos}</h3><table class="mini">${ids.map((id, i) => { const p = L.P[id]; return `<tr><td class="mute">${i + 1}</td><td class="click" onclick="showPlayer(${id})">${esc(pname(p))}${p.inj ? ' <b style="color:var(--bad)">INJ</b>' : ''}${p.redshirt ? ' <span class="rk rs">RS</span>' : ''}${I ? rotTags(I, id) : ''}</td>${I ? `<td class="small mute dshr" title="Snap share">${available(id) ? (I.share[id] ?? 0) + '%' : ''}</td>` : ''}<td>${ovrTag(p.ovr)}</td><td style="white-space:nowrap"><button class="sm" onclick="moveDepth('${pos}',${i},-1)" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button><button class="sm" onclick="moveDepth('${pos}',${i},1)" ${i === ids.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button></td></tr>`; }).join('')}</table></div>`; }
+// ---------- roles, snap shares, breathers (league side: 25_rotation.js) ----------
+const ROT_SPOTS = { RB: 'one back on the field: aim for 100%', WR: 'formations use 1 to 4 WRs', TE: 'formations use 0 to 2 TEs', DE: 'two DEs on the field', DT: 'formations use 1 to 3 DTs', LB: 'formations use 1 to 4 LBs', CB: 'formations use 2 to 4 CBs', S: 'formations use 1 or 2 safeties' };
+function rotTags(I, id) { return (I.tags[id] || []).map(t => `<span class="rk rl">${t}</span>`).join(''); }
+function rotLockIcon(on) { return `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="3" y="7.2" width="10" height="7" rx="1.2" fill="currentColor"/><path d="${on ? 'M5.2 7.4V5.2a2.8 2.8 0 0 1 5.6 0v2.2' : 'M5.2 7.4V5.2a2.8 2.8 0 0 1 5.6 0'}" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>`; }
+function rotOptsPanel(T, side) {
+  const RL = T.rotLast, lg = RL ? `Last game (${RL.live ? 'played' : 'simmed'}): ${side === 'O' ? RL.O + ' offensive' : RL.D + ' defensive'} snaps.` : 'Snap counts from your last game show up here.';
+  return `<div class="panel tight dopts"><div class="row"><label class="small"><input type="checkbox" ${rotOpt(T, 'twoMin') ? 'checked' : ''} onchange="rotUi('opt','twoMin',this.checked)"> Starters play the two-minute drill</label>
+    <label class="small"><input type="checkbox" ${rotOpt(T, 'keyDowns') ? 'checked' : ''} onchange="rotUi('opt','keyDowns',this.checked)"> Starters on 3rd/4th down and in the red zone</label>
+    <span class="sp"></span><button class="sm ghost" onclick="rotUi('reset','${side}')">Reset to Auto</button></div><div class="small mute" style="margin-top:4px">${lg} END = endurance: how fast he tires and how fast he gets it back.</div></div>`;
+}
+function rotShareSel(pos, id, v) {
+  const opts = []; for (let x = 0; x <= 100; x += 5) opts.push(x); if (!opts.includes(v)) { opts.push(v); opts.sort((a, b) => a - b); }
+  return `<select class="dsh" aria-label="Snap share" onchange="rotUi('share','${pos}',${id},this.value)">${opts.map(x => `<option value="${x}" ${x === v ? 'selected' : ''}>${x}%</option>`).join('')}</select>`;
+}
+function rotBlock(pos) {
+  const T = UT(), ids = (T.depth[pos] || []).filter(id => L.P[id]);
+  if (!ROT_GROUPS.includes(pos)) return `<div class="panel tight dblk"><div class="row"><h3>${pos}</h3><span class="sp"></span><span class="small mute">every down · no rotation</span></div><table class="mini drot">${ids.map((id, i) => { const p = L.P[id]; return `<tr${available(id) ? '' : ' class="dim"'}><td class="mute">${i + 1}</td><td class="dnm"><span class="click" onclick="showPlayer(${id})"><b>${esc(pname(p))}</b></span>${p.inj ? ' <b style="color:var(--bad)">INJ</b>' : ''}<div class="small mute">END ${playerEndurance(p)}</div></td><td>${ovrTag(p.ovr)}</td></tr>`; }).join('')}</table></div>`;
+  const I = rotInfo(T, pos), P0 = ROT_PRESETS[pos], tot = I.order.reduce((a, id) => a + (I.share[id] || 0), 0), ex = (T.rot && T.rot.roles && T.rot.roles[pos]) || {};
+  const pre = `<select class="dpre" aria-label="${pos} workload" onchange="rotUi('preset','${pos}',this.value)">${Object.entries(P0).map(([k, [n, v]]) => `<option value="${k}" ${I.preset === k ? 'selected' : ''}>${n}${v[0] < 100 ? ' ' + v.filter(x => x > 0).slice(0, 3).join('/') : ''}</option>`).join('')}<option value="custom" ${I.preset === 'custom' ? 'selected' : ''}>Custom</option></select>`;
+  const rows = ids.map((id, i) => { const p = L.P[id], ok = available(id), lk = rotLocked(T, id), sh = I.share[id] ?? 0;
+    const sub = [rotTags(I, id), `END ${I.end[id]}`, I.last[id] != null ? `last game ${I.last[id]}%` : ''].filter(Boolean).join(' · ');
+    return `<tr${ok ? '' : ' class="dim"'}><td class="mute">${i + 1}</td><td class="dnm"><span class="click" onclick="showPlayer(${id})"><b>${esc(pname(p))}</b> <span class="mute">${p.ovr}</span></span>${p.inj ? ' <b style="color:var(--bad)">INJ</b>' : ''}${p.redshirt ? ' <span class="rk rs">RS</span>' : ''}<div class="small mute">${sub}</div></td>
+      <td>${ok ? rotShareSel(pos, id, sh) : '<span class="small mute">out</span>'}</td><td><button class="sm dlk${lk ? ' on' : ''}" onclick="rotUi('lock','${pos}',${id})" aria-pressed="${lk}" aria-label="${lk ? 'Locked in (plays through fatigue)' : 'Lock in (no breathers)'}" title="${lk ? 'Locked in: plays through fatigue' : 'Lock in: never takes a breather'}">${rotLockIcon(lk)}</button></td></tr>`; }).join('');
+  const roles = I.roles.length ? `<div class="droles"><div class="pos">Roles</div>${I.roles.map(r => { const cur = ex[r.k] != null && ids.includes(+ex[r.k]) ? +ex[r.k] : null, an = r.id != null && L.P[r.id] ? L.P[r.id].ln : '—';
+    return `<label class="drole"><span><b>${r.n}</b><i>${r.d}</i></span><select onchange="rotUi('role','${pos}','${r.k}',this.value)"><option value="" ${cur == null ? 'selected' : ''}>Auto${cur == null ? ' · ' + esc(an) : ''}</option>${ids.map(id => `<option value="${id}" ${cur === id ? 'selected' : ''}>${esc(pname(L.P[id]))} · fit ${r.fit(id)}${available(id) ? '' : ' (out)'}</option>`).join('')}</select></label>`; }).join('')}</div>` : '';
+  return `<div class="panel tight dblk"><div class="row"><h3>${pos}</h3><span class="sp"></span>${pre}</div><table class="mini drot">${rows}</table><div class="small mute dsum">Shares total ${tot}% · ${ROT_SPOTS[pos]}</div>${roles}</div>`;
+}
+function rotUi(act, a, b, c) {
+  const T = UT();
+  if (act === 'preset') rotSetPreset(T, a, b); else if (act === 'share') rotSetShare(T, a, b, c); else if (act === 'lock') rotToggleLock(T, b);
+  else if (act === 'role') rotSetRole(T, a, b, c); else if (act === 'opt') rotSetOpt(T, a, b);
+  else if (act === 'reset') { if (!confirm(`Reset every ${a === 'O' ? 'offensive' : 'defensive'} role, snap share and lock to Auto?`)) return; rotReset(T, a); }
+  saveGame(); render();
+}
 function moveDepth(pos, i, d) { const a = UT().depth[pos]; const j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; saveGame(); render(); }
 // ---------- development ----------
 VIEWS.develop = function () {

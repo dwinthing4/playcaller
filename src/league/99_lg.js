@@ -36,6 +36,8 @@ const LG = {
   state: () => L, team: tid => L.teams[tid], player: pid => L.P[pid], user: () => L.user,
   starters: (team, formKey, side) => starters(team, formKey, side),
   depthPick: (team, pos, idx, used) => depthPick(team, pos, idx, used || new Set()),
+  // per-snap lineups with roles, snap shares and fatigue (25_rotation.js): rs = rotInit(home, away) once per game
+  lineup: (team, formKey, side, ctx, rs) => teamLineup(team, formKey, side, ctx, rs), rotInit, rotStep, rotSnap, rotRest, rotEnergy, rotReport,
   kitFor: (team, isHome) => kitFor(team, isHome),
   playsFor: (tid, side) => playsFor(tid, side),
   cpuCall: (tid, side, ctx) => cpuCall(tid, side, ctx),
@@ -52,3 +54,4 @@ const LG = {
 LG._t = { UT, teamName, capRoom, capUsed, expiring, resignPlayer, userOnClock, userDraft, simDraftUntilUser, signOffer, askingSalary, releasePlayer, proposeTrade, playerValue, pickValue, evalTrade, toAsset, myBlock, toggleBlock, genIncomingOffer, acceptIncoming,
   scoutingWeek, scoutState, meetProspect, proDay, hireScout, setScoutPri, ownerMeeting, ownerChoose, gmWeek, coordCall, cpuCall, cpuFourth, planSwap, planLock, scoutOpp, teamOvr, pct, restructure, franchiseTag, offerExtension, extAsk,
   applyMatchResult, userPlayoffGame, userGame, setFocus, upgradeFac, upgradePC, hireCoord, poach, jobSecurity, stories, storyGoal, sitOutSeason, acceptOffer, starterIds };
+Object.assign(LG._t, { teamLineup, rotInfo, rotRoles, rotSetPreset, rotSetShare, rotSetRole, rotToggleLock, rotSetOpt, rotReset, playerEndurance, rotSimLines });
