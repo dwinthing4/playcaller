@@ -1116,7 +1116,7 @@ function hardCount(pl) {
   const b = el.acts.querySelector('[data-a="hard"]'); if (b) b.classList.add('used');
   const ol = G.cur.lists[0] || [], dl = G.cur.lists[1] || [];
   const code = G.noFlags === true || G.noFlags === 'pre' ? null : RULES.hardCount({ dAwr: avgAwr(dl, isDL), oAwr: avgAwr(ol, isOL), uses: n, diff: G.diff, noise: G.noise || 0 }, R);
-  tick(`${pnm(pl.qb && pl.qb.pid)}: hard count…`); buzz(15);
+  tick(`${pnm(pl.qb && pl.qb.pid)}: hard count…`); buzz(15); if (typeof SND !== 'undefined') SND.on('hardcount');
   if (!code) { if (G.wasRunning) G.clock = Math.max(1, G.clock - 2); after(700, () => { if (G && G.play === pl && G.stage === 'pre') tick(n >= 2 ? 'They are not biting any more' : 'Nobody bites'); }); return; }
   const byO = code === 'FS', f = { code, by: byO ? off : def, pid: foulGuy(byO ? ol : dl, code), pre: true, dead: true, hc: true };
   G.pre = null;     // what really happened replaces any jump rolled for this snap
