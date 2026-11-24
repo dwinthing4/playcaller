@@ -111,11 +111,31 @@ if (part === 'def' || part === 'all') {
     await shot('dcall_' + k.replace(/:/g, '')); await page.evaluate(() => { const x = document.querySelector('.lpan [data-ln="x"]'); if (x) x.click(); });
     const t1 = Date.now(); for (let i = 0; i < 40; i++) { const s = await S(); if (s.stage !== 'pre') break; await wait(150); } check(Date.now() - t1 < 6000, `the offense snaps after the call (${Date.now() - t1} ms)`);
   };
-  const seen = await bot(200, { onPreD, fast: true });
+  const seen = await bot(250, { onPreD, fast: true });
   console.log('  defense only:', JSON.stringify(seen));
   check(seen.autoO > 0 && seen.sheetO === 0, `your offense ran on its own (auto samples ${seen.autoO}, offense sheets ${seen.sheetO})`);
   check(seen.final, `defense-only game reaches the final whistle (${seen.sec}s)`);
   if (await page.$('#mDone')) await tap('#mDone'); await wait(600);
+}
+
+// ---------- the play clock runs out: delay of game; the no-huddle bar; the pause menu's mode switch
+if (part === 'clock' || part === 'all') {
+  await career(3); await tap('#mKick');
+  let g; for (let i = 0; i < 200; i++) { g = await S(); if (g.stage === 'call' && g.sheet === 'O') break; if (g.kick) await page.keyboard.press('Space'); if (g.stage === 'call' && g.sheet === 'D') await page.evaluate(() => document.querySelector('.sheet .pc[data-id]').click()); await wait(300); }
+  check(g.pc != null && g.pc <= 40, `play clock runs on the call sheet (${g.pc})`);
+  await page.evaluate(() => { const G = MATCH._G; G.pc.t0 = G.time - G.pc.len + 4; }); await wait(600); await shot('clock_low');
+  const d0 = await page.evaluate(() => ({ yl: MATCH._G.yl, n: MATCH._G.pbp.length }));
+  for (let i = 0; i < 30; i++) { if ((await page.evaluate(() => MATCH._G.pbp.some(t => /Delay of game/.test(t))))) break; await wait(300); }
+  const dog = await page.evaluate(() => ({ dog: MATCH._G.pbp.some(t => /Delay of game/.test(t)), yl: MATCH._G.yl }));
+  check(dog.dog && dog.yl < d0.yl, `play clock at zero: delay of game (ball ${d0.yl} -> ${dog.yl})`);
+  for (let i = 0; i < 40; i++) { g = await S(); if (g.stage === 'call' && g.sheet === 'O') break; await wait(300); }
+  await tap('[data-hq="hurry"]'); await wait(500); g = await S(); check(g.hq, 'No huddle turns on the quick bar'); await shot('hurry_bar');
+  const r0 = await page.evaluate(() => MATCH._G.runoff);
+  await page.evaluate(() => MATCH._G.paused = false); await page.keyboard.press('Escape'); await wait(400); await shot('pause_modes');
+  check(await page.$('.gmp [data-gm="O"]') != null, 'pause menu offers the mode switch');
+  await tap('.gmp [data-gm="D"]'); await wait(800); g = await S();
+  check(g.sideMode === 'D' && g.auto === 'side', `switching to defense only mid-drive hands your offense to the coordinator (${g.auto})`);
+  console.log('  runoff on the no-huddle bar:', r0.toFixed(1));
 }
 
 // ---------- the daily drive: from the title, played to the end of the drive, scored, copy text
