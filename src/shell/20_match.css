@@ -262,3 +262,5 @@ body.phonemode #gui .joy{display:none!important}
 .rb.pre u{display:block;text-decoration:none;font:var(--cond-w) 9px/1.1 var(--cond);letter-spacing:.08em;color:var(--gold)}
 .rb.pre.blk u{color:var(--ink2)}
 .rb.pre.hr:active{transform:translate(-50%,-100%) scale(.94)}
+/* phones held upright: the weather chip and crowd meter sit bottom right, clear of the event ticker under the scorebug */
+@media (max-width:520px){#hud .gday{z-index:2;top:auto;bottom:calc(14px + var(--sab))}}

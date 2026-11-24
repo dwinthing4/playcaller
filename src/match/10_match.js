@@ -832,7 +832,7 @@ function fakeOpts(kind, tid) {
     const wg = take(T, ['TE'], 2), wg2 = take(T, ['FB', 'TE', 'RB'], 2); if (!hq || !kk || wg.length < 2 || wg2.length < 2) return null;
     O.push(E('QB', hq, -7, 0), E('K', kk, -9.5, -1.6), E('TE', wg[0], -1, -5.6), E('TE2', wg[1], -1, 5.6), E('SL', wg2[0], -1.6, -7.4), E('RB', wg2[1], -1.6, 7.4));
     op = run ? { id: 'fakeF', name: 'Fake field goal', side: 'O', form: 'Field goal', type: 'run', carrier: 'QB', scheme: 'outside', gap: 'D', rside: R() < 0.5 ? 'L' : 'R', routes: {} }
-      : { id: 'fakeF', name: 'Fake field goal pass', side: 'O', form: 'Field goal', type: 'pass', routes: { TE: 'flat', TE2: 'corner', SL: 'drag', RB: 'flat' } };
+      : { id: 'fakeF', name: 'Fake field goal pass', side: 'O', form: 'Field goal', type: 'pass', routes: { TE: 'flat', TE2: 'corner' } };      // the wings release, the rest stay in to protect the holder
   }
   O = O.filter(Boolean); if (O.length !== 11) return null;
   // the other side: punt return (eight up, two jammers, a deep man) or field-goal block (everyone on the line)
@@ -992,7 +992,7 @@ function ctxKey() {
 const ACTS = {     // [buttons, hint with a mouse + keyboard, hint on a touch screen]
   none: ['', '', ''],
   motion: [`<button class="a wide" style="opacity:.7">Motion…</button>`, 'Man in motion: the ball is snapped when he gets set', 'Man in motion…'],
-  preO: [`<button class="a big on" data-a="snap">SNAP</button><button class="a wide on" data-a="audible">Audible</button>`, 'Click the field (or Space) to snap · pass plays: click a tag for a hot route', 'Tap to snap · tap a tag for a hot route'],
+  preO: [`<button class="a big on" data-a="snap">SNAP</button><button class="a wide on" data-a="audible">Audible</button>`, 'Click the field (or Space) to snap · pass plays: click a tag for a hot route', 'Tap to snap · tap a tag: hot route'],
   preD: [`<button class="a on" data-a="switch">Switch</button><button class="a on" data-a="audible">Audible</button>`, 'E switch player · WASD move after the snap', 'Switch picks your defender'],
   qb: [`<button class="a wide on" data-a="away">Throw away</button>`, 'Drag back to aim, let go to throw · drag forward to run · WASD moves in the pocket', 'Drag back to throw · drag forward to run · stick moves the QB'],
   run: [`<button class="a on" data-a="juke">Juke<span class="key">J</span></button><button class="a on" data-a="spin">Spin<span class="key">K</span></button><button class="a on" data-a="stiff">Stiff arm<span class="key">L</span></button><button class="a hot on" data-a="truck">Truck<span class="key">I</span></button>`, 'WASD or drag to run · let go and he keeps running', ''],
