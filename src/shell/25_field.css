@@ -2,3 +2,5 @@
 .refc .rw{font:500 14px/1.3 var(--body);color:var(--ink);margin-top:4px;max-width:min(420px,86vw)}
 .penc .penw{font:600 14px/1.35 var(--body);color:var(--ink);margin:8px 0 2px;padding:6px 9px;border-radius:var(--r);background:rgba(255,210,26,.14);box-shadow:inset 3px 0 0 #ffd21a}
 .acts .a.used{opacity:.42;pointer-events:none}
+/* phones: the hard count button takes the bottom-right corner before the snap, so the crowd / weather chips move to the left */
+@media (max-width:520px){body:has(.acts [data-a="hard"]) #hud .gday{right:auto;left:calc(10px + var(--sal, 0px))}}

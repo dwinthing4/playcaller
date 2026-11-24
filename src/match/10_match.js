@@ -1098,7 +1098,7 @@ function onKey(e) {
 // The QB barks a hard count to draw the defense offside. Sometimes a defensive lineman jumps (more often a low-awareness one, and
 // against a rookie-level CPU; less each time you use it in a game): a free 5 yards, and you see him go. Now and then your own
 // low-awareness lineman flinches instead (false start). Otherwise nobody bites and the play clock runs a bit. Once a snap.
-ACTS.preO[0] += `<button class="a wide on" data-a="hard">Hard count<span class="key">H</span></button>`;
+ACTS.preO[0] += `<button class="a wide on" data-a="hard">Hard count</button>`; ACTS.preO[1] += ' · H hard count';
 function hardCount(pl) {
   if (!pl || !G.cur || G.stage !== 'pre' || G.userSide !== 'O' || pl.phase !== 'pre' || pl.ret || G.pat || (pl.motion && pl.motion.go) || G.hcPl === pl) return;
   G.hcPl = pl; const off = G.poss, def = opp(off), H = G.hc || (G.hc = {}), n = H[off] || 0; H[off] = n + 1;
