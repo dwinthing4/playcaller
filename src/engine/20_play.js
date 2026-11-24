@@ -534,7 +534,7 @@ class Play {
       for (const r of this.reads.main) if (tryR(r, pressured ? 0.2 : -0.3, false)) return;
       if (pressured && q.A.spd > 72 && this.r() < 0.025 * (q.A.spd - 60) / 20) { this.scramble = true; this.emit(`${q.name} takes off`, 'info'); return; }
       // nothing there: smart QBs throw it away, others hold on and take the sack; nobody forces it into coverage
-      if (this.liveT > 3.6 || pr < 1.15) { if (q.bailT === undefined) q.bailT = this.r() < 0.4 + awr / 250 ? 0 : 9;
+      if (this.liveT > 3.3 || pr < 1.2) { if (q.bailT === undefined) q.bailT = this.r() < 0.4 + awr / 250 ? 0 : 9;
         if (q.bailT === 0) { q.windup = wt; q.windTarget = 'away'; q.throwAnim = 0.45; } }
     }
   }
@@ -559,7 +559,7 @@ class Play {
   windupFor(q) { return cl(0.25 - q.A.awr * 0.0015, 0.1, 0.22); }
   // how far a throw strays: distance, accuracy rating, a throw at the edge of his arm, pressure (awareness keeps him calm), throwing on the move
   throwSigma(q, d, pressure, user) {
-    const A = q.A, gen = q.tr.includes('general') ? 0.65 : 1, base = 0.22 + d * 0.03 + Math.max(0, d - 16) * 0.03, strain = 1 + Math.max(0, d / (q.range || 55) - 0.78) * 1.6;
+    const A = q.A, gen = q.tr.includes('general') ? 0.65 : 1, base = 0.22 + d * 0.03 + Math.max(0, d - 16) * 0.035, strain = 1 + Math.max(0, d / (q.range || 55) - 0.78) * 1.6;
     const press = 1 + pressure * cl(1.95 - A.awr / 100, 0.9, 1.6) * gen, moving = len2(q.vel) > 3 ? 1.08 + Math.max(0, 88 - A.tha) / 110 + Math.max(0, 80 - A.awr) / 250 : 1;
     return base * (q.accK || 0.9) * strain * press * moving * (user ? 0.75 : 1);
   }
@@ -572,7 +572,7 @@ class Play {
     const gun = q.p.z < this.losZ - 3.5, tx = q.p.x + (this.gapX > q.p.x ? 0.55 : -0.55), tz = q.p.z + (gun ? 0.55 : 0.35), dx = tx - rb.p.x, dz = tz - rb.p.z, m = Math.hypot(dx, dz) || 1, cap = rb.vmax * (gun ? 0.95 : 0.88);
     locomote(rb, v2(dx / m * Math.min(cap, m * 4 + 2), dz / m * Math.min(cap, m * 4 + 2)), dt, env); slewHeading(rb, Math.atan2(this.gapX - rb.p.x, this.losZ - rb.p.z), 8, dt);
     if (Math.hypot(rb.p.x - q.p.x, rb.p.z - q.p.z) < 1.2 && this.liveT > 0.1) { this.handed = true; this.carrier = rb; rb.role = 'carrier'; this.ball.state = 'held'; this.kind = 'run'; rb.ballSide = this.gapX > rb.p.x ? -1 : 1;
-      for (const d of this.D) d.runRead = this.t + (d.recog + 0.07) * (this.op.pa ? 1.6 : 1); }
+      for (const d of this.D) d.runRead = this.t + (d.recog + 0.09) * (this.op.pa ? 1.6 : 1); }
   }
   // ball carrier AI: design gap behind the line, then field vision in the open
   runnerAI(c, dt, env) {
@@ -1082,7 +1082,7 @@ class Play {
     if (!lineDrive) {
       if (def && (!off || def.d <= off.d + 0.25)) {
         const dA = def.p.A, ballhawk = def.p.tr.includes('ballhawk') ? 0.1 : 0;
-        const pInt = cl(0.12 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
+        const pInt = cl(0.1 + (off ? 0 : 0.16) + (0.95 - def.d) * 0.12 + (dA.hnd - 60) / 260 + ballhawk + (def.p.swatT > 0 ? -0.02 : 0), 0.02, 0.45), pPD = cl(0.45 + ((dA.mcv + dA.zcv) / 2 - 65) / 150 + (def.p.swatT > 0 ? 0.22 : 0) - (off ? battle * 0.25 : 0), 0.2, 0.8);
         const r = this.r(); if (r < pInt) { result = 'int'; who = def.p; } else if (r < pInt + pPD || !off) { result = 'pbu'; who = def.p; }
       }
       if (result === 'inc' && off) {
@@ -1340,7 +1340,7 @@ class Play {
     // the defender ran through him downfield: he is knocked off his line (stumbles, stays up) and that is illegal contact
     const knock = past && !fight && dIn > rIn + 2.5 && -vn > 4 && !r.grabbedBy, kr = fight ? 0.55 : knock ? 0.5 : 0.2;
     r.vel.x -= nx * vn * kr; r.vel.z -= nz * vn * kr; d.vel.x += nx * vn * (1 - kr); d.vel.z += nz * vn * (1 - kr);
-    if (knock) { r.om.x += nx * 0.7; r.om.z += nz * 0.7; if (!this.seen('k' + d.pid)) this.fev({ k: 'ic', d: d.pid, r: r.pid, x: d.p.x, z: d.p.z, dz: (r.p.z - this.losZ) / YD, sev: cl((-vn - 4.2) / 3, 0.3, 1), awr: d.A.awr }); }
+    if (knock) { r.om.x += nx * 0.7; r.om.z += nz * 0.7; if (!this.seen('k' + d.pid)) this.fev({ k: 'ic', d: d.pid, r: r.pid, x: d.p.x, z: d.p.z, dz: (r.p.z - this.losZ) / YD, sev: cl((-vn - 5) / 3, 0.3, 1), awr: d.A.awr }); }
     return true;
   }
   // a receiver on his route and a teammate (a lineman, a crossing receiver), or two defenders in coverage, before the throw:
