@@ -17,7 +17,10 @@ class Play {
     this.pass = o.op.type === 'pass'; this.kind = this.pass ? 'pass' : 'run'; this.air = false; this.thrown = false; this.handed = false;
     this.diff = DIFF[o.diff || 'pro'] || DIFF.pro; this.userSide = o.userSide || null;
     this.input = { x: 0, z: 0 }; this.userTouched = false; this.contactZ = null; this.fpZ = null;
-    this.env = (o.weather === 'rain' || o.weather === 'snow') ? { mu: 0.78, wet: true } : { mu: 1.2, wet: false };
+    const wx = o.wx || null, wtr = o.weather || (wx && wx.weather) || 'clear';
+    this.env = (wtr === 'rain' || wtr === 'snow') ? { mu: wtr === 'snow' ? 0.96 : 1.0, wet: true, snow: wtr === 'snow' } : { mu: 1.2, wet: false };     // slick footing (and slips on hard cuts, see locomote)
+    this.env.wind = wx && wx.wind && Math.hypot(wx.wind.x, wx.wind.z) > 0.3 ? { x: wx.wind.x, z: wx.wind.z } : null; this.env.cold = wx && wx.temp != null ? cl((45 - wx.temp) / 40, 0, 1) : 0;
+    this.flagEv = [];                                          // things the officials might flag (holds, grabs, contact downfield, late hits): the match decides
     this.setup(); if (o.ret) this.setupReturn(o.ret);
   }
   r() { return this.rand(); }
@@ -255,7 +258,7 @@ class Play {
     this.kneel = R.kind === 'kickoff' ? land.z < -3 * YD : land.z < 0; this.letGo = R.kind === 'punt' && !this.kneel && land.z < 9 * YD;
     for (const p of this.O) if (p.wallD != null) p.wall = v2(lp(p.wallX, land.x, 0.35) * 0.8, land.z + p.wallD);
     if (R.wait) { ret.p = v2(cl(land.x + this.gauss() * 1.2, -FIELD.halfW + 1, FIELD.halfW - 1), Math.min(land.z - 3 - this.r() * 2, ret.p.z)); this.resetFeet(ret); }
-    this.ball = { state: 'air', p: V3(x0, y0, z0), v: V3((land.x - x0) / T, (yL - y0 + 0.5 * G * T * T) / T, (land.z - z0) / T), t: 0, T, land, target: ret, ret: true, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(x0, z0), fromZ: z0 };
+    this.ball = { state: 'air', p: V3(x0, y0, z0), v: V3((land.x - x0) / T, (yL - y0 + 0.5 * G * T * T) / T, (land.z - z0) / T), t: 0, T, land, target: ret, ret: true, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(x0, z0), fromZ: z0 }; this.windUp(this.ball, 1);
     this.fx.push({ kind: 'snap' });
   }
   kickNow(landX, landZ, hang) { if (!this.ret || this.phase !== 'pre') return false; Object.assign(this.ret, { landX, landZ, hang, wait: false }); this.ret.wait = true; this.launchKick(this.ret); this.ret.wait = false; return true; }
@@ -861,7 +864,9 @@ class Play {
   spotFlight(x, z) {
     const q = this.qb, hand = this.handPos(q, 0), mx = this.maxThrow(q); let dx = x - hand.x, dz = z - hand.z; const d0 = Math.hypot(dx, dz) || 1e-6, d = Math.min(d0, mx); dx *= d / d0; dz *= d / d0;
     const T = Math.max(0.35, d / (q.arm * 0.9)), L = v2(hand.x + dx, hand.z + dz), vy = (1.3 - hand.y + 0.5 * G * T * T) / T;
-    return { hand, L, T, d, v: V3(dx / T, vy, dz / T), max: mx, capped: d0 > mx + 0.5, sigma: this.throwSigma(q, d, this.pressureOn(q), true) };
+    const out = { hand, L, T, d, v: V3(dx / T, vy, dz / T), max: mx, capped: d0 > mx + 0.5, sigma: this.throwSigma(q, d, this.pressureOn(q), true) }, wa = this.windAcc();
+    if (wa) { const c = this.windComp(q), k = 0.5 * T * T * (1 - c); out.wa = wa; out.v.x -= 0.5 * wa.x * T * c; out.v.z -= 0.5 * wa.z * T * c; out.L = v2(L.x + wa.x * k, L.z + wa.z * k); }     // the arc and the ring show where it really comes down
+    return out;
   }
   spotTarget(L, T) { let r = null, best = 5.5; for (const p of this.receivers) { if (!p.upright()) continue; const at = this.predictRoute(p, T), m = Math.hypot(at.x - L.x, at.z - L.z) - Math.min(p.vmax * T * 0.3, 3);
       const reach = Math.hypot(L.x - p.p.x, L.z - p.p.z), late = (reach / (p.vmax * 0.97) + 0.2 - T) * p.vmax, ahead = (L.z - p.p.z) > 0 && p.deepR ? Math.max(0, late) : 99, sc = Math.min(m, ahead);
@@ -872,10 +877,10 @@ class Play {
     const sigma = this.throwSigma(q, f.d, this.pressureOn(q), true);   // you aimed it yourself: a bit tighter than the AI's read-and-throw
     L = v2(L.x + this.gauss() * sigma * 0.8, L.z + this.gauss() * sigma);
     const r = this.spotTarget(L, T), high = this.contestedAt(L, T), vy = ((high ? 1.8 : 1.3) - hand.y + 0.5 * G * T * T) / T;
-    this.ball = { state: 'air', p: { ...hand }, v: V3((L.x - hand.x) / T, vy, (L.z - hand.z) / T), t: 0, T, land: L, target: r, high, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z), fromZ: q.p.z };
+    this.ball = { state: 'air', p: { ...hand }, v: V3((L.x - hand.x) / T, vy, (L.z - hand.z) / T), t: 0, T, land: L, target: r, high, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z), fromZ: q.p.z }; this.windUp(this.ball, 1);
     this.air = true; this.thrown = true; this.throwT = this.t; this.passer = q; this.carrier = null; this.add(q, 'pa'); if (r) this.add(r, 'tgt');
     for (const d of this.D) d.react = cl(0.36 - d.A.awr / 500 - (d.posName === 'S' ? 0.06 : 0) + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.45);
-    this.emit(r ? `${q.name} throws for ${r.name}` : `${q.name} lets it fly`, 'info'); this.fx.push({ kind: 'throw' });
+    this.emit(r ? `${q.name} throws for ${r.name}` : `${q.name} lets it fly`, 'info'); this.fx.push({ kind: 'throw' }); this.relEv(q);
   }
   // will a defender be on top of the catch point when the ball gets there? then it is a jump ball, thrown up higher
   contestedAt(L, T) { for (const d of this.D) { if (!d.upright() || (d.job === 'rush' && !d.zone)) continue; const k = Math.min(T, 1.2) * 0.6; if (Math.hypot(d.p.x + d.vel.x * k - L.x, d.p.z + d.vel.z * k - L.z) < 1.6 + T * 0.5) return true; } return false; }
@@ -890,6 +895,10 @@ class Play {
       x += ex * sp * t * 0.9; z += ez * sp * t * 0.9; }
     return v2(cl(x, -FIELD.halfW + 0.5, FIELD.halfW - 0.5), Math.min(z, FIELD.goalZ + 9));
   }
+  // wind pushes a ball in the air (it curves); the passer aims off for it (comp 0..1: how much he allows for). B.land becomes where it really comes down.
+  windAcc() { const w = this.env.wind; return w ? { x: w.x * 0.07, z: w.z * 0.07 } : null; }
+  windComp(q) { return cl(0.5 + ((q.A.tha || 60) - 50) / 110 + ((q.A.awr || 60) - 50) / 300, 0.45, 0.93); }
+  windUp(B, comp) { const a = this.windAcc(); if (!a || !(B.T > 0)) return; const T = B.T, k = 0.5 * T * T * (1 - comp); B.wa = a; B.v.x -= 0.5 * a.x * T * comp; B.v.z -= 0.5 * a.z * T * comp; if (B.land && k) B.land = v2(B.land.x + a.x * k, B.land.z + a.z * k); }
   handPos(p, i) { const J = this.poses[p.id]; return J && J.arms ? J.arms[i].hand : V3(p.p.x, 1.5, p.p.z); }
   launch(r) {
     const q = this.qb, hand = this.handPos(q, 0), vb = q.arm; let L = v2(r.p.x, r.p.z), T = 0.4;
@@ -899,19 +908,20 @@ class Play {
     L.x = cl(L.x, -FIELD.halfW + 1.8, FIELD.halfW - 1.8);                 // QBs keep sideline throws inside, so the catch is made in bounds
     L = v2(L.x + this.gauss() * sigma * 0.8, L.z + this.gauss() * sigma);
     const high = this.contestedAt(L, T), catchH = high ? 1.8 : 1.3, dx = L.x - hand.x, dz = L.z - hand.z, vy = (catchH - hand.y + 0.5 * G * T * T) / T;
-    this.ball = { state: 'air', p: { ...hand }, v: V3(dx / T, vy, dz / T), t: 0, T, land: L, target: r, high, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z), fromZ: q.p.z };
+    this.ball = { state: 'air', p: { ...hand }, v: V3(dx / T, vy, dz / T), t: 0, T, land: L, target: r, high, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z), fromZ: q.p.z }; this.windUp(this.ball, this.windComp(q));
     this.air = true; this.thrown = true; this.throwT = this.t; this.passer = q; this.carrier = null; this.add(q, 'pa'); this.add(r, 'tgt');
     for (const d of this.D) d.react = cl(0.36 - d.A.awr / 500 - (d.posName === 'S' ? 0.06 : 0) + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.45);
-    this.emit(`${q.name} throws for ${r.name}`, 'info'); this.fx.push({ kind: 'throw' });
+    this.emit(`${q.name} throws for ${r.name}`, 'info'); this.fx.push({ kind: 'throw' }); this.relEv(q);
   }
-  throwAway(q) { const hand = this.handPos(q, 0), side = q.p.x >= 0 ? 1 : -1, L = v2(side * (FIELD.halfW + 4), this.losZ + 6), d = Math.hypot(L.x - hand.x, L.z - hand.z), T = Math.max(0.5, d / (q.arm * 0.9));
-    this.ball = { state: 'air', p: { ...hand }, v: V3((L.x - hand.x) / T, (1.2 - hand.y + 0.5 * G * T * T) / T, (L.z - hand.z) / T), t: 0, T, land: L, target: null, away: true, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z) };
+  throwAway(q) { if (this.flagEv && !this.ret && q.p.z < this.losZ && Math.abs(q.p.x - this.ballX) < 4.2 && this.pressureOn(q) > 0.25) this.flagEv.push({ k: 'grd', t: this.liveT, q: q.pid, x: q.p.x, z: q.p.z, awr: q.A.awr });
+    const hand = this.handPos(q, 0), side = q.p.x >= 0 ? 1 : -1, L = v2(side * (FIELD.halfW + 4), this.losZ + 6), d = Math.hypot(L.x - hand.x, L.z - hand.z), T = Math.max(0.5, d / (q.arm * 0.9));
+    this.ball = { state: 'air', p: { ...hand }, v: V3((L.x - hand.x) / T, (1.2 - hand.y + 0.5 * G * T * T) / T, (L.z - hand.z) / T), t: 0, T, land: L, target: null, away: true, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(q.p.x, q.p.z) }; this.windUp(this.ball, 1);
     this.air = true; this.thrown = true; this.throwT = this.t; this.passer = q; this.carrier = null; this.add(q, 'pa'); this.emit(`${q.name} throws it away`, 'info'); }
   ballStep(dt) {
     const B = this.ball;
     if (B.state === 'snap') { B.t += dt; const q = this.qb, u = Math.min(1, B.t / 0.22), h = this.handPos(q, 0); B.p = V3(lp(B.from.x, h.x, u), lp(B.from.y, h.y, u) + Math.sin(Math.PI * u) * 0.2, lp(B.from.z, h.z, u)); if (u >= 1) { B.state = 'held'; this.carrier = q; } return; }
     if (B.state === 'air') {
-      B.v.y -= G * dt; B.p = add3(B.p, mul3(B.v, dt)); B.t += dt; B.axis = norm3(B.v); B.rot.z += 38 * dt;
+      B.v.y -= G * dt; if (B.wa) { B.v.x += B.wa.x * dt; B.v.z += B.wa.z * dt; } B.p = add3(B.p, mul3(B.v, dt)); B.t += dt; B.axis = norm3(B.v); B.rot.z += 38 * dt;
       // user defender swat / jump in the last instant of flight
       const ud = this.userD; if (ud && this.input.swat && B.T - B.t < 0.35 && ud.upright()) { this.input.swat = false; ud.swatT = 0.35; }
       if (B.t >= B.T - 0.01 || B.p.y < 0.25) this.catchPoint();
@@ -945,7 +955,7 @@ class Play {
         let pc = off.p.hands + 0.07 - Math.max(0, off.d - 0.75) * 0.3;
         if (def) pc -= cl(1 - def.d / 1.8, 0, 1) * cl(0.42 - battle * 0.3 - (off.p.tr.includes('hands') ? 0.1 : 0), 0.1, 0.62);
         pc -= Math.max(0, Math.hypot(at.x - B.from.x, at.z - B.from.z) / YD - 22) * 0.011;     // a long ball comes in over the shoulder: harder to track and secure
-        if (this.env.wet) pc -= 0.04;
+        if (this.env.wet) pc -= this.env.snow ? 0.05 : 0.04; pc -= this.env.cold * 0.02;
         if (this.r() < cl(pc, 0.05, 0.97)) { result = 'catch'; who = off.p; } else result = off.d < 0.85 && !(def && def.d < 1.2) ? 'drop' : 'off';
         // a contested ball that gets away can be tipped up and picked: the defender at the catch point has a shot at the carom
         if (result !== 'catch' && def && def.d < 1.3 && this.r() < 0.18 * (1.3 - def.d) * (0.6 + def.p.A.hnd / 150)) { result = 'int'; who = def.p; }
@@ -1016,6 +1026,7 @@ class Play {
         if (ov) this.resolve(c, d, ov);
         continue;
       }
+      if (this.flagEv && live && this.pass && !this.ret && A.unit !== B.unit) this.nearEv(A, B);
       const ov = bodyOverlap(caps[A.id], caps[B.id]);
       const bl = A.unit === 'O' && B.unit === 'D' ? A : B.unit === 'O' && A.unit === 'D' ? B : null, df = bl === A ? B : bl === B ? A : null;
       const canBlock = bl && live && this.canBlock(bl) && (c ? c.unit === 'O' : !!this.ret);
@@ -1025,9 +1036,36 @@ class Play {
       const lateB = !!(bl && this.catchT && !bl.ol && this.t - this.catchT < 0.45);
       if (canBlock && !lateB && !bl.bond && !df.bondBy && !(df.shedCd > 0 && df.lastShedBy === bl) && bl.upright() && df.upright() && df !== this.userD) { bl.bond = df; df.bondBy = bl; df.bondT = 0; df.shedNeed = undefined; }
       if (canBlock && !bl.bond && df === this.userD && !df.bondBy && bl.upright() && df.upright() && !(df.shedCd > 0)) { bl.bond = df; df.bondBy = bl; df.bondT = 0; df.shedNeed = undefined; }
+      if (this.ret && this.flagEv && bl && bl.bond === df && df.bondT === 0) this.ibbEv(bl, df);
       if (ov) { if (bl && bl.bond === df && ov.depth < 0.08) continue; this.resolve(A, B, ov); }
     }
     this.near = {}; for (const p of P) { const arr = []; for (const q of P) if (q !== p && Math.abs(q.p.x - p.p.x) < 1.6 && Math.abs(q.p.z - p.p.z) < 1.6) arr.push(caps[q.id][0], caps[q.id][1]); this.near[p.id] = arr; }
+  }
+  // ---------------- flag watch: the engine only records what the officials could see; the match decides what gets flagged ----------------
+  nearEv(A, B) {      // a defender's hands on a receiver downfield before the throw, or contact while a catchable ball is in the air
+    const o = A.unit === 'O' ? A : B, d = o === A ? B : A; if (d.dl || o.ol || o === this.qb || !o.upright() || !d.upright()) return;
+    if (Math.hypot(o.p.x - d.p.x, o.p.z - d.p.z) > 0.82) return;
+    const S = this.flagSeen || (this.flagSeen = new Set()), Bl = this.ball, dz = (o.p.z - this.losZ) / YD;
+    if (!this.thrown && o.role === 'route' && dz > 5) { const key = 'g' + d.pid + '_' + o.pid; if (S.has(key)) return; S.add(key); this.flagEv.push({ k: 'grab', t: this.liveT, d: d.pid, r: o.pid, x: d.p.x, z: d.p.z, trail: o.p.z > d.p.z + 0.2, awr: d.A.awr }); return; }
+    if (!this.air || Bl.state !== 'air' || !Bl.land || Bl.away || Bl.land.z < this.losZ + YD) return;
+    const tl = Bl.T - Bl.t, tgt = Bl.target && Bl.target.unit === 'O' ? Bl.target : null, lx = Bl.land.x - o.p.x, lz = Bl.land.z - o.p.z, ld = Math.hypot(lx, lz);
+    if (tl > 1.0 || (tgt ? o !== tgt : ld > 3)) return; const key = 'p' + d.pid; if (S.has(key)) return; S.add(key);
+    const catchable = ld < 2.6, ahead = ((d.p.x - o.p.x) * lx + (d.p.z - o.p.z) * lz) / (ld || 1);     // > 0: the defender is between him and the ball (he has position)
+    this.flagEv.push({ k: 'pi', t: this.liveT, d: d.pid, r: o.pid, x: Bl.land.x, z: Bl.land.z, catchable, early: tl > 0.25, behind: ahead < 0, awr: d.A.awr });
+    if (ahead > 0.2 && catchable) this.flagEv.push({ k: 'opi', t: this.liveT, r: o.pid, d: d.pid, x: o.p.x, z: o.p.z, catchable, awr: o.A.awr });
+  }
+  hitEv(a, b, j) {     // the passer hit after the ball is gone
+    const o = a.unit === 'O' ? a : b, d = o === a ? b : a; if (o !== this.passer || d.unit !== 'D' || this.throwT == null || j < 80) return;
+    const dt = this.t - this.throwT, S = this.flagSeen || (this.flagSeen = new Set()), key = 'l' + d.pid; if (dt < 0.12 || S.has(key)) return; S.add(key);
+    this.flagEv.push({ k: 'late', t: this.liveT, d: d.pid, q: o.pid, dt, j, x: o.p.x, z: o.p.z, awr: d.A.awr });
+  }
+  relEv(q) {          // a rusher bearing down on the passer as the ball comes out: will he pull up?
+    if (!this.flagEv || this.ret) return; let best = null, bd = 9; for (const d of this.D) { if (!d.upright() || d.bondBy) continue; const dd = Math.hypot(d.p.x - q.p.x, d.p.z - q.p.z); if (dd < bd) { bd = dd; best = d; } }
+    if (!best || bd > 1.8) return; const cv = ((q.p.x - best.p.x) * best.vel.x + (q.p.z - best.p.z) * best.vel.z) / (bd || 1); if (cv > 2) this.flagEv.push({ k: 'rel', t: this.liveT, d: best.pid, dist: bd, cv, x: q.p.x, z: q.p.z, awr: best.A.awr });
+  }
+  ibbEv(b, d) {        // a return blocker who takes a man on from behind
+    const f = d.fwd(), dx = b.p.x - d.p.x, dz = b.p.z - d.p.z, m = Math.hypot(dx, dz) || 1; if ((f.x * dx + f.z * dz) / m > -0.55) return;
+    this.flagEv.push({ k: 'ibb', t: this.liveT, b: b.pid, d: d.pid, x: b.p.x, z: b.p.z, awr: b.A.awr });
   }
   canBlock(b) { return b.role === 'block' || b.role === 'pp' || b.ol || (this.thrown && !this.air && this.carrier !== b) || (this.handed && this.kind === 'run' && b !== this.carrier); }
   // A block is a breakable bond: the blocker holds and drives, the defender works to shed. Ratings decide who wins.
@@ -1071,6 +1109,7 @@ class Play {
   }
   shed(b, d, why) {
     const pp = this.pass && !this.thrown && this.carrier === this.qb && why;
+    if (why && this.phase === 'live' && this.flagEv) this.flagEv.push({ k: this.ret ? 'rbeat' : 'beat', t: this.liveT, b: b.pid, d: d.pid, pp: !!pp, ol: !!b.ol, x: b.p.x, z: b.p.z, awr: b.A.awr });     // flag watch: beaten while still engaged (a hold?)
     b.bond = null; d.bondBy = null; d.bondT = 0; d.shedNeed = undefined; d.shedCd = 0.9; b.assign = null; d.lastShedBy = b;
     if (d.helper) { d.helper.help = null; d.helper = null; }
     if (pp) { const q = this.qb, ux = q.p.x - d.p.x, uz = q.p.z - d.p.z, um = Math.hypot(ux, uz) || 1, side = Math.sign((d.p.x - b.p.x) * uz - (d.p.z - b.p.z) * ux) || (this.r() < 0.5 ? 1 : -1);
@@ -1100,6 +1139,7 @@ class Play {
     if (j > 45 && !mates) {
       hitBody(a, nh.x * j / a.mass * kh, nh.z * j / a.mass * kh, ov.at.y, j * kh); hitBody(b, -nh.x * j / b.mass * kh, -nh.z * j / b.mass * kh, ov.at.y, j * kh);
       const c = this.carrier; if (c && ((a === c) || (b === c))) { c.lastHitBy = a === c ? b : a; c.lastHitT = this.t; }
+      if (this.flagEv && !this.ret && this.thrown && this.phase === 'live') this.hitEv(a, b, j);
       if (this.phase === 'live' && j > 200) { if (c && (a === c || b === c) && this.contactZ === null) { this.contactZ = c.p.z; this.contactT = this.t; } this.bigHit = Math.max(this.bigHit, j); this.fx.push({ kind: 'hit', at: ov.at, j }); }
     }
   }
@@ -1151,6 +1191,7 @@ class Play {
     d.engaged = true; d.wq = wq; d.gripT = 0; d.lungeT = 0; d.restLen = Math.max(0.6, dist); d.restMin = Math.max(0.58, dist - 0.1);
     if (this.contactZ === null) { this.contactZ = c.p.z; this.contactT = this.t; }
     if (this.fpZ === null) this.fpZ = c.p.z;
+    if (this.flagEv && !this.ret && this.phase === 'live') { this.flagEv.push({ k: 'tk', t: this.liveT, d: d.pid, c: c.pid, h: d.contactH, J, qb: c === this.qb && this.pass && !this.thrown && !this.scramble, x: c.p.x, z: c.p.z, awr: d.A.awr }); if (J > 600) this.flagEv.push({ k: 'ur', t: this.liveT, d: d.pid, c: c.pid, J, side: Math.abs(c.p.x) > FIELD.halfW - 1.5, x: c.p.x, z: c.p.z, awr: d.A.awr }); }
     this.bigHit = Math.max(this.bigHit, J); this.fx.push({ kind: shoulder ? 'hit' : 'grab', at: V3((c.p.x + d.p.x) / 2, h, (c.p.z + d.p.z) / 2), j: J });
     this.contacts = (this.contacts || 0) + 1; this.sumJ = (this.sumJ || 0) + J;
     { const t = v2(-n.z, n.x), vt = (c.vel.x - d.vel.x) * t.x + (c.vel.z - d.vel.z) * t.z, Ft = -Math.sign(vt) * 0.45 * J * Math.min(1, Math.abs(vt) / 2.5);
@@ -1163,7 +1204,7 @@ class Play {
     if (this.ball.state === 'held') {
       const r = c.right(), fromSide = -(n.x * r.x + n.z * r.z) * Math.sign(c.ballSideV), shock = J * cl(0.35 + fromSide, 0, 1.2) * (this.env.wet ? 1.2 : 1) * (shoulder ? 1 : 0.5);
       const pocketQB = c === this.qb && this.pass && !this.thrown && !this.scramble;
-      const carF = cl(1.3 - c.A.car / 100, 0.25, 1), pF = ((pocketQB ? 0.02 : 0.0055) + 0.02 * cl((shock - 60) / 300, 0, 1.5)) * carF * (this.env.wet ? 1.3 : 1);
+      const carF = cl(1.3 - c.A.car / 100, 0.25, 1), pF = ((pocketQB ? 0.02 : 0.0055) + 0.02 * cl((shock - 60) / 300, 0, 1.5)) * carF * (this.env.wet ? 1.3 : 1) * (1 + this.env.cold * 0.15);
       if (this.r() < pF) this.fumble(n, J);
     }
   }
