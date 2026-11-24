@@ -26,6 +26,7 @@ function matchHero(g) {
   const art = JSON.stringify({ c1: home.c1, c2: home.c2, left: away.c1, right: home.c1, seed: home.id * 7 + 3, floor: 0.6 });
   return `<section class="hero mhero art"><canvas class="heroart" data-stadium='${art}'></canvas><div class="small heroLab">${L.phase === 'playoffs' ? ROUND_NAMES[L.playoff.round] : 'Week ' + (L.week + 1) + ' of ' + schedWeeks()}${hubSlot(g)}${riv ? '<span class="rvl">Rivalry</span>' : ''}</div>
    <div class="match2">${side(away)}<div class="vs">@</div>${side(home)}</div>
+   ${typeof geoMatchLine === 'function' ? geoMatchLine(g) : ''}
    <div class="row playrow"><button class="pri big" onclick="startUserGame('play')">Play</button><button onclick="startUserGame('watch')">Watch</button><button onclick="startUserGame('instant')">Instant</button>${L.phase === 'regular' ? '<button class="sm ghost" onclick="if(confirm(\'Sim the rest of the regular season?\')){simToPlayoffs();saveGame();render();}">Sim to playoffs</button>' : ''}</div></section>`;
 }
 function briefingCard() {

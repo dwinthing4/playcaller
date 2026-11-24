@@ -122,8 +122,9 @@ function noise(c) {
 }
 
 // ---------------- weather and kicks ----------------
-// k: { along (m/s, + = at the kicker's back), cross (m/s, + = toward his left), temp (F), weather }. Yards a kick gains or loses.
-function kickYds(k) { if (!k) return 0; const cold = clamp01((50 - (k.temp != null ? k.temp : 60)) / 40); return (k.along || 0) * 0.55 - cold * 4 - (k.weather === 'snow' ? 3 : k.weather === 'rain' ? 1 : 0); }
+// k: { along (m/s, + = at the kicker's back), cross (m/s, + = toward his left), temp (F), weather, alt (ft) }. Yards a kick gains or loses.
+// Thin air carries: about 2.5 yards at a mile high (src/league/15_geo.js has each city's altitude).
+function kickYds(k) { if (!k) return 0; const cold = clamp01((50 - (k.temp != null ? k.temp : 60)) / 40); return (k.along || 0) * 0.55 - cold * 4 - (k.weather === 'snow' ? 3 : k.weather === 'rain' ? 1 : 0) + Math.max(0, k.alt || 0) / 5280 * 2.5; }
 function windTxt(mph, ang) {      // ang: wind direction relative to the offense (0 = at its back)
   if (!mph || mph < 3) return 'calm';
   const a = ((ang % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI, c = Math.cos(a);

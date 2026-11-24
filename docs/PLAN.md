@@ -103,3 +103,17 @@ Games not played live (CPU vs CPU, Instant, Sim week) run through the league's p
 ## Coordinates (engine)
 Meters. x = sideline to sideline (0 = middle, +x = offense's LEFT when facing downfield), z = downfield for the offense, y up.
 Playbook dy (+ = right) maps to x = -dy * YD. Engine always runs plays toward +z; the renderer flips for the other direction.
+
+## Geography, travel, city weather, map (src/league/15_geo.js, src/ui/64_mapdata.js + 65_map.js/.css)
+- `geoTeam(T)` = where a team plays (fictional city table GEO_CITY, real stadiums GEO_REAL by team id, cached as `T.gk`), with roof
+  ('open'|'dome'|'retract'), surface, altitude and a climate (Sep/Jan highs, rain, snow, wind). `geoSite(name)` for neutral sites (g.site).
+- VENUE (src/core/30_venue.js) takes the stadium kind, roof, surface and altitude from the city; `atmo` draws weather from the climate
+  and the date (geoDate), uses `g.slot` for the time of day, closes retractable roofs on bad days. `VENUE.today()` adds roof, roofOpen, alt, surface.
+- Travel: `geoTravel(g, tid)` (miles, time zones, body clock from the slot, stamina cost ≤ 6%, altitude drain); the rotation
+  (rotTravelInit in 25_rotation.js) starts the road team below full stamina and caps recovery (half back at halftime).
+  `geoTravelEdge(g, tid)` / `LG.travelEdge` = an edge for the fast sim in power-edge points (home field = +1.5).
+- Kicks carry ~2.5 yd farther a mile up (RULES.kickYds k.alt). Wet grass is a touch slicker than wet turf (20_play env.mu).
+- Scouting: prospects' region = their college's region (geoCollege). Scout travel section of 60_staff.js: `scoutTrips()` (season calendar
+  of college games, showcases, all-star games + travel budget in L.strav), `scoutSend`, `scoutRecall`, `scoutMove` (next week).
+- Map screen: own nav group 'mapg' (registered from 65_map.js), layers League / Scouting / Pipelines. `geoPipeline(players, 'home'|'col')`
+  and `geoHome(p)` work on any player list, for a future college mode's recruits.

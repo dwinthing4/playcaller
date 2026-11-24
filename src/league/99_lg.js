@@ -63,3 +63,6 @@ Object.assign(LG._t, { rfParse, rfMatch, rfPlan, rfApply, rfExport, imgGet, imgP
 Object.assign(LG._t, { fastGame, fsimNorm, glParse, glSeason, simGame, makeSchedule, byeWeek, recBook, histDynasties, histScaledCareer, lgPtsPerGame, lgScale });
 // player realism (72_combine.js, 73_scoutx.js, 74_camp.js): measurables, combine, role archetypes, comps, draft-guide reports, camp
 Object.assign(LG._t, { msrOf, msrGen, msrEnsure, msrRead, msrPct, cmbRun, cmbProDays, cmbRead, cmbScore, cmbTop, draftValue, sxView, rarchOf, plkFor, plkUpdate, dgrReport, dgrLatest, dgrShort, tcampOpen, tcampState, tcampApply, tcampAuto, tcampLeft, pwoOpen, pwoApply, pwoLeft, reveal, scoutReportText });
+// geography, travel and scout trips (src/league/15_geo.js, the Scout travel section of 60_staff.js); travelEdge(g, tid) is a fast-sim edge in power points
+LG.travelEdge = (g, tid) => geoTravelEdge(g, tid); LG.travel = (g, tid) => geoTravel(g, tid);
+Object.assign(LG._t, { geoTeam, geoTravel, geoTravelEdge, geoTrips, geoCollege, geoHome, geoPipeline, scoutTrips, scoutSend, scoutRecall, scoutMove, scoutEvOpen });

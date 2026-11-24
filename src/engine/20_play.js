@@ -20,6 +20,7 @@ class Play {
     this.input = { x: 0, z: 0 }; this.userTouched = false; this.contactZ = null; this.fpZ = null;
     const wx = o.wx || null, wtr = o.weather || (wx && wx.weather) || 'clear';
     this.env = (wtr === 'rain' || wtr === 'snow') ? { mu: wtr === 'snow' ? 0.96 : 1.0, wet: true, snow: wtr === 'snow' } : { mu: 1.2, wet: false };     // slick footing (and slips on hard cuts, see locomote)
+    if (this.env.wet && !this.env.snow && wx && wx.surf === 'grass') this.env.mu *= 0.97;      // wet grass is a touch slicker than wet turf
     this.env.wind = wx && wx.wind && Math.hypot(wx.wind.x, wx.wind.z) > 0.3 ? { x: wx.wind.x, z: wx.wind.z } : null; this.env.cold = wx && wx.temp != null ? cl((45 - wx.temp) / 40, 0, 1) : 0;
     this.flagEv = [];                                          // things the officials might flag (holds, grabs, contact downfield, late hits): the match decides
     this.setup(); if (o.ret) this.setupReturn(o.ret);

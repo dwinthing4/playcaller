@@ -15,8 +15,12 @@ const ovOf = (T, ov) => Object.assign({}, (T && T.venue) || {}, ov || {});
 function of(T, ovIn) {
   const r = rngOf(hashS('venue|' + (T.city || '') + '|' + (T.name || '') + '|' + T.id)), q = Array.from({ length: 20 }, r);
   const ov = ovOf(T, ovIn), ch = (k, i, list) => (ov[k] != null && ov[k] !== 'auto' ? ov[k] : list[Math.min(list.length - 1, Math.floor(q[i] * list.length))]);
-  const v = {}; v.stadium = ch('stadium', 0, ['bowl', 'bowl', 'horseshoe', 'horseshoe', 'dome', 'college', 'college', 'retro', 'retro']); const S = v.stadium;
-  v.surface = ch('surface', 1, S === 'dome' ? ['turf'] : S === 'bowl' ? ['grass', 'grass', 'turf'] : ['grass', 'grass', 'grass', 'turf']);
+  // the city decides the roof and the surface (src/league/15_geo.js): domes and retractable roofs get the roofed ground, the paint stays the team's
+  const geo = typeof geoTeam === 'function' ? geoTeam(T) : null, gr = geo ? geo.roof : null;
+  const v = {}; v.stadium = ch('stadium', 0, gr === 'dome' || gr === 'retract' ? ['dome'] : gr ? ['bowl', 'bowl', 'horseshoe', 'horseshoe', 'college', 'college', 'retro', 'retro'] : ['bowl', 'bowl', 'horseshoe', 'horseshoe', 'dome', 'college', 'college', 'retro', 'retro']); const S = v.stadium;
+  v.roof = ov.roof || (S === 'dome' ? (gr === 'retract' ? 'retract' : 'dome') : 'open');
+  v.surface = ch('surface', 1, geo ? [geo.surf] : S === 'dome' ? ['turf'] : S === 'bowl' ? ['grass', 'grass', 'turf'] : ['grass', 'grass', 'grass', 'turf']);
+  v.alt = ov.alt != null ? +ov.alt : geo ? geo.alt : 0;
   v.mow = ch('mow', 2, v.surface === 'turf' ? ['stripes', 'wide', 'plain', 'stripes'] : ['stripes', 'stripes', 'wide', 'checker', 'diamond', 'lengthwise']);
   v.grass = ov.grass != null ? ov.grass : Math.floor(q[3] * 4);
   v.ez = ch('ez', 4, S === 'college' ? ['stripes', 'argyle', 'outline', 'script', 'solid'] : ['solid', 'solid', 'stripes', 'argyle', 'outline', 'script']);
@@ -38,32 +42,46 @@ function of(T, ovIn) {
   return v;
 }
 const weekOf = lg => (lg ? (lg.phase === 'playoffs' ? 18 + ((lg.playoff && lg.playoff.round) | 0) : lg.week | 0) : 0);
-// game day: time of day, weather, wind and temperature. Snow only from week 12, rain rarely, never under a roof.
+/// game day: time of day, weather, wind and temperature, from the home city's climate and the date (src/league/15_geo.js):
+// snow late in the season in cold open-air cities, heat early in the South, rain in the Northwest, nothing under a roof.
+// A retractable roof closes for rain, snow, cold, heat or a gale. The time of day follows the schedule slot (g.slot) when the
+// game has one. g: the game (default: the one this team hosts this week, which is also what the renderer finds).
 // wind: { mph, dir } with dir the angle it blows TOWARD in the field frame (0 = toward the end the home team attacks in the 1st quarter, +PI/2 = toward the offense's left)
-function atmo(T, v, lg, ovIn) {
+function atmo(T, v, lg, ovIn, gIn) {
   const wk = weekOf(lg);
   const r = rngOf(hashS('atmo|' + T.id + '|' + wk + '|' + (lg ? lg.year : 0))), x = r(), w = r(), ov = ovOf(T, ovIn);
-  let tod = x < 0.34 ? 'day' : x < 0.47 ? 'overcast' : x < 0.69 ? 'dusk' : 'night';
-  if (wk >= 18 && tod === 'overcast') tod = 'night';                   // playoff football: more of it under the lights
-  if (ov.tod && ov.tod !== 'auto') tod = ov.tod; if (v.stadium === 'dome') tod = 'dome';
-  let weather = 'clear'; if (tod !== 'dome') { if (wk >= 12 && w < 0.2 && tod !== 'dusk') weather = 'snow'; else if (w > 0.92 && tod !== 'day') weather = 'rain'; }
-  if (ov.weather && ov.weather !== 'auto' && tod !== 'dome') weather = ov.weather;
-  const out = { tod, weather, wk, late: Math.min(1, wk / 17), az: r(), el: r(), tgt: r() };
-  // wind and temperature come from their own streams (so the look above is unchanged for old saves)
+  const geo = typeof geoTeam === 'function', g = gIn !== undefined ? gIn : geo ? geoCurGame(lg, T.id) : null;
+  const place = geo ? (g && g.site && geoSite(g.site)) || geoTeam(T) : null, d = geo ? geoDate(lg ? lg.year : 2026, wk) : null;
+  const kick = place && g && g.slot ? geoKick(g, place, d) : null;
+  let tod;
+  if (kick) { const h = kick.local, m = d.getUTCMonth(), dark = m >= 10 || m <= 1; tod = h >= 18.5 ? 'night' : h >= 15.5 ? (dark || x < 0.4 ? 'dusk' : 'day') : 'day'; if (tod === 'day' && x > 0.86) tod = 'overcast'; }
+  else { tod = x < 0.34 ? 'day' : x < 0.47 ? 'overcast' : x < 0.69 ? 'dusk' : 'night'; if (wk >= 18 && tod === 'overcast') tod = 'night'; }   // playoff football: more of it under the lights
+  if (ov.tod && ov.tod !== 'auto' && ov.tod !== 'dome') tod = ov.tod;
+  const hour = kick ? kick.local : { day: 13.5, overcast: 13.5, dusk: 16.5, night: 20 }[tod] || 14, cl = place ? geoClimate(place, d, hour) : null;
+  let weather = 'clear';
+  if (cl) { if (w < cl.snow) weather = 'snow'; else if (w > 1 - cl.rain) weather = 'rain'; }
+  else if (wk >= 12 && w < 0.2 && tod !== 'dusk') weather = 'snow'; else if (w > 0.92 && tod !== 'day') weather = 'rain';
+  if (ov.weather && ov.weather !== 'auto') weather = ov.weather;
+  if (weather !== 'clear' && tod === 'day') tod = 'overcast'; if (weather === 'snow' && tod === 'dusk') tod = 'night';
+  // wind and temperature come from their own stream
   const r2 = rngOf(hashS('wx|' + T.id + '|' + wk + '|' + (lg ? lg.year : 0))), clim = rngOf(hashS('clim|' + T.id + '|' + (T.city || '')))();
-  if (tod === 'dome') { out.wind = { mph: 0, dir: 0 }; out.temp = 70; return out; }
   const u = r2(); let mph = u < 0.35 ? u / 0.35 * 5 : u < 0.8 ? 5 + (u - 0.35) / 0.45 * 7 : 12 + (u - 0.8) / 0.2 * 12;
   if (weather !== 'clear') mph += 3 + r2() * 6;
-  mph *= v.stadium === 'horseshoe' || v.stadium === 'college' ? 1.15 : v.stadium === 'bowl' ? 0.85 : 1;
+  mph *= (v.stadium === 'horseshoe' || v.stadium === 'college' ? 1.15 : v.stadium === 'bowl' ? 0.85 : 1) * (place ? 0.7 + 0.6 * place.wind : 1);
   if (ov.wind != null) mph = +ov.wind;
-  const dir = ov.windDir != null ? +ov.windDir : r2() * Math.PI * 2;
-  let temp = 82 - 46 * Math.pow(out.late, 1.15) - (wk >= 18 ? 4 : 0) + (clim - 0.5) * 28 + (r2() - 0.5) * 10 + (tod === 'night' ? -6 : tod === 'dusk' ? -3 : tod === 'day' ? 3 : 0);
-  if (weather === 'snow') temp = Math.min(temp, 20 + r2() * 11); else if (weather === 'rain') temp = Math.max(temp, 38 + r2() * 8);
+  const dir = ov.windDir != null ? +ov.windDir : r2() * Math.PI * 2, late = Math.min(1, wk / 17);
+  let temp = cl ? cl.t + (r2() - 0.5) * 10 : 82 - 46 * Math.pow(late, 1.15) - (wk >= 18 ? 4 : 0) + (clim - 0.5) * 28 + (r2() - 0.5) * 10 + (tod === 'night' ? -6 : tod === 'dusk' ? -3 : tod === 'day' ? 3 : 0);
+  if (weather === 'snow') temp = Math.min(temp, 20 + r2() * 12); else if (weather === 'rain') temp = Math.max(temp, 38 + r2() * 8);
   if (ov.temp != null) temp = +ov.temp;
+  // under a roof: a fixed dome always, a retractable one when the day is bad
+  const roof = v.roof || (v.stadium === 'dome' ? 'dome' : 'open'), bad = weather !== 'clear' || temp < 55 || temp > 86 || mph > 18;
+  const closed = ov.roofOpen != null && roof === 'retract' ? !ov.roofOpen : roof === 'dome' || (roof === 'retract' && bad) || (v.stadium === 'dome' && roof === 'open');
+  const out = { tod, weather, wk, late, az: r(), el: r(), tgt: r(), roof, closed, roofOpen: roof === 'retract' && !closed, alt: v.alt || 0, place: place ? place.name : T.city || '', slot: kick ? kick.slot : null };
+  if (closed) { out.tod = 'dome'; out.weather = 'clear'; out.wind = { mph: 0, dir: 0 }; out.temp = 70; out.outside = { weather, temp: Math.round(temp) }; return out; }
   out.wind = { mph: Math.round(Math.max(0, mph)), dir }; out.temp = Math.round(temp);
   return out;
 }
-// what the match needs: one call, no renderer
-function today(home, lg, ovIn) { const v = of(home, ovIn), a = atmo(home, v, lg, ovIn); return { tod: a.tod, weather: a.weather, wind: a.wind, temp: a.temp, dome: v.stadium === 'dome', stadium: v.stadium, wk: a.wk }; }
+// what the match needs: one call, no renderer. dome = played under a closed roof (no wind or weather, louder crowd)
+function today(home, lg, ovIn, g) { const v = of(home, ovIn), a = atmo(home, v, lg, ovIn, g); return { tod: a.tod, weather: a.weather, wind: a.wind, temp: a.temp, dome: a.closed, stadium: v.stadium, wk: a.wk, roof: a.roof, roofOpen: a.roofOpen, alt: a.alt, surface: v.surface, place: a.place, outside: a.outside || null }; }
 return { hashS, rngOf, OPTS, of, atmo, today, weekOf };
 })();

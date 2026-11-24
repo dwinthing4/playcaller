@@ -242,7 +242,7 @@ function teamLineup(t, formKey, side, ctx, rs) {
 }
 
 // ---------- match rotation state ----------
-function rotInit(H, A) { return { E: {}, work: {}, u: {}, last: {}, pend: {}, rest: {}, back: {}, n: {}, ids: (H.roster || []).concat(A.roster || []) }; }
+function rotInit(H, A) { const rs = { E: {}, work: {}, u: {}, last: {}, pend: {}, rest: {}, back: {}, n: {}, ids: (H.roster || []).concat(A.roster || []) }; rotTravelInit(rs, H, A); return rs; }
 function rotRecMul(p, kind) { return (0.5 + playerEndurance(p) / 100) * coachRecMul(p, kind); }   // coachRecMul: coach perks (62_coach.js)
 function rotDrain(p, work) { return ((ROT_BASE[p.pos] || .015) + work * ROT_K) * (1.5 - playerEndurance(p) / 100); }
 // effort during a live play: distance run, weighted toward sprinting, plus time spent locked in a block
@@ -259,9 +259,9 @@ function rotSnap(rs, lists, res, st, op) {
     const p = e && e.rp, id = p && p.id; if (id == null || on.has(id)) continue; on.add(id);
     let w = rs.work[id] || 0; if (res && res.carrier === id && !res.td) w += 12; if (tk.has(id)) w += 5;
     if (pass && li === 0 && e.slot) { const dp = rotRouteDepth(op, e.slot); w += dp >= 15 ? 14 : dp >= 8 ? 6 : dp >= 0 ? 2 : 0; }
-    rs.E[id] = clamp((rs.E[id] ?? 1) - rotDrain(p, w) * (st ? 0.8 : 1) + ROT_ON * rotRecMul(p), 0.05, 1);
+    rs.E[id] = clamp((rs.E[id] ?? 1) - rotDrain(p, w) * (st ? 0.8 : 1) * rotDm(rs, id) + ROT_ON * rotRecMul(p), 0.05, rotCap(rs, id));
   } });
-  for (const id of rs.ids) { if (on.has(id)) continue; const p = L.P[id]; if (p && (rs.E[id] ?? 1) < 1) rs.E[id] = Math.min(1, rs.E[id] + ROT_OFF * rotRecMul(p)); }
+  for (const id of rs.ids) { if (on.has(id)) continue; const p = L.P[id]; if (p && (rs.E[id] ?? 1) < 1) rs.E[id] = Math.min(rotCap(rs, id), rs.E[id] + ROT_OFF * rotRecMul(p)); }
   if (!st) for (const k in rs.pend) {
     const pd = rs.pend[k], B = rs.u[k] || (rs.u[k] = { acc: {}, on: {} });
     for (const id in pd.t) B.acc[id] = (B.acc[id] || 0) + pd.t[id];
@@ -271,9 +271,9 @@ function rotSnap(rs, lists, res, st, op) {
   rs.pend = {}; rs.work = {};
 }
 // breaks in the game: timeouts, the two-minute warning, quarter breaks, halftime
-function rotRest(rs, kind) { if (!rs) return; const a = ROT_REST[kind] || 0; for (const id of rs.ids) { const e = rs.E[id]; if (e == null || e >= 1) continue; const p = L.P[id]; if (p) rs.E[id] = Math.min(1, e + a * rotRecMul(p, kind)); } }
+function rotRest(rs, kind) { if (!rs) return; const a = ROT_REST[kind] || 0; if (kind === 'half') rotTravelHalf(rs); for (const id of rs.ids) { const e = rs.E[id]; if (e == null || e >= 1) continue; const p = L.P[id]; if (p) rs.E[id] = Math.min(rotCap(rs, id), e + a * rotRecMul(p, kind)); } }
 // stamina 0..1 right now (during a live play: minus what this play has cost him so far)
-function rotEnergy(rs, pid, pl) { if (!rs || pid == null) return 1; let e = rs.E[pid] ?? 1; const w = rs.work[pid]; if (w && pl && pl.phase === 'live') { const p = L.P[pid]; if (p) e -= rotDrain(p, w); } return clamp(e, 0, 1); }
+function rotEnergy(rs, pid, pl) { if (!rs || pid == null) return 1; let e = rs.E[pid] ?? 1; const w = rs.work[pid]; if (w && pl && pl.phase === 'live') { const p = L.P[pid]; if (p) e -= rotDrain(p, w) * rotDm(rs, pid); } return clamp(e, 0, 1); }
 function rotReport(rs) {
   if (!rs) return null; const out = {};
   for (const k in rs.n) { const tid = parseInt(k, 10), side = k.slice(String(tid).length), o = out[tid] || (out[tid] = { O: 0, D: 0, p: {} }); o[side] = rs.n[k]; const B = rs.u[k]; if (B) for (const id in B.on) o.p[id] = (o.p[id] || 0) + B.on[id]; }
@@ -342,3 +342,22 @@ function rotSetRole(T, pos, k, v) {
 function rotToggleLock(T, id) { const r = rotCfgW(T); if (r.lock[id]) delete r.lock[id]; else r.lock[id] = 1; }
 function rotSetOpt(T, k, v) { rotCfgW(T)[k] = !!v; }
 function rotReset(T, side) { const r = rotCfgW(T); for (const pos of ROT_GROUPS) { if ((DEF_POS.includes(pos) ? 'D' : 'O') !== side) continue; delete r.roles[pos]; delete r.preset[pos]; for (const id of T.roster) if (L.P[id] && L.P[id].pos === pos) { delete r.share[id]; delete r.lock[id]; } } }
+
+// ---------- road trips, thin air and heat (src/league/15_geo.js) ----------
+// A long trip costs the road team a few % of stamina at kickoff (geoTravel: miles, time zones, a 10 a.m. body clock), and they
+// only get half of it back at halftime: rs.cap[pid] = the most a player recovers to. Visitors at altitude and everyone on a hot
+// day tire faster: rs.dm[pid] multiplies the drain (teams from hot cities feel the heat half as much). rs.trv[tid] = the trip.
+function rotTravelInit(rs, H, A) {
+  rs.cap = {}; rs.dm = {}; rs.trv = {};
+  if (typeof geoTravel !== 'function' || !L || !H || !A || H.id == null || A.id == null || !L.teams || L.teams[H.id] !== H) return;
+  const g = geoCurGame(L, H.id, A.id) || { h: H.id, a: A.id }; let wx = null;
+  try { wx = VENUE.today(H, L, null, g); } catch (e) { wx = null; }
+  const heat = wx && !wx.dome && wx.temp > 84 ? Math.min(0.08, (wx.temp - 84) / 100) : 0;
+  for (const T of [H, A]) {
+    const t = geoTravel(g, T.id); if (!t) continue; rs.trv[T.id] = t; const hm = 1 + heat * (geoTeam(T).sep >= 86 ? 0.5 : 1), m = t.drain * hm;
+    for (const id of T.roster || []) { if (t.cost > 0) { rs.cap[id] = 1 - t.cost; rs.E[id] = 1 - t.cost; } if (m !== 1) rs.dm[id] = m; }
+  }
+}
+function rotTravelHalf(rs) { if (rs && rs.cap) for (const id in rs.cap) rs.cap[id] = 1 - (1 - rs.cap[id]) / 2; }
+function rotCap(rs, id) { return (rs && rs.cap && rs.cap[id]) || 1; }
+function rotDm(rs, id) { return (rs && rs.dm && rs.dm[id]) || 1; }
