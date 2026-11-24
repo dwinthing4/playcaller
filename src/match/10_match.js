@@ -1357,7 +1357,7 @@ function gmInit() {
   el.pclk = document.createElement('div'); el.pclk.className = 'pclk cx-plate'; el.pclk.innerHTML = '<small>PLAY CLOCK</small><b></b>'; el.hud.appendChild(el.pclk);
   el.sheet.addEventListener('click', hqClick);
 }
-function gmOpen(o) { G.daily = o.daily || null; G.sideMode = 'full'; G.pc = null; G.hurry = null; G.ln = null; lnClose(); pcKey = '-'; pcShow(null); }
+function gmOpen(o) { G.daily = o.daily || null; G.sideMode = 'full'; G.pc = null; G.hurry = null; G.ln = null; lnClose(); pcKey = '-'; pcShow(null); if (G.daily) dlySetup(); }
 // ---- the pregame screen: Play full game is the big button; the last choice is remembered (and marked)
 function gmIntroRow(ready) {
   const back = '<button class="ghost on" id="mBack">Back</button>';
@@ -1606,9 +1606,9 @@ function dcSnapLater(pl) {      // the offense snaps it once you are done (or af
 }
 
 // ---- the daily drive: one situation a day (src/ui/20_title.js builds it from the date); it ends with the drive and is scored
+function dlySetup() { const D = G.daily, u = G.user, o = opp(u); G.q = 4; G.clock = D.clock; G.score[u] = D.us; G.score[o] = D.them; G.to[u] = D.to; G.to[o] = 2; G.warned[2] = true; if (D.clock <= G.WARN) G.warned[4] = true; G.recvFirst = u; G.poss = u; G.yl = D.yl; }
 function dlyStart() {
-  const D = G.daily, u = G.user, o = opp(u);
-  G.q = 4; G.clock = D.clock; G.score[u] = D.us; G.score[o] = D.them; G.to[u] = D.to; G.to[o] = 2; G.warned[2] = true; if (D.clock <= G.WARN) G.warned[4] = true; G.recvFirst = u;
+  const D = G.daily, u = G.user; dlySetup();
   banner('DAILY DRIVE', D.short, 'good', 2200); tick(D.txt);
   after(2200, () => { if (G) setPossession(u, D.yl, 'Daily drive'); });
 }
@@ -1623,14 +1623,14 @@ const DLY_HOW = { TD: 'Touchdown', FG: 'Field goal', INT: 'Intercepted', Fumble:
 function dlyEnd() {
   const D = G.daily, u = G.user, o = opp(u), d = G.dailyD || {}, pts = Math.max(0, G.score[u] - D.us), yds = Math.round(d.yds || 0), left = Math.max(0, Math.round(G.clock)), won = G.score[u] > G.score[o], tie = G.score[u] === G.score[o];
   let how = DLY_HOW[d.result] || (G.clock <= 0 ? 'Time ran out' : d.result || 'Drive over'); if (d.result === 'TD') how += pts >= 8 ? ' + two' : pts === 7 ? ' + extra point' : '';
-  const score = Math.max(0, pts * 100 + Math.max(0, yds) + left * 2), verdict = won ? 'WON' : tie ? 'TIED' : 'LOST';
+  const score = Math.max(0, pts * 100 + Math.max(0, yds) + (pts > 0 ? left * 2 : 0) + (won ? 300 : tie ? 100 : 0)), verdict = won ? 'WON' : tie ? 'TIED' : 'LOST';
   const copy = `Playcaller Daily Drive ${D.date}\n${D.txt}\n${how}: ${verdict} · ${yds} yds, ${d.plays || 0} plays, ${clockTxt(left)} left · Score ${score}`;
   G.over = true; G.stage = 'final'; G.auto = null; G.timers = []; hideSheet(); actsFor('none'); lnClose(); pcShow(null); speedBar(false); if (glOk) R3D.overlay(null);
   G.result = { quit: false, daily: { date: D.date, pts, yds, left, plays: d.plays || 0, won, tie, how, verdict, score, copy } };
   overlay(`<div class="card dlyc"><div class="small mute" style="text-align:center;letter-spacing:.08em">DAILY DRIVE · ${esc(D.date)}</div>
     <div class="dlyv ${won ? 'good' : tie ? '' : 'bad'}">${won ? 'You won it' : tie ? 'Tied it' : 'Not today'}</div><div class="dlyh">${esc(how)}</div>
     <div class="dlys"><div><b>${pts}</b><span>points</span></div><div><b>${yds}</b><span>yards</span></div><div><b>${clockTxt(left)}</b><span>left</span></div><div class="sc"><b>${score}</b><span>score</span></div></div>
-    <div class="small mute" style="text-align:center">${esc(D.txt)}<br>Score: points × 100 + yards + 2 a second left</div>
+    <div class="small mute" style="text-align:center">${esc(D.txt)}<br>Score: points × 100 + yards, + 2 a second left if you scored, + 300 for the win</div>
     <div class="row" style="margin-top:12px"><button class="on" id="mCopy">Copy result</button><button class="pri big on" id="mDone">Done</button></div></div>`);
   document.getElementById('mCopy').onclick = e => { if (typeof dailyCopyText === 'function') dailyCopyText(copy, e.currentTarget); };
   document.getElementById('mDone').onclick = () => close(G.result);

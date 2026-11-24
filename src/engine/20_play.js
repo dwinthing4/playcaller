@@ -306,7 +306,11 @@ class Play {
     const bx = this.ballX, los = this.losZ, side = Math.sign(p.p.x - bx) || 1, qz = this.qb.p.z, W = x => cl(x, -FIELD.halfW + 1.5, FIELD.halfW - 1.5), z0 = Math.min(p.p.z, los - 0.9);
     const path = type === 'jet' ? [v2(W(bx - side * 6), z0)] : type === 'orbit' ? [v2(bx + side * 2.2, qz - 1.4), v2(bx - side * 0.9, qz - 2.1), v2(W(bx + side * 4), qz - 1.4)] : [v2(W(bx - (p.p.x - bx) * 0.85), p.p.z)];
     const then = p.role === 'route' ? 'route' : this.op.type === 'run' && p.posName === 'WR' ? 'block' : 'keep';
-    const m = { p, type, then, user: true, go: false, done: true, path, i: 0, side, t0: this.t, set: false, man: this.D.find(d => d.job === 'man' && d.cover === p) || null };
+    // in man coverage someone runs with him: his man, or (a run play, where nobody is assigned to the receivers) the defender across from him
+    const manCov = !!(typeof MAN_COVERAGES !== 'undefined' && MAN_COVERAGES[this.dp.cov]);
+    const near = d => Math.abs(d.p.x - p.p.x) + Math.abs(d.p.z - p.p.z) * 0.3 + (d.cover ? 8 : 0);
+    const man = this.D.find(d => d.job === 'man' && d.cover === p) || (manCov ? this.D.filter(d => !d.dl && d.job !== 'rush' && d.job !== 'deep' && !(d.zone && d.zone.deep)).sort((a, b) => near(a) - near(b))[0] : null);
+    const m = { p, type, then, user: true, go: false, done: true, path, i: 0, side, t0: this.t, set: false, man: man || null };
     this.motion = this.umo = m; p.route0 = p.route; p.route = null;      // his route is drawn again from where he ends up
     if (!m.man) { const end = path[path.length - 1], sh = cl((end.x - p.p.x) / 10, -1, 1) * 1.8;
       for (const d of this.D) if (!d.dl && d.job !== 'rush' && (d.zone || d.job === 'deep' || d.job === 'spy')) { const deep = (d.zone && d.zone.deep) || d.job === 'deep'; d.slideX = cl(d.p.x + sh * (deep ? 1.2 : 0.8), -FIELD.halfW + 1, FIELD.halfW - 1); if (d.zone) d.zone = Object.assign({}, d.zone, { x: d.zone.x + sh * 0.5 }); } }
