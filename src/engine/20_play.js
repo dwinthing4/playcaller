@@ -572,7 +572,7 @@ class Play {
     const gun = q.p.z < this.losZ - 3.5, tx = q.p.x + (this.gapX > q.p.x ? 0.55 : -0.55), tz = q.p.z + (gun ? 0.55 : 0.35), dx = tx - rb.p.x, dz = tz - rb.p.z, m = Math.hypot(dx, dz) || 1, cap = rb.vmax * (gun ? 0.95 : 0.88);
     locomote(rb, v2(dx / m * Math.min(cap, m * 4 + 2), dz / m * Math.min(cap, m * 4 + 2)), dt, env); slewHeading(rb, Math.atan2(this.gapX - rb.p.x, this.losZ - rb.p.z), 8, dt);
     if (Math.hypot(rb.p.x - q.p.x, rb.p.z - q.p.z) < 1.2 && this.liveT > 0.1) { this.handed = true; this.carrier = rb; rb.role = 'carrier'; this.ball.state = 'held'; this.kind = 'run'; rb.ballSide = this.gapX > rb.p.x ? -1 : 1;
-      for (const d of this.D) d.runRead = this.t + (d.recog + 0.09) * (this.op.pa ? 1.6 : 1); }
+      for (const d of this.D) d.runRead = this.t + (d.recog + 0.05) * (this.op.pa ? 1.6 : 1); }
   }
   // ball carrier AI: design gap behind the line, then field vision in the open
   runnerAI(c, dt, env) {
@@ -1450,7 +1450,7 @@ class Play {
         adv = (Ab.rbk * 0.7 + Ab.str * 0.3 + (b.tr.includes('mauler') ? 6 : 0)) / (Ad.bsh * 0.7 + Ad.str * 0.3) * massK;
         if (!d.dl) adv *= 1.1; if (!b.ol) adv *= (b.posName === 'TE' || b.posName === 'FB') ? 0.95 : 0.85;
         // an even run block holds past ~2.5 s about two times in three; a dominant tackle wins early more often
-        d.shedNeed = (1.75 + 2.8 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9) * (this.ret ? (this.ret.kind === 'punt' ? 1.0 : 1.2) : 1);     // return blocks are open-field shields: harder to shed in time
+        d.shedNeed = ((this.ret ? 1.45 : 1.75) + 2.8 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9) * (this.ret ? (this.ret.kind === 'punt' ? 1.0 : 1.2) : 1);     // return blocks are open-field shields: harder to shed in time
         if (!b.ol && this.catchT) d.shedNeed *= 0.5;      // a skill player blocking in space is a stalk, not a drive block: it holds a second or so
       }
       if (d === this.userD) d.shedNeed *= 0.75;      // user can fight off a block faster by working the stick
