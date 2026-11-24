@@ -223,7 +223,7 @@ const WORDS = {
   hard: { h: [0, 0.06], v: [0.045, 0.27, [740, 1250, 2650], [1.22, 0.92]], t: 0.335 } };
 SFX.bark = (B, t, o = {}) => {
   const W0 = WORDS[o.word] || WORDS.hut, v = voice(B, 1); if (!v) return; const f0 = (o.f0 || 175) * (0.96 + Math.random() * 0.08), lv = (o.g != null ? o.g : 1) * (o.word === 'hard' ? 1.35 : 1), sl = o.slow || 1;
-  const lp = fl(v, 'lowpass', 3600, 0.6), sum = gn(v, 1); chain(sum, lp, out(v, o.pan || 0, 0.32));
+  const lp = fl(v, 'lowpass', 3600, 0.6), sum = gn(v, 0.25); chain(sum, lp, out(v, o.pan || 0, 0.32));
   const [vt, vd, F, pc] = W0.v, d = vd * sl, src = os(v, 'voice', f0 * pc[0]), vg = gn(v, 0), nz = noise(v, null, t, t + vt + d + 0.12);
   src.frequency.setValueAtTime(f0 * pc[0], t + vt); src.frequency.linearRampToValueAtTime(f0 * pc[1], t + vt + d); src.connect(vg);
   const hg = gn(v, 0); nz.connect(hg);
@@ -242,16 +242,16 @@ SFX.horn = (B, t, o = {}) => {
   const tEnd = t + blasts[blasts.length - 1][0] + blasts[blasts.length - 1][1] + 0.5;
   for (const f of notes) for (const dt of [-0.0035, 0.0035]) { const x = os(v, per ? 'square' : 'sawtooth', f), m = gn(v, (per ? 0.07 : 0.085) / (per ? 1 : 1.2)); chain(x, m, pre);
     for (const [b0] of blasts) { x.frequency.setValueAtTime(f * (1 + dt) * 0.95, t + b0); x.frequency.exponentialRampToValueAtTime(f * (1 + dt), t + b0 + 0.12); } run(v, x, t, tEnd); }
-  const pk = (per ? 0.3 : 0.34) * lv; eg.gain.setValueAtTime(0, t);
+  const pk = (per ? 0.36 : 0.7) * lv; eg.gain.setValueAtTime(0, t);
   for (const [b0, d] of blasts) { const s = t + b0; eg.gain.setValueAtTime(0, s); eg.gain.linearRampToValueAtTime(pk, s + 0.07); eg.gain.linearRampToValueAtTime(pk * 0.9, s + d); eg.gain.exponentialRampToValueAtTime(pk * 0.001, s + d + 0.32); eg.gain.linearRampToValueAtTime(0, s + d + 0.33); }
 };
 // the broadcast sting: a low boom, a crash and a brass chord opening up
 SFX.sting = (B, t, o = {}) => {
   const v = voice(B, 2); if (!v) return; const lv = o.g != null ? o.g : 1, g = gn(v, lv); g.connect(out(v, 0, 0.4));
-  const bm = os(v, 'sine', 62), bg = gn(v, 0); chain(bm, bg, g); bm.frequency.setValueAtTime(64, t); bm.frequency.exponentialRampToValueAtTime(40, t + 0.7); env(bg.gain, t, 0.004, 0.42, 0.95); run(v, bm, t, t + 1.05);
-  const hp = fl(v, 'highpass', 4800, 0.7), cg = gn(v, 0); chain(hp, cg, g); noise(v, null, t, t + 1.8).connect(hp); env(cg.gain, t, 0.002, 0.16, 1.7);
+  const bm = os(v, 'sine', 62), bg = gn(v, 0); chain(bm, bg, g); bm.frequency.setValueAtTime(64, t); bm.frequency.exponentialRampToValueAtTime(40, t + 0.7); env(bg.gain, t, 0.004, 0.3, 0.95); run(v, bm, t, t + 1.05);
+  const hp = fl(v, 'highpass', 4800, 0.7), cg = gn(v, 0); chain(hp, cg, g); noise(v, null, t, t + 1.8).connect(hp); env(cg.gain, t, 0.002, 0.1, 1.7);
   const flt = fl(v, 'lowpass', 420, 1.6), sg = gn(v, 0); chain(flt, sg, g); flt.frequency.setValueAtTime(420, t); flt.frequency.exponentialRampToValueAtTime(2700, t + 0.07); flt.frequency.exponentialRampToValueAtTime(1100, t + 0.9);
-  for (const f of [116.5, 174.6, 233.1, 293.7, 349.2]) for (const dt of [-0.004, 0.004]) { const x = os(v, 'sawtooth', f * (1 + dt)), m = gn(v, 0.045); chain(x, m, flt); run(v, x, t, t + 1.5); }
+  for (const f of [116.5, 174.6, 233.1, 293.7, 349.2]) for (const dt of [-0.004, 0.004]) { const x = os(v, 'sawtooth', f * (1 + dt)), m = gn(v, 0.028); chain(x, m, flt); run(v, x, t, t + 1.5); }
   env(sg.gain, t, 0.025, 1, 1.35);
 };
 // the crowd answering a moment: vowel-shaped swells of noise (cheer rises and brightens, groan falls "aww", ooh, boo, a gasp);
@@ -259,7 +259,7 @@ SFX.sting = (B, t, o = {}) => {
 SFX.react = (B, t, o = {}) => {
   const kind = o.kind || 'cheer', sz = clamp(o.size != null ? o.size : 0.6, 0.1, 1.2), v = voice(B, 0); if (!v || !BUF.pink) return; const lv = (o.g != null ? o.g : 1) * sz;
   const g = gn(v, lv); g.connect(B.crowd);
-  const P = { cheer: { f: [650, 1350, 1100], q: 0.7, f2: 2400, a: 0.22, h: 0.5 + 0.8 * sz, r: 1.6 + 1.4 * sz, pk: 0.5 },
+  const P = { cheer: { f: [650, 1350, 1100], q: 0.7, f2: 2400, a: 0.22, h: 0.5 + 0.8 * sz, r: 1.6 + 1.4 * sz, pk: 0.36 },
     groan: { f: [880, 520, 360], q: 1.5, f2: 1250, a: 0.14, h: 0.35, r: 1.3, pk: 0.62 },
     ooh: { f: [480, 640, 430], q: 2, f2: 900, a: 0.16, h: 0.25, r: 0.8, pk: 0.62 },
     boo: { f: [330, 360, 330], q: 2.6, f2: 760, a: 0.38, h: 1.2, r: 0.8, pk: 0.75 },
@@ -301,7 +301,7 @@ function mkCrowd(B) {
 }
 // energy 0..1 (how loud the building is), val -1..1 (groan .. cheer), clap 0..1
 function crowdMix(e, val, clap, hush) {
-  return { bed: 0.075 + 0.15 * e, bab: 0.16 * (1 - 0.55 * e) * (1 - 0.7 * (hush || 0)), roar: 0.55 * Math.pow(e, 2.1), roarF: 620 + 1000 * e + 260 * val, shout: 0.42 * Math.pow(Math.max(0, e - 0.38), 1.4) * (val >= 0 ? 1 : 0.35), clap: 0.3 * clap };
+  return { bed: 0.03 + 0.12 * e, bab: 0.045 * (1 - 0.5 * e) * (1 - 0.7 * (hush || 0)), roar: 0.7 * Math.pow(e, 2.2), roarF: 620 + 1000 * e + 260 * val, shout: 0.42 * Math.pow(Math.max(0, e - 0.38), 1.4) * (val >= 0 ? 1 : 0.35), clap: 0.2 * clap };
 }
 function setP(Ly, key, p, v, t, up, dn) { if (!p) return; const last = Ly.last[key]; if (last != null && Math.abs(last - v) < 1e-3) return; p.setTargetAtTime(v, t, last == null || v > last ? up : dn); Ly.last[key] = v; }
 function crowdSet(Ly, t, X, up, dn) {
