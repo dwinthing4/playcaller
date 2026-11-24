@@ -28,6 +28,9 @@ await setup({ yl: 46, down: 3, togo: 7, q: 4, clock: 70 });
 await until(g => g.stage === 'call' && g.sheet === 'O');
 await page.evaluate(() => { const c = [...document.querySelectorAll('.sheet .pc[data-id]')].find(c => { const p = L.plays.find(x => x.id === c.dataset.id); return p && p.type === 'pass'; }); c && c.click(); });
 await until(g => g.stage === 'pre'); await wait(900); await shot('pre_snap_weather_crowd');
+// a hot route: tap a receiver's tag (twice: go, then slant ...)
+const hr = await page.evaluate(() => { const b = document.querySelector('.rb.hr'); if (!b) return null; const before = b.querySelector('u').textContent; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); return before; });
+await wait(350); const hr2 = await page.evaluate(() => { const b = document.querySelector('.rb.hr'); return b ? b.querySelector('u').textContent : null; }); console.log('hot route', hr, '->', hr2); await shot('hot_route');
 // snap; a defender grabs a receiver: the flag comes out mid-play
 await page.evaluate(() => { const g = MATCH._G; g.pre = null; }); await page.keyboard.press('Space').catch(() => { });
 if (phone) await page.evaluate(() => { const g = MATCH._G; if (g.stage === 'pre') g.play.snap(); });

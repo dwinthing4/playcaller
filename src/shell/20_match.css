@@ -257,3 +257,8 @@ body.phonemode #gui .joy{display:none!important}
 .kbar .kk3 button.sel{background:var(--on);color:var(--onink)}.kbar .kk3 small{font-size:9px;opacity:.55;margin-left:4px}
 @media (hover:none),(pointer:coarse){.kbar .kk3 small{display:none}}
 @media (max-width:520px){.kbar .kk3{width:100%;justify-content:center}.kbar .kk3 button{flex:1}}
+/* hot routes: the route on each pre-snap tag (tap to change it) */
+.rb.pre.hr{cursor:pointer;flex-direction:column;height:auto;min-height:26px;padding:3px 7px 2px;line-height:1.05}
+.rb.pre u{display:block;text-decoration:none;font:var(--cond-w) 9px/1.1 var(--cond);letter-spacing:.08em;color:var(--gold)}
+.rb.pre.blk u{color:var(--ink2)}
+.rb.pre.hr:active{transform:translate(-50%,-100%) scale(.94)}

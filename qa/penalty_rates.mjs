@@ -9,13 +9,14 @@ const N = +(process.argv[2] || 8), qlen = +(process.argv[3] || 120);
 const browser = await chromium.launch({ executablePath: exe, args: ['--use-angle=d3d11', '--enable-gpu'] });
 const page = await (await browser.newContext({ viewport: { width: 800, height: 600 } })).newPage(); const errs = [];
 page.on('pageerror', e => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1]));
+await page.addInitScript(() => { let s = 20261117; Math.random = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; });     // seeded, like match_sim
 await page.goto('file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/')); await page.waitForTimeout(300);
 await page.evaluate(q => { NG.slot = 3; NG.qlen = q; createLeague(); pickTeam(L.teams[0].id); }, qlen);
 const all = [];
 for (let i = 0; i < N; i++) {
   const r = await page.evaluate(i => new Promise(res => { const h = L.teams[(i * 2 + 1) % 32], a = L.teams[(i * 2 + 2) % 32]; L.week = (i * 3) % 17;
-    MATCH.open({ g: { h: h.id, a: a.id }, home: h, away: a, userTid: h.id, mode: 'instant', onDone: r => res({ hs: r.hs, as: r.as, pen: r.pen, wx: r.wx, drives: r.drives.length, dr: r.drives, pbp: r.pbp.filter(x => /PENALTY|Offsetting|runoff/.test(x)), plays: r.pbp.filter(x => / at /.test(x)).length }) }); }), i);
-  all.push(r);
+    MATCH.open({ g: { h: h.id, a: a.id }, home: h, away: a, userTid: h.id, mode: 'instant', onDone: r => res({ hs: r.hs, as: r.as, pen: r.pen, wx: r.wx, drives: r.drives.length, dr: r.drives, pbp: r.pbp.filter(x => /PENALTY|Offsetting|runoff/.test(x)), plays: r.pbp.filter(x => / at /.test(x)).length, full: r.pbp }) }); }), i);
+  all.push(r); if (process.env.DUMP && i === 0) for (const l of r.full) console.log(l);
   const pn = Object.values(r.pen || {}); console.log(`game ${i + 1}: ${r.as}-${r.hs}  plays ${r.plays}  drives ${r.drives}  penalties ${pn.map(x => `${x.n}-${x.yds}`).join(' / ')}  wx ${r.wx.weather} ${r.wx.temp}F wind ${r.wx.wind.mph}${r.wx.dome ? ' (dome)' : ''}`);
 }
 const n = all.length, acc = {}, dec = {}; let off = 0, runoff = 0;

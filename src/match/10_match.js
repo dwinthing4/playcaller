@@ -46,7 +46,7 @@ function init() {
   el.sheet.addEventListener('click', onSheetClick);
   el.kbar.addEventListener('pointerdown', e => { if (e.target.closest('[data-kick]')) { e.preventDefault(); if (G && G.kpow) G.kpow(); else kickAimGo(); } });
   el.touch.addEventListener('pointerdown', () => { if (G && G.kaim) kickAimGo(); });
-  el.acts.addEventListener('pointerdown', onAct);
+  el.acts.addEventListener('pointerdown', onAct); el.bub.addEventListener('pointerdown', onBubble);
   el.camBtn.onclick = () => { if (!G) return; if (el.cam.classList.contains('show')) closeCam(); else camPanel(); };
   el.cam.addEventListener('input', onCamInput); el.cam.addEventListener('change', onCamInput); el.cam.addEventListener('click', onCamClick);
   el.game.addEventListener('wheel', onWheel, { passive: false });
@@ -151,7 +151,7 @@ function doKickoff(kicker, free, q) {
     G.clock = Math.max(0, G.clock - 5);
     if (retTD) { banner('KICK RETURN TD!', `${pnm(rid)} takes it the distance`, isU(recv) ? 'good' : 'bad', 2400); return after(2400, () => score(recv, 6, 'Kick return TD', true)); }
     if (muff) { banner('FUMBLE!', `${KT.name} recover the kickoff`, isU(kicker) ? 'good' : 'bad', 2000); return after(2000, () => setPossession(kicker, 100 - ret, 'kick')); }
-    banner(`RETURN TO THE ${ret > 50 ? 100 - ret : ret}`, `${pnm(rid)} brings it back`, '', 1500); after(1500, () => setPossession(recv, ret, 'kick'));
+    banner(`RETURN TO THE ${ret > 50 ? 100 - ret : ret}`, `${pnm(rid)} brings it back`, '', 1500); after(1500, () => setPossession(recv, simRetFoul(recv, kicker, ret), 'kick'));
   });
 }
 // the kick is away (a played-out return): deep through kickGo, squib and onside through the engine's own kick types
@@ -180,6 +180,11 @@ function noteOnside(kicker) { (G.onsides = G.onsides || {})[kicker] = ((G.onside
 function onsideOdds(expect, k) { return clamp((expect ? 0.11 : 0.52) + (k ? (k.a.kac - 70) / 600 : 0), 0.04, 0.65); }       // measured in the engine (qa/onside_test.cjs)
 // a kickoff that sails out of bounds: the receiving team takes it at its 40
 function kobRoll(k, qq) { const p = qq != null ? (qq < 0.08 ? 0.5 : qq < 0.16 ? 0.15 : 0.003) : 0.006 * RULES.disc(k ? k.a.kac : 65); return R() < p; }
+// a return that is not played out (instant games): now and then a block in the back or a hold on it, 10 yards back from where it ended
+function simRetFoul(recv, kicker, yl) {
+  if (G.noFlags === true || G.noFlags === 'live' || R() > 0.07 * (G.penK || 1)) return yl; const blk = stUnit(recv, 10, new Set(), false), p = blk.length ? pick(blk) : null, f = { code: R() < 0.65 ? 'IBB' : 'RH', by: recv, pid: p ? p.id : null };
+  let yds = 10; if (yds > yl / 2) yds = yl / 2; countFoul(f, yds, 'accepted'); return Math.max(1, yl - yds);
+}
 function kickOOB(kicker) {
   const recv = opp(kicker), k = kickerOf(kicker, 'K'), f = { code: 'KOB', by: kicker, pid: k ? k.id : null }; G.retPlay = null; G.fouls = [];
   countFoul(f, 5, 'accepted'); G.pbp.push(`${qTxt(G.q)} ${clockTxt(G.clock)} ${TM(kicker).abbr} kickoff out of bounds: ${TM(recv).abbr} ball at the 40`);
@@ -211,7 +216,7 @@ function nextSnap() {
     G.clock = G.WARN; G.runoff = 0; G.warned[G.q] = true; banner('TWO-MINUTE WARNING', '', '', 1700); return after(1700, nextSnap); }
   if (!G.toChecked) { G.toChecked = true; if (cpuTimeout()) return after(1300, nextSnap); }
   const off = G.poss;
-  if (G.down === 4 && (!userCalls(off) || G.sim)) { const d = has('cpuFourth') ? LG.cpuFourth(off, ctxFor(off, 'O')) : (G.yl > 62 ? 'fg' : 'punt'); if (d === 'punt' && G.yl < 72) return punt(off); if (d === 'fg' && G.yl >= 52) return fieldGoal(off); }
+  if (G.down === 4 && (!userCalls(off) || G.sim)) { const d = has('cpuFourth') ? LG.cpuFourth(off, ctxFor(off, 'O')) : (G.yl > 62 ? 'fg' : 'punt'); if (d === 'punt' && G.yl < 72) return cpuFake(off, 'punt') ? fakePlay('punt', off) : punt(off); if (d === 'fg' && G.yl >= 52) return cpuFake(off, 'fg') ? fakePlay('fg', off) : fieldGoal(off); }
   if (G.sim) return after(0, simPlay);
   if (G.mode === 'play') return showSheet(isU(off) ? 'O' : 'D');
   autoCalls();
@@ -262,11 +267,11 @@ function autoCalls() {
   if (mine && mine.say && G.speed <= 2) sayBubble(mine.who, mine.say, isU(off) ? 'O' : 'D');
   startPlay(O.play, D.play, R() < 0.5);
 }
-function startPlay(op, dp, flip) {
+function startPlay(op, dp, flip, custom) {
   hideSheet(); closeOverlay();
   if (G.runoff > 0 && G.clock - G.runoff <= 0 && !G.pat) { G.clock = 0; G.runoff = 0; banner('CLOCK RUNS OUT', '', '', 1300); return after(1300, nextSnap); }
   G.wasRunning = G.runoff > 0; G.clock = Math.max(0, G.clock - G.runoff); G.runoff = 0; G.toChecked = false;
-  const off = G.poss, def = opp(off), opts = buildOpts(op, dp, flip);
+  const off = G.poss, def = opp(off), opts = custom || buildOpts(op, dp, flip); G.fakeKind = null;
   G.noise = crowdNoise(off); if (G.noise > 0) opts.off.bonus = (opts.off.bonus || 0) - G.noise * 0.9;     // a loud building: the road line works on a silent count
   applyConditions(opts, off); G.fouls = []; G.fev = 0; G.flagUp = false; G.pre = preRoll(opts); if (glOk && R3D.flag) R3D.flag(null);
   const uO = isU(off), uD = isU(def);
@@ -305,12 +310,12 @@ function onWhistle() {
   flagWatch(pl); const delay = judge(pl.result, { lists: G.cur.lists, lastX: x, target: pl.ball && pl.ball.target ? pl.ball.target.pid : null });
   if (delay >= 0) after(delay, nextSnap);
 }
-function simPlay() {
+function simPlay(fake) {
   if (!G || G.over) return;
-  const off = G.poss, def = opp(off), O = callFor(off, 'O'), D = callFor(def, 'D', O.play.form);
+  const off = G.poss, def = opp(off), O = fake && fake.op ? { play: fake.op } : callFor(off, 'O'), D = fake && fake.dp ? { play: fake.dp } : callFor(def, 'D', O.play.form);
   if (G.runoff > 0 && G.clock - G.runoff <= 0 && !G.pat) { G.clock = 0; G.runoff = 0; return nextSnap(); }
   G.wasRunning = G.runoff > 0; G.clock = Math.max(0, G.clock - G.runoff); G.runoff = 0; G.toChecked = false;
-  const opts = buildOpts(O.play, D.play, R() < 0.5); opts.userSide = null;
+  const opts = fake && fake.opts ? fake.opts : buildOpts(O.play, D.play, R() < 0.5); opts.userSide = null;
   G.noise = crowdNoise(off); if (G.noise > 0) opts.off.bonus = (opts.off.bonus || 0) - G.noise * 0.9; applyConditions(opts, off); G.fouls = []; G.fev = 0;
   G.cur = { op: O.play, dp: D.play, off, def, yl0: G.yl, down0: G.down, togo0: G.togo, clock0: G.clock, lists: [opts.off.list, opts.def.list] };
   { const pre = preRoll(opts); if (pre && pre.dead) { const d = applyFoul(pre, null, null); simProgress(); if (d >= 0) after(0, nextSnap); return; } if (pre) G.fouls.push(pre); }
@@ -366,6 +371,7 @@ function processResult(res, info) {
   }
   if (G.down > 4) { banner('TURNOVER ON DOWNS', `${TM(def).name} take over`, good(false), 2000); const ny = 100 - G.yl; closeDrive('Downs'); after(2000, () => setPossession(def, ny, 'Downs')); return -1; }
   G.runoff = stop ? 0 : G.RUN * (0.85 + R() * 0.3);
+  if (res.type === 'oob' && !warn && !((G.q === 2 && G.clock <= G.WARN) || (G.q >= 4 && G.clock <= G.qlen / 3))) G.runoff = G.RUN * 0.5;     // the clock starts again when the ball is spotted
   if (warn) after(1500, () => banner('TWO-MINUTE WARNING', '', '', 1500));
   return warn ? 3000 : 1650;
 }
@@ -548,7 +554,7 @@ function punt(tid, pq) {
     if (land >= 99) { banner('PUNT · TOUCHBACK', `${dist}-yard punt`, '', 1700); return after(1700, () => setPossession(recv, 20, 'Punt')); }
     if (retTD) { banner('PUNT RETURN TD!', TM(recv).name, isU(recv) ? 'good' : 'bad', 2400); G.poss = recv; return after(2300, () => score(recv, 6, 'Punt return TD', true)); }
     const ryl = clamp(100 - land + ret, 1, 99);
-    banner(`PUNT · ${dist} YDS`, fair ? 'Fair catch' : `Returned ${ret} yds`, '', 1700); after(1700, () => setPossession(recv, ryl, 'Punt'));
+    banner(`PUNT · ${dist} YDS`, fair ? 'Fair catch' : `Returned ${ret} yds`, '', 1700); after(1700, () => setPossession(recv, fair ? ryl : simRetFoul(recv, tid, ryl), 'Punt'));
   });
 }
 function fieldGoal(tid, quality, aimR) {
@@ -651,7 +657,7 @@ const avgAwr = (list, test) => { const a = list.filter(test).map(e => (e.rp && e
 const isOL = e => OLSM[e.slot] || e.pos === 'TE', isDL = e => /^D[ET]/.test(e.slot) || e.pos === 'DE' || e.pos === 'DT';
 // before the snap: does somebody jump? (dead-ball fouls stop it right there; offside and illegal formation are live: a free play)
 function preRoll(opts) {
-  if (G.pat || G.noFlags || !opts || !opts.off || !opts.def) return null;
+  if (G.pat || G.noFlags === true || G.noFlags === 'pre' || !opts || !opts.off || !opts.def) return null;
   const off = opts.off.tid, def = opts.def.tid, ol = opts.off.list || [], dl = opts.def.list || [], qb = ol.find(e => e.slot === 'QB');
   const code = RULES.preSnap({ k: G.penK, noise: G.noise || 0, oAwr: avgAwr(ol, isOL), dAwr: avgAwr(dl, isDL), qbAwr: qb && qb.rp ? qb.rp.a.awr : 70, cpuO: !userCalls(off) || G.mode !== 'play', late: (G.q === 2 || G.q >= 4) && G.clock < G.WARN * 1.6, audible: !!G.audLoud }, R);
   G.audLoud = false; if (!code) return null;
@@ -664,6 +670,7 @@ function preRoll(opts) {
 function snapCall(pl) {
   if (!pl) return; const f = G.pre; G.pre = null;
   if (f && f.dead && pl.phase === 'pre' && !pl.ret) return deadBall(pl, f);
+  if (G.fakeKind && !G.sim) { banner(G.fakeKind === 'punt' ? 'FAKE PUNT!' : 'FAKE FIELD GOAL!', '', isU(G.poss) ? 'good' : 'bad', 1300); } G.fakeKind = null;
   if (f) { G.fouls.push(f); if (!G.sim) { const p = pl.players.find(q => q.pid === f.pid); throwFlag(p ? p.p.x : pl.ballX, pl.losZ + (f.by === G.poss ? -0.5 : 0.5)); } }
   pl.snap();
 }
@@ -677,12 +684,12 @@ function deadBall(pl, f) {
 function throwFlag(x, z) { G.flagUp = true; if (glOk && !G.sim && R3D.flag) R3D.flag({ x, z }); if (!G.sim) tick('FLAG on the play'); }
 // new engine events since the last look: does the flag come out?
 function flagWatch(pl) {
-  if (!pl || !pl.flagEv || (G.pat && G.pat.two) || G.noFlags) return;
+  if (!pl || !pl.flagEv || (G.pat && G.pat.two) || G.noFlags === true || G.noFlags === 'live') return;
   const evs = pl.flagEv, from = G.fev || 0; G.fev = evs.length;
   for (let i = from; i < evs.length; i++) {
     const e0 = evs[i], list = [e0]; if (e0.k === 'grab' && !e0.trail) list.push(Object.assign({}, e0, { k: 'push', r: e0.r })); if (e0.k === 'tk' && e0.qb && e0.h > 1.5) list.push(Object.assign({}, e0, { k: 'helm' }));
     for (const ev of list) {
-      let code = EV2PEN[ev.k]; if (!code) continue; if (code === 'OH' && R() < 0.15) code = 'IUH'; if (code === 'DH' && R() < 0.3) code = 'IC';
+      let code = EV2PEN[ev.k]; if (!code) continue; if (code === 'OH' && R() < 0.1) code = 'IUH'; if (code === 'DH' && R() < 0.3) code = 'IC';
       const byO = !!EV_BY_O[ev.k], tid = pl.ret ? (byO ? G.retPlay && G.retPlay.recv : G.retPlay && G.retPlay.kicker) : (byO ? G.cur.off : G.cur.def);
       if (tid == null || G.fouls.length >= 2 || G.fouls.some(f => f.code === code && f.by === tid)) continue;
       if (R() >= RULES.chance(ev, { k: G.penK })) continue;
@@ -803,6 +810,56 @@ function applyFoul(f, res, info) {
   const o = RULES.enforce({ yl: G.yl, down: G.down, togo: G.togo }, { code: f.code, spotYl: f.spotYl }); countFoul(f, o.yds, 'accepted');
   return noPlay(f, res, info, o, 'accepted');
 }
+
+// ------------------------------------------------------------ fakes: the punt or field-goal unit lines up, then runs it or throws it
+// The defense is in its return / block look and reads it late. Run when it is short, throw when it is long.
+function fakeOpts(kind, tid) {
+  const T = TM(tid), DT0 = TM(opp(tid)), used = new Set(), ok = p => p && !(p.inj > 0) && !p.holdout && !p.redshirt;
+  const take = (team, pos, n, by) => (team.roster || []).map(P).filter(p => ok(p) && pos.includes(p.pos) && !used.has(p.id)).sort((a, b) => (by ? by(b) - by(a) : (b.ovr || 0) - (a.ovr || 0))).slice(0, n).map(p => (used.add(p.id), p));
+  const st = has('starters') ? LG.starters(T, 'Shotgun', 'O') : [], ol = st.filter(e => OLSM[e.slot]).map(e => ({ slot: e.slot, pos: e.pos, rp: P(e.pid != null ? e.pid : e.id), dx: e.dx, dy: e.dy })).filter(e => e.rp);
+  ol.forEach(e => used.add(e.rp.id)); if (ol.length < 5) return null;
+  const short = G.togo <= (kind === 'punt' ? 3 : 2), run = short, E = (slot, p, dx, dy) => p ? { slot, pos: p.pos, rp: p, dx, dy } : null;
+  const runner = p => p.a.spd + p.a.btk * 0.6 + p.a.car * 0.4, arm = p => p.a.thp + p.a.tha;
+  let O = ol.slice(), op;
+  if (kind === 'punt') {
+    const pp = take(T, ['FB', 'RB'], 1, runner)[0], pk = kickerOf(tid, 'P'); if (pk) used.add(pk.id); const wg = take(T, ['TE', 'FB'], 2), gn = take(T, ['WR'], 2, p => p.a.spd);
+    if (!pp || !pk || wg.length < 2 || gn.length < 2) return null;
+    if (run) { O.push(E('QB', pp, -5, 0), E('P', pk, -14, 0)); op = { id: 'fakeP', name: 'Fake punt', side: 'O', form: 'Punt', type: 'run', carrier: 'QB', scheme: 'power', gap: 'C', rside: R() < 0.5 ? 'L' : 'R', routes: {} }; }
+    else { O.push(E('QB', pk, -14, 0), E('RB', pp, -5, 0)); op = { id: 'fakeP', name: 'Fake punt pass', side: 'O', form: 'Punt', type: 'pass', routes: { X: 'go', Z: 'out', TE: 'flat', TE2: 'seam' } }; }
+    O.push(E('TE', wg[0], -1.5, -5.6), E('TE2', wg[1], -1.5, 5.6), E('X', gn[0], -1, -21), E('Z', gn[1], -1, 21));
+  } else {
+    const hq = (has('depthPick') && P(LG.depthPick(T, 'QB', 1))) || kickerOf(tid, 'P'), kk = kickerOf(tid, 'K'); if (hq) used.add(hq.id); if (kk) used.add(kk.id);
+    const wg = take(T, ['TE'], 2), wg2 = take(T, ['FB', 'TE', 'RB'], 2); if (!hq || !kk || wg.length < 2 || wg2.length < 2) return null;
+    O.push(E('QB', hq, -7, 0), E('K', kk, -9.5, -1.6), E('TE', wg[0], -1, -5.6), E('TE2', wg[1], -1, 5.6), E('SL', wg2[0], -1.6, -7.4), E('RB', wg2[1], -1.6, 7.4));
+    op = run ? { id: 'fakeF', name: 'Fake field goal', side: 'O', form: 'Field goal', type: 'run', carrier: 'QB', scheme: 'outside', gap: 'D', rside: R() < 0.5 ? 'L' : 'R', routes: {} }
+      : { id: 'fakeF', name: 'Fake field goal pass', side: 'O', form: 'Field goal', type: 'pass', routes: { TE: 'flat', TE2: 'corner', SL: 'drag', RB: 'flat' } };
+  }
+  O = O.filter(Boolean); if (O.length !== 11) return null;
+  // the other side: punt return (eight up, two jammers, a deep man) or field-goal block (everyone on the line)
+  const dl = take(DT0, ['DE'], 2).concat(take(DT0, ['DT'], kind === 'punt' ? 2 : 3)), lb = take(DT0, ['LB'], 3), cb = take(DT0, ['CB'], kind === 'punt' ? 3 : 2), sf = take(DT0, ['S'], 1);
+  if (dl.length < 4 || lb.length < 3 || cb.length < 2 || !sf.length) return null;
+  const D = [];
+  dl.forEach((p, i) => D.push({ slot: (p.pos === 'DE' ? 'DE' : 'DT') + (i + 1), pos: p.pos, rp: p, dx: 1, dy: [-5.5, 5.5, -1.6, 1.6, 0][i] }));
+  lb.forEach((p, i) => D.push({ slot: 'LB' + (i + 1), pos: p.pos, rp: p, dx: kind === 'punt' ? 1.6 : 1.2, dy: [-3.4, 3.4, kind === 'punt' ? -8 : 8][i] }));
+  if (kind === 'punt') { D.push({ slot: 'CB1', pos: cb[0].pos, rp: cb[0], dx: 1, dy: -21 }, { slot: 'CB2', pos: cb[1].pos, rp: cb[1], dx: 1, dy: 21 }); if (cb[2]) D.push({ slot: 'CB3', pos: cb[2].pos, rp: cb[2], dx: 36, dy: 0 }); D.push({ slot: 'S1', pos: 'S', rp: sf[0], dx: 13, dy: 0 }); }
+  else { D.push({ slot: 'CB1', pos: cb[0].pos, rp: cb[0], dx: 2.5, dy: -10 }, { slot: 'CB2', pos: cb[1].pos, rp: cb[1], dx: 2.5, dy: 10 }, { slot: 'S1', pos: 'S', rp: sf[0], dx: 8, dy: 0 }); }
+  if (D.length !== 11) return null;
+  const dp = { id: 'fakeD', name: kind === 'punt' ? 'Punt return' : 'Field goal block', side: 'D', form: 'Kick', cov: 'c3', blitz: [], surprise: true };
+  const fat = {}; for (const pid in G.fat) fat[pid] = clamp(1 - G.fat[pid] * 0.045, 0.35, 1);
+  const userSide = G.mode === 'play' ? (isU(tid) ? 'O' : isU(opp(tid)) ? 'D' : null) : null;
+  const opts = { losZ: G.yl * YDm, ballX: G.ballX, down: G.down, togo: G.togo, op: Object.assign({ flip: false }, op), dp, off: { tid, list: O, bonus: 0, style: T.offStyle }, def: { tid: opp(tid), list: D, bonus: 0, style: DT0.defStyle },
+    userSide, userSlot: 'LB1', diff: G.diff, seed: (G.seed + (++G.playN) * 7919) >>> 0, weather: 'clear', fatigue: fat };
+  return { op: opts.op, dp, opts };
+}
+function fakePlay(kind, tid) {
+  tid = tid != null ? tid : G.poss; hideSheet();
+  const F = fakeOpts(kind, tid); if (!F) return kind === 'punt' ? punt(tid) : fieldGoal(tid);
+  G.pbp.push(`${qTxt(G.q)} ${clockTxt(G.clock)} ${TM(tid).abbr} fake ${kind === 'punt' ? 'punt' : 'field goal'} (${F.op.type})`);
+  if (G.sim) return after(0, () => simPlay(F));
+  startPlay(F.op, F.dp, false, F.opts); G.fakeKind = kind;
+}
+// the CPU fakes now and then: mostly on 4th and short around midfield (punt) or 4th and a yard or two (field goal)
+function cpuFake(tid, kind) { if (G.pat || G.q >= 5) return false; const sd = G.score[tid] - G.score[opp(tid)], p = kind === 'punt' ? (G.togo <= 3 && G.yl >= 30 && G.yl <= 60 ? 0.04 : 0.004) : (G.togo <= 2 ? 0.03 : 0.003); return R() < (G.fakeP != null ? G.fakeP : p * (sd < 0 ? 1.5 : 1)); }
 
 // ------------------------------------------------------------ the end
 function finish() {
@@ -935,7 +992,7 @@ function ctxKey() {
 const ACTS = {     // [buttons, hint with a mouse + keyboard, hint on a touch screen]
   none: ['', '', ''],
   motion: [`<button class="a wide" style="opacity:.7">Motion…</button>`, 'Man in motion: the ball is snapped when he gets set', 'Man in motion…'],
-  preO: [`<button class="a big on" data-a="snap">SNAP</button><button class="a wide on" data-a="audible">Audible</button>`, 'Click the field (or Space) to snap', 'Tap the field to snap'],
+  preO: [`<button class="a big on" data-a="snap">SNAP</button><button class="a wide on" data-a="audible">Audible</button>`, 'Click the field (or Space) to snap · pass plays: click a tag for a hot route', 'Tap to snap · tap a tag for a hot route'],
   preD: [`<button class="a on" data-a="switch">Switch</button><button class="a on" data-a="audible">Audible</button>`, 'E switch player · WASD move after the snap', 'Switch picks your defender'],
   qb: [`<button class="a wide on" data-a="away">Throw away</button>`, 'Drag back to aim, let go to throw · drag forward to run · WASD moves in the pocket', 'Drag back to throw · drag forward to run · stick moves the QB'],
   run: [`<button class="a on" data-a="juke">Juke<span class="key">J</span></button><button class="a on" data-a="spin">Spin<span class="key">K</span></button><button class="a on" data-a="stiff">Stiff arm<span class="key">L</span></button><button class="a hot on" data-a="truck">Truck<span class="key">I</span></button>`, 'WASD or drag to run · let go and he keeps running', ''],
@@ -1044,12 +1101,19 @@ function applyInput(pl) {
   const b = R3D.basis(); pl.input.x = b.rx * sx - b.fx * sy; pl.input.z = b.rz * sx - b.fz * sy;
 }
 function recvOrder(pl) { return pl.receivers.slice().sort((a, b) => b.p.x - a.p.x); }
+// hot routes: tap a man's tag before the snap to cycle his route (pass plays)
+const HOT = ['go', 'slant', 'out', 'curl', 'block'], HOT_LAB = { go: 'GO', slant: 'SLANT', out: 'OUT', curl: 'CURL', block: 'BLOCK', custom: 'DRAWN', in: 'IN', post: 'POST', corner: 'CORNER', hitch: 'HITCH', stick: 'STICK', comeback: 'COMEBACK', seam: 'SEAM', flat: 'FLAT', drag: 'DRAG', wheel: 'WHEEL', screen: 'SCREEN', angle: 'ANGLE', fade: 'FADE' };
+function onBubble(e) {
+  const b = e.target.closest('.rb.hr'); if (!b || !G || !G.play || ctxKey() !== 'preO') return; e.preventDefault(); e.stopPropagation();
+  const pl = G.play, slot = b.dataset.slot, cur = (pl.op.routes || {})[slot] || 'block', nx = HOT[(HOT.indexOf(cur) + 1) % HOT.length];
+  if (pl.hotRoute && pl.hotRoute(slot, nx)) { bubKey = ''; if (glOk) R3D.overlay(pl, 'O'); tick(`Hot route: ${pnm((pl.O.find(p => p.slot === slot) || {}).pid)} ${nx === 'block' ? 'stays in to block' : 'runs a ' + nx}`); buzz(10); }
+}
 // receiver name tags before the snap (last name, OVR; on a keyboard, the 1-5 throw key). Gone once the ball is snapped so they never block the play.
 function bubbles() {
   const k = ctxKey(), pl = G.play, show = k === 'preO';
   if (!show) { if (bubKey) { el.bub.innerHTML = ''; bubKey = ''; } return; }
-  const rs = recvOrder(pl), sig = k + rs.map(r => r.id).join(',');
-  if (sig !== bubKey) { bubKey = sig; const keys = matchMedia('(pointer: fine)').matches; el.bub.innerHTML = rs.map((r, i) => `<div class="rb pre" data-r="${r.id}">${esc((r.rp && r.rp.ln) || r.slot)}${keys ? `<small>${i + 1}</small>` : ''}${r.rp && r.rp.ovr ? `<em>${r.rp.ovr}</em>` : ""}</div>`).join(''); }
+  const ro = recvOrder(pl), rs = pl.pass ? pl.O.filter(p => !p.ol && p !== pl.qb).sort((a, b) => b.p.x - a.p.x) : ro, rtOf = r => (pl.op.routes || {})[r.slot] || (r.role === 'route' ? r.routeName : 'block'), sig = k + rs.map(r => r.id + rtOf(r)).join(',');
+  if (sig !== bubKey) { bubKey = sig; const keys = matchMedia('(pointer: fine)').matches; el.bub.innerHTML = rs.map(r => { const i = ro.indexOf(r); return `<div class="rb pre${pl.pass ? ' on hr' : ''}${r.role === 'route' ? '' : ' blk'}" data-r="${r.id}" data-slot="${esc(r.slot)}">${esc((r.rp && r.rp.ln) || r.slot)}${keys && i >= 0 ? `<small>${i + 1}</small>` : ''}${r.rp && r.rp.ovr ? `<em>${r.rp.ovr}</em>` : ''}${pl.pass ? `<u>${esc(HOT_LAB[rtOf(r)] || String(rtOf(r)).toUpperCase())}</u>` : ''}</div>`; }).join(''); }
   const nodes = el.bub.children, upd = G.time - G.bubT > 0.12; if (upd) G.bubT = G.time;
   const W = el.game.clientWidth || innerWidth, H = el.game.clientHeight || innerHeight;
   // receivers split out wide can be off screen: pin their tag to the edge
@@ -1155,6 +1219,8 @@ function renderSheet() {
       ${side === 'O' ? `<button class="on ${G.flip ? 'pri' : ''}" data-act="flip">Flip ⇄</button>` : ''}
       ${side === 'O' && !G.pat && fg && G.yl >= 50 ? `<button class="on ${four === 'fg' ? 'pri' : ''}" data-act="fg">FG ${fg.d} yd · ${Math.round(fg.p * 100)}%</button>` : ''}
       ${side === 'O' && !G.pat && G.yl < 72 && (G.down === 4 || G.yl < 40) ? `<button class="on ${four === 'punt' ? 'pri' : ''}" data-act="punt">Punt</button>` : ''}
+      ${side === 'O' && !G.pat && G.down === 4 && G.yl < 72 ? `<button class="on ghost" data-act="fakep" title="Line up to punt, then ${G.togo <= 3 ? 'run it' : 'throw it'}">Fake punt</button>` : ''}
+      ${side === 'O' && !G.pat && G.down === 4 && fg && G.yl >= 55 ? `<button class="on ghost" data-act="fakefg" title="Line up for the kick, then ${G.togo <= 2 ? 'run it' : 'throw it'}">Fake FG</button>` : ''}
       ${side === 'O' && !G.pat && late && lead > 0 && G.down < 4 ? `<button class="on" data-act="kneel">Kneel</button>` : ''}
       ${side === 'O' && !G.pat && G.runoff > 0 && G.down < 4 ? `<button class="on" data-act="spike">Spike</button>` : ''}
       <span class="grp"><button class="on ghost" data-act="min">▾</button><button class="on ghost" data-act="simd">Sim drive</button><button class="on ghost" data-act="menu">☰</button></span>
@@ -1177,6 +1243,7 @@ function onSheetClick(e) {
   if (a === 'flip') { G.flip = !G.flip; renderSheet(); return; }
   if (a === 'fg') { hideSheet(); return fieldGoal(G.user); }
   if (a === 'punt') { hideSheet(); return punt(G.user); }
+  if (a === 'fakep' || a === 'fakefg') return fakePlay(a === 'fakep' ? 'punt' : 'fg', G.user);
   if (a === 'kneel') return kneel();
   if (a === 'spike') return spike();
   if (a === 'min') { el.sheet.classList.toggle('min'); return; }

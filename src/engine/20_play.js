@@ -91,6 +91,7 @@ class Play {
       const awr = d.A.awr; d.recog = d.dl ? 0.05 : d.posName === 'LB' ? cl(0.5 - awr / 300, 0.16, 0.45) : cl(0.75 - awr / 260, 0.3, 0.7);
       d.recog += this.diff.react * (this.userSide === 'O' ? 1 : this.userSide === 'D' ? -1 : 0);
       d.react = cl(0.3 - awr / 520 + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.36);
+      if (dp.surprise) { d.recog += 0.4; d.react += 0.06; }                // a fake: they lined up for a kick
     }
     this.assignCoverage(); this.applyFilm();
     // receivers and corners line up in a staggered stance: the inside foot back
@@ -166,6 +167,14 @@ class Play {
   }
 
   // ---------------- public control ----------------
+  // hot route before the snap: a new route for one man ('block' keeps him in to block)
+  hotRoute(slot, rt) {
+    if (this.phase !== 'pre' || !this.pass || this.ret) return false; const p = this.O.find(q => q.slot === slot); if (!p || p.ol || p === this.qb || (rt !== 'block' && !ROUTES[rt])) return false;
+    const paths = Object.assign({}, this.op.paths || {}); delete paths[slot]; this.op = Object.assign({}, this.op, { paths, routes: Object.assign({}, this.op.routes || {}, { [slot]: rt }) });
+    if (rt === 'block') { p.role = ['RB', 'FB'].includes(p.slot) || p.posName === 'TE' ? 'pp' : 'block'; p.asg = { t: p.role === 'pp' ? 'pass' : 'stalk', d: 0 }; p.asgX = 0; p.routeName = null; p.route = null; }
+    else { p.role = 'route'; p.routeName = rt; p.asg = null; this.buildRoute(p); }
+    this.receivers = this.O.filter(q => q.role === 'route'); this.quickGame = undefined; return true;
+  }
   snap() { if (this.phase !== 'pre') return; if (this.motion && !this.motion.done) { this.motion.go = true; return; } this.goLive(); }
   goLive() {
     this.phase = 'live'; this.liveT = 0; for (const p of this.players) { p.stance = false; }
@@ -1106,7 +1115,7 @@ class Play {
   }
   relEv(q) {          // a rusher bearing down on the passer as the ball comes out: will he pull up?
     if (!this.flagEv || this.ret) return; let best = null, bd = 9; for (const d of this.D) { if (!d.upright() || d.bondBy) continue; const dd = Math.hypot(d.p.x - q.p.x, d.p.z - q.p.z); if (dd < bd) { bd = dd; best = d; } }
-    if (!best || bd > 1.8) return; const cv = ((q.p.x - best.p.x) * best.vel.x + (q.p.z - best.p.z) * best.vel.z) / (bd || 1); if (cv > 2) this.flagEv.push({ k: 'rel', t: this.liveT, d: best.pid, dist: bd, cv, x: q.p.x, z: q.p.z, awr: best.A.awr });
+    if (!best || bd > 3) return; const cv = ((q.p.x - best.p.x) * best.vel.x + (q.p.z - best.p.z) * best.vel.z) / (bd || 1); if (cv > 1.5) this.flagEv.push({ k: 'rel', t: this.liveT, d: best.pid, dist: bd, cv, x: q.p.x, z: q.p.z, awr: best.A.awr });
   }
   ibbEv(b, d) {        // a return blocker who takes a man on from behind
     const f = d.fwd(), dx = b.p.x - d.p.x, dz = b.p.z - d.p.z, m = Math.hypot(dx, dz) || 1; if ((f.x * dx + f.z * dz) / m > -0.55) return;
@@ -1236,7 +1245,7 @@ class Play {
     d.engaged = true; d.wq = wq; d.gripT = 0; d.lungeT = 0; d.restLen = Math.max(0.6, dist); d.restMin = Math.max(0.58, dist - 0.1);
     if (this.contactZ === null) { this.contactZ = c.p.z; this.contactT = this.t; }
     if (this.fpZ === null) this.fpZ = c.p.z;
-    if (this.flagEv && !this.ret && this.phase === 'live') { this.flagEv.push({ k: 'tk', t: this.liveT, d: d.pid, c: c.pid, h: d.contactH, J, qb: c === this.qb && this.pass && !this.thrown && !this.scramble, x: c.p.x, z: c.p.z, awr: d.A.awr }); if (J > 600) this.flagEv.push({ k: 'ur', t: this.liveT, d: d.pid, c: c.pid, J, side: Math.abs(c.p.x) > FIELD.halfW - 1.5, x: c.p.x, z: c.p.z, awr: d.A.awr }); }
+    if (this.flagEv && !this.ret && this.phase === 'live') { this.flagEv.push({ k: 'tk', t: this.liveT, d: d.pid, c: c.pid, h: d.contactH, J, qb: c === this.qb && this.pass && !this.thrown && !this.scramble, x: c.p.x, z: c.p.z, awr: d.A.awr }); if (J > 450) this.flagEv.push({ k: 'ur', t: this.liveT, d: d.pid, c: c.pid, J, side: Math.abs(c.p.x) > FIELD.halfW - 1.5, x: c.p.x, z: c.p.z, awr: d.A.awr }); }
     this.bigHit = Math.max(this.bigHit, J); this.fx.push({ kind: shoulder ? 'hit' : 'grab', at: V3((c.p.x + d.p.x) / 2, h, (c.p.z + d.p.z) / 2), j: J });
     this.contacts = (this.contacts || 0) + 1; this.sumJ = (this.sumJ || 0) + J;
     { const t = v2(-n.z, n.x), vt = (c.vel.x - d.vel.x) * t.x + (c.vel.z - d.vel.z) * t.z, Ft = -Math.sign(vt) * 0.45 * J * Math.min(1, Math.abs(vt) / 2.5);

@@ -21,6 +21,7 @@ let n = 0; const shot = async name => page.screenshot({ path: path.join(shots, `
 const wait = ms => page.waitForTimeout(ms);
 await page.evaluate(() => startUserGame('play'));
 for (let i = 0; i < 240; i++) { const g = await G(); if (g && g.ready) break; await wait(500); }
+await page.evaluate(() => { MATCH._G.noFlags = true; });     // no penalty flags here: a false start would eat the snap this test is checking
 await page.click('#mKick');
 // pick a play of a given type from the call sheet
 const callPlay = async type => page.evaluate(t => { const cards = [...document.querySelectorAll('.sheet .pc[data-id]')]; const pick = cards.find(c => { const p = L.plays.find(x => x.id === c.dataset.id); return p && (!t || p.type === t); }) || cards[0]; if (pick) pick.click(); return !!pick; }, type);

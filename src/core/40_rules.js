@@ -30,7 +30,7 @@ const PEN = {
 };
 // how many flags: the per-snap odds run about twice the pro rate (only the common fouls are modelled, and a default game
 // with 2-minute quarters has ~33 snaps a side), so a game ends with about 5 accepted penalties a team. Longer quarters: more.
-const RATE = 2.2;
+const RATE = 2.8;
 const clamp01 = v => Math.max(0, Math.min(1, v));
 // discipline: awareness keeps a player from jumping the count, grabbing, or hitting late (50 -> 1.3x, 70 -> 1x, 90 -> 0.7x)
 const disc = awr => Math.max(0.55, Math.min(1.45, 1 + (70 - (awr || 60)) * 0.015));
@@ -78,17 +78,17 @@ const yardsTxt = (o, P) => (P.spot ? 'spot foul' : o.half ? 'half the distance t
 function chance(ev, ctx) {
   const k = RATE * (ctx && ctx.k != null ? ctx.k : 1);
   switch (ev.k) {
-    case 'beat': return clamp01((ev.pp ? 0.026 : 0.019) * k * disc(ev.awr) * (ev.ol ? 1 : 0.8));     // a beaten blocker who grabs as his man gets by
+    case 'beat': return clamp01((ev.pp ? 0.02 : 0.014) * k * disc(ev.awr) * (ev.ol ? 1 : 0.8));     // a beaten blocker who grabs as his man gets by
     case 'rbeat': return clamp01(0.018 * k * disc(ev.awr));                                        // return blocks
-    case 'grab': return clamp01(0.027 * k * disc(ev.awr) * (ev.trail ? 1.6 : 0.6));
-    case 'push': return clamp01(0.0055 * k * disc(ev.awr));                                         // the receiver shoves off a man in front of him                 // a defender with his hands on a receiver downfield, before the throw
-    case 'pi': return clamp01(0.27 * k * disc(ev.awr) * (ev.catchable ? 1 : 0.25) * (ev.early ? 1.5 : 0.8) * (ev.behind ? 1.25 : 0.8));
+    case 'grab': return clamp01(0.03 * k * disc(ev.awr) * (ev.trail ? 1.6 : 0.6));
+    case 'push': return clamp01(0.0035 * k * disc(ev.awr));                                         // the receiver shoves off a man in front of him                 // a defender with his hands on a receiver downfield, before the throw
+    case 'pi': return clamp01(0.5 * k * disc(ev.awr) * (ev.catchable ? 1 : 0.25) * (ev.early ? 1.5 : 0.8) * (ev.behind ? 1.25 : 0.8));
     case 'opi': return clamp01(0.06 * k * disc(ev.awr) * (ev.catchable ? 1 : 0.4));
     case 'late': return clamp01((ev.dt > 0.55 ? 0.4 : ev.dt > 0.35 ? 0.18 : 0.05) * k * 0.55 * disc(ev.awr));   // a hit on the passer after the ball is gone
-    case 'rel': return clamp01(0.05 * k * disc(ev.awr) * (ev.cv > 5 ? 1.5 : 1) * (ev.dist < 1 ? 1.4 : 1));    // drove the passer into the ground as he let it go
+    case 'rel': return clamp01(0.06 * k * disc(ev.awr) * (ev.cv > 5 ? 1.5 : 1) * (ev.dist < 1.2 ? 1.6 : ev.dist < 2 ? 1 : 0.4));    // drove the passer into the ground as he let it go
     case 'helm': return clamp01(0.02 * k * disc(ev.awr));                                          // a shot to the passer's head
     case 'tk': return clamp01(0.0024 * k * disc(ev.awr) * (ev.h > 1.45 ? 3.5 : ev.h > 1.25 ? 1.6 : 0.6));     // grabbed the face mask making the tackle
-    case 'ur': return clamp01((ev.side ? 0.06 : 0.012) * k * disc(ev.awr) * Math.min(2, (ev.J || 600) / 700));   // a shot on a runner going down, or out of bounds
+    case 'ur': return clamp01((ev.side ? 0.15 : 0.03) * k * disc(ev.awr) * Math.min(2, (ev.J || 600) / 700));   // a shot on a runner going down, or out of bounds
     case 'ibb': return clamp01(0.09 * k * disc(ev.awr));                                           // a return blocker hitting a man from behind
     case 'grd': return clamp01(0.32 * disc(ev.awr));
   }
@@ -97,9 +97,9 @@ function chance(ev, ctx) {
 // pre-snap: the line jumps (offense: false start, worse on the road in a loud building; defense: offside / encroachment)
 function preSnap(ctx, r) {
   const k = RATE * (ctx.k != null ? ctx.k : 1), noise = ctx.noise || 0;
-  const fs = 0.0145 * k * disc(ctx.oAwr) * (1 + 1.6 * noise) * (ctx.audible ? 1 + 2.2 * noise : 1);
-  const dj = 0.0085 * k * disc(ctx.dAwr) * (1 + (ctx.qbAwr - 70) * 0.012);         // a veteran QB's hard count draws them offside
-  const ilf = 0.0028 * k, dog = ctx.cpuO ? 0.0018 * k * (1 + 2 * noise) * (ctx.late ? 1.6 : 1) : 0;
+  const fs = 0.0062 * k * disc(ctx.oAwr) * (1 + 1.6 * noise) * (ctx.audible ? 1 + 2.2 * noise : 1);
+  const dj = 0.0095 * k * disc(ctx.dAwr) * (1 + (ctx.qbAwr - 70) * 0.012);         // a veteran QB's hard count draws them offside
+  const ilf = 0.0012 * k, dog = ctx.cpuO ? 0.0004 * k * (1 + 2 * noise) * (ctx.late ? 1.6 : 1) : 0;
   let u = r();
   if ((u -= fs) < 0) return 'FS';
   if ((u -= dj) < 0) { const v = r(); return v < 0.55 ? 'OFS' : v < 0.85 ? 'NZI' : 'ENC'; }
