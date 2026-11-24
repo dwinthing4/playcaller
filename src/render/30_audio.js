@@ -526,7 +526,7 @@ if (W && typeof document !== 'undefined') {
 }
 
 // ------------------------------------------------------------ settings: the switch, the volume, the sound test
-function apply() { if (!isOn()) { masterTo(); suspend(); return; } const a = ensure(); if (!a) return; masterTo(); if (M && !M.C) build(); if (M && M.C) setP(M.C, 'bus', a.crowd.gain, crowdVol() * (M.dome ? 1.35 : 1), a.ctx.currentTime, 0.1, 0.1); }
+function apply() { if (!isOn()) { masterTo(); suspend(); return; } const a = ensure(); if (!a) return; masterTo(); a.busyUntil = performance.now() + 1500; if (!(M && M.G && M.G.paused)) resume(); if (M && !M.C && running()) build(); if (M && M.C) setP(M.C, 'bus', a.crowd.gain, crowdVol() * (M.dome ? 1.35 : 1), a.ctx.currentTime, 0.1, 0.1); }
 const TESTS = [['crowd', 'Crowd'], ['roar', 'Roar'], ['groan', 'Groan'], ['boo', 'Boos'], ['hit', 'Pads'], ['bighit', 'Big hit'], ['catch', 'Catch'], ['kick', 'Kick'], ['punt', 'Punt'], ['whistle', 'Whistle'], ['flag', 'Flag'],
   ['cadence', 'Set… hut'], ['hard', 'Hard count'], ['horn', 'Score horn'], ['quarter', 'Quarter horn'], ['sting', 'TD sting'], ['rain', 'Rain'], ['wind', 'Wind'], ['click', 'Click']];
 // a few seconds of the bed for the test buttons (when no game is on)
@@ -571,7 +571,10 @@ function test(name) {
 async function renderOff(name, o = {}) {
   if (!OAC) return null; const sr = o.sr || 48000, dur = o.dur || 3, oc = new OAC(2, Math.round(sr * dur), sr);
   prep(oc, true); const B = makeBus(oc, !!o.dome, !!o.raw); B.master.gain.value = o.vol != null ? o.vol : 1;
-  if (name === 'load') { const Ly = mkCrowd(B); B.crowd.gain.value = 1; crowdSet(Ly, 0, crowdMix(0.7, 0.3, 0.5, 0), 0.05, 0.05); for (let t = 0.1; t < dur - 1; t += 0.1) SFX.hit(B, t, { k: Math.random(), helmet: Math.random() < 0.4, prio: 2 }); for (let t = 0.3; t < dur - 1; t += 1.5) { SFX.endWhistle(B, t, { two: 1 }); SFX.react(B, t + 0.2, { kind: 'cheer', size: 0.6 }); SFX.bark(B, t + 0.5, { word: 'hut' }); } }
+  if (name === 'load') {      // a busy game: the bed plus 10 hits a second, a whistle, a cheer and a bark every 1.5 s, each made just in time as in a match
+    const Ly = mkCrowd(B); B.crowd.gain.value = 1; crowdSet(Ly, 0, crowdMix(0.7, 0.3, 0.5, 0), 0.05, 0.05);
+    const win = w => { for (let t = w; t < w + 0.5 - 1e-6; t += 0.1) SFX.hit(B, t + 0.02, { k: Math.random(), helmet: Math.random() < 0.4, prio: 2 }); if (Math.round(w * 2) % 3 === 0) { SFX.endWhistle(B, w + 0.05, { two: 1 }); SFX.react(B, w + 0.2, { kind: 'cheer', size: 0.6 }); SFX.bark(B, w + 0.4, { word: 'hut' }); } };
+    win(0); for (let w = 0.5; w < dur - 1; w += 0.5) { const w0 = w; oc.suspend(w0).then(() => { win(w0); oc.resume(); }); } }
   else if (name === 'crowdAt') { const Ly = mkCrowd(B); B.crowd.gain.value = (o.dome ? 1.35 : 1); crowdSet(Ly, 0, crowdMix(o.e != null ? o.e : 0.5, o.val || 0, o.clap || 0, 0), 0.02, 0.02); }
   else if (name === 'reactAt') { SFX.react(B, 0.05, { kind: o.kind || 'cheer', size: o.size || 1 }); }
   else play(name, B, 0.05);

@@ -93,7 +93,8 @@ const res = { on: [], off: [] };
 for (const on of [true, false, true, false, true, false]) { await page.evaluate(o => { L.settings.sound = o; SND.apply(); }, on); await page.mouse.click(5, 5); await page.waitForTimeout(600); const r = await fps(); const d = await page.evaluate(() => SND.debug.ctx); res[on ? 'on' : 'off'].push(r); console.log(`  sound ${on ? 'on ' : 'off'} (${d}): ${r.fps.toFixed(1)} fps, p95 ${r.p95.toFixed(1)} ms, worst ${r.worst.toFixed(0)} ms`); }
 const med = a => a.map(r => r.fps).sort((x, y) => x - y)[Math.floor(a.length / 2)];
 const st = await page.evaluate(() => __sndT);
-const ld = await page.evaluate(async () => { const t0 = performance.now(); const r = await SND._render('load', { dur: 10 }); return { ms: performance.now() - t0, peak: r.peak }; });
+const ld = await page.evaluate(async () => { let t0 = performance.now(); const r = await SND._render('load', { dur: 10 }); const ms = performance.now() - t0; t0 = performance.now(); await SND._render('crowdAt', { e: 0.6, dur: 10 }); return { ms, bed: performance.now() - t0, peak: r.peak }; });
+console.log('  the crowd bed alone (always on): 10 s renders in ' + ld.bed.toFixed(0) + ' ms = ' + (ld.bed / 100).toFixed(1) + '% of one core');
 console.log('  audio-thread cost proxy: a busy 10 s mix (crowd, reverb, 10 hits/s, whistles, cheers, barks) renders offline in ' + ld.ms.toFixed(0) + ' ms = ' + (ld.ms / 100).toFixed(1) + '% of one core (peak ' + ld.peak + ' dBFS)');
 console.log(`  median fps: sound on ${med(res.on).toFixed(1)}, off ${med(res.off).toFixed(1)};  SND.frame ${(st.frame / Math.max(1, st.nf)).toFixed(3)} ms a frame (${st.nf} frames), engine events ${(st.ev / Math.max(1, st.ne) * 1000).toFixed(1)} µs each (${st.ne})`);
 
@@ -102,11 +103,11 @@ console.log('\n3. the Sound switch');
 await page.evaluate(() => { L.settings.sound = false; SND.apply(); }); await page.waitForTimeout(1200);
 const off = await page.evaluate(async () => { const G = MATCH._G, pl = G.play, m0 = SND.debug.made; for (let i = 0; i < 50; i++) { PHYS.onEvent('hit', pl, { j: 900, at: { x: 0, z: pl.losZ } }); PHYS.onEvent('end', pl, { type: 'tackle', yards: 3 }); } SND.frame(G, 0.016); SND.test('horn'); await new Promise(r => setTimeout(r, 300)); const d = SND.debug; return { ctx: d.ctx, master: d.master, made: d.made - m0 }; });
 console.log('  sound off:', JSON.stringify(off)); if (off.ctx === 'running' || off.master > 0 || off.made > 0) bad('the Sound switch did not silence everything');
-await page.evaluate(() => { L.settings.sound = true; SND.apply(); }); await page.mouse.click(5, 5); await page.waitForTimeout(800);
-const onAgain = await page.evaluate(() => SND.debug); console.log('  back on:', onAgain.ctx, 'master', onAgain.master); if (onAgain.ctx !== 'running') bad('did not resume when switched back on');
+await page.evaluate(() => { L.settings.sound = true; SND.apply(); });
+const onAgain = await page.evaluate(() => (async () => { for (let i = 0; i < 30; i++) { if (SND.debug.ctx === 'running') break; await new Promise(r => setTimeout(r, 100)); } return SND.debug; })()); console.log('  back on:', onAgain.ctx, 'master', onAgain.master); if (onAgain.ctx !== 'running') bad('did not resume when switched back on');
 // pause suspends
 await page.evaluate(() => { MATCH._G.paused = true; }); await page.waitForTimeout(800); const pz = await page.evaluate(() => SND.debug); console.log('  paused:', pz.ctx, 'master', pz.master); if (pz.ctx === 'running') bad('paused match still running audio');
-await page.evaluate(() => { MATCH._G.paused = false; }); await page.waitForTimeout(800); const rz = await page.evaluate(() => SND.debug); console.log('  resumed:', rz.ctx, 'master', rz.master); if (rz.ctx !== 'running') bad('did not resume after pause');
+await page.evaluate(() => { MATCH._G.paused = false; }); const rz = await page.evaluate(() => (async () => { for (let i = 0; i < 30; i++) { if (SND.debug.ctx === 'running') break; await new Promise(r => setTimeout(r, 100)); } return SND.debug; })()); console.log('  resumed:', rz.ctx, 'master', rz.master); if (rz.ctx !== 'running') bad('did not resume after pause');
 // quit the game through the pause menu, then the settings panel and its test buttons
 await page.evaluate(() => { document.querySelector('.mbtn.pause').click(); }); await page.waitForTimeout(300);
 await page.evaluate(() => { const b = document.querySelector('[data-m=quit]'); if (b) b.click(); }); await page.waitForTimeout(600);
