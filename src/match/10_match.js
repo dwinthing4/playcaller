@@ -87,6 +87,7 @@ function open(o) {
 }
 function teardown() { cancelAnimationFrame(raf); raf = 0; sling.id = null; sling.mode = null; closeCam(); speedBar(false); if (glOk) { R3D.overlay(null); R3D.aim(null); aimOn = false; R3D.clearPlayers(); R3D.camOverride = null; R3D.kickAim(null); if (R3D.flag) R3D.flag(null); R3D.windV = null; } if (el.kbar) el.kbar.classList.remove("show", "on"); if (G) { G.kickAnim = null; G.kaim = null; } G = null; }
 function close(result) {
+  if (typeof SND !== 'undefined') SND.on('close');
   const o = G.o; teardown(); el.game.hidden = true; applyRot(); PHYS.setWidth(1); document.body.classList.remove('phonemode'); document.body.classList.remove('ingame'); el.sheet.classList.remove('show'); el.ovl.className = 'ovl'; el.ovl.innerHTML = ''; el.acts.innerHTML = ''; el.bub.innerHTML = ''; actKey = '';
   try { if (o.onDone) o.onDone(result); } catch (e) { console.error(e); }
 }
@@ -117,6 +118,7 @@ function frame(now) {
   if (G.kickAnim && !G.paused) { kickFrame(dt); if (!G) return; }
   if (G.kaim && !G.paused) kickAimFrame();
   if (glOk && !G.sim) { aimFrame(); const pl = G.play; R3D.draw(pl, dt * (G.mode === 'watch' ? Math.min(G.speed || 1, 3) : 1), { ctl: pl && G.userSide && G.stage === 'live' ? pl.controlled() : (pl && G.userSide === 'D' && G.stage === 'pre' ? pl.userD : null), target: pl && pl.ball && pl.ball.state === 'air' && pl.ball.land ? pl.ball.land : null, camMode: G.camMode || 'O', bigBall: !!G.kickAnim, zoom: pl && pl.result && (pl.result.type === 'td' || pl.result.type === 'deftd') ? Math.max(0.72, 1 - pl.deadT * 0.2) : 1, focus: pl && G.userSide === 'D' && G.mode === 'play' ? pl.userD : null }); }
+  if (typeof SND !== 'undefined') SND.frame(G, dt);
   hudFrame();
 }
 
@@ -657,6 +659,7 @@ function condHud() {
     el.wxc.title = w.dome ? 'Indoors: no wind or weather' : `${w.weather === 'clear' ? (w.tod === 'overcast' ? 'Overcast' : 'Clear') : w.weather === 'rain' ? 'Rain: slick footing, wet ball' : 'Snow: slick footing, shorter kicks'} · ${w.temp}°F · wind ${mph} mph`;
     el.wxc.innerHTML = `${wxIcon(w)}<b>${w.dome ? 'DOME' : w.temp + '°'}</b>${w.dome ? '' : mph < 2 ? '<span class="wd">CALM</span>' : `<span class="wd">${ang == null ? '' : `<i style="transform:rotate(${Math.round(ang)}deg)">${ARROW}</i>`}${mph}<small>MPH</small></span>`}`; }
   const n = show && G.stage !== 'kick' && !(pl && pl.ret) && !G.kickAnim ? crowdNoise(G.poss) : 0, lvl = n < 0.12 ? 0 : Math.min(5, Math.ceil(n * 5)), ck = lvl + '|' + (n >= 0.7);
+  if (typeof SND !== 'undefined') SND.crowd(n);
   if (ck !== crowdKey) { crowdKey = ck; el.crowd.classList.toggle('show', lvl > 0); el.crowd.classList.toggle('loud', n >= 0.7); el.crowd.querySelectorAll('i').forEach((x, i) => x.classList.toggle('on', i < lvl)); }
 }
 
