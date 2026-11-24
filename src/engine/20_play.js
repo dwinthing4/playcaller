@@ -95,6 +95,7 @@ class Play {
       if (dp.surprise) { d.recog += 0.4; d.react += 0.06; }                // a fake: they lined up for a kick
     }
     this.assignCoverage(); this.applyFilm(); this.applyScout();
+    this.applyCalls();      // your calls at the line: spy, double, gap blitz, show blitz (see "calls at the line" below)
     // receivers and corners line up in a staggered stance: the inside foot back
     for (const p of this.players) { if (p.posName !== 'WR' && p.posName !== 'CB') continue; const back = p.unit === 'O' ? -1 : 1, inX = Math.sign(this.ballX - p.p.x) || 1, r = p.right();
       const f = p.feet.slice().sort((a, b) => ((b.x - p.p.x) * inX) - ((a.x - p.p.x) * inX))[0]; if (f) f.z += back * 0.32; }
@@ -199,6 +200,7 @@ class Play {
     this.ball.state = 'snap'; this.ball.t = 0; this.ball.from = V3(this.ballX, 0.3, this.losZ); this.ball.to = this.qb;
     if (this.motion && this.motion.then === 'block') { const m = this.motion.p; m.role = 'block'; m.asg = { t: 'stalk', d: 0 }; }
     if (this.motion && this.motion.then === 'route' && this.motion.p.role === 'route') this.buildRoute(this.motion.p);
+    if (this.umo) this.umoLive();
     this.fx.push({ kind: 'snap' });
   }
   controlled() {
@@ -242,6 +244,7 @@ class Play {
   preStep(dt) {
     const env = this.env, m = this.motion;
     for (const p of this.players) {
+      if (this.umo && this.umoStep(p, dt, env)) continue;      // motion you called at the line (and the defense reacting to it)
       if (m && m.go && p === m.p) { const dx = m.tx - p.p.x, sp = m.type === 'jet' ? 7.5 : m.type === 'across' ? 6.8 : 5; locomote(p, v2(Math.sign(dx) * Math.min(sp, Math.abs(dx) * 3), 0), dt, env); p.crouchT = 0.1;
         if (Math.abs(dx) < (m.type === 'jet' ? 2.2 : 0.4)) { m.done = true; this.goLive(); return; } continue; }
       locomote(p, v2(), dt, env);
@@ -249,6 +252,86 @@ class Play {
     }
     // man defenders shadow the motion man
     if (m && m.go) for (const d of this.D) if (d.cover === m.p) { const tx = m.p.p.x + (m.p.p.x > this.ballX ? -0.8 : 0.8); locomote(d, v2(cl((tx - d.p.x) * 3, -7, 7), 0), dt, env); }
+  }
+
+  // ---------------- calls at the line (the match's Calls and Motion buttons, src/match/10_match.js) ----------------
+  // Your defensive calls ride on dp.calls = { spy, dbl, gap: 'A'|'B'|'C', gx: +1|-1 (side of the ball, world x), show } and re-shape the
+  // called defense once its coverage is set (and before the protection is): who spies the QB, who doubles their best receiver, who shoots
+  // which gap, who walks up to show pressure and then drops. A man pulled off his receiver hands him to the spare man if there is one;
+  // if not, that receiver is open (the price of the call).
+  applyCalls() {
+    const C = this.dp && this.dp.calls; if (!C || this.o.ret) return; const bx = this.ballX, los = this.losZ;
+    const spare = ex => this.D.find(x => x !== ex && x.job === 'spy' && !x.qbSpy && !x.cover && !x.dl);
+    const release = d => { const r = d.cover, wasMan = d.job === 'man'; d.cover = null; d.zone = null; d.bracket = d.under = false; if (r && wasMan) { const s = spare(d); if (s) { s.job = 'man'; s.cover = r; s.cush = 2.2; } } };
+    const walk = (d, x, z) => { d.p.x = cl(x, -FIELD.halfW + 1, FIELD.halfW - 1); d.p.z = Math.max(los + 0.8, z); this.resetFeet(d); };
+    if (C.dbl) {
+      const val = p => (p.rp.ovr || 60) + (p.posName === 'WR' ? 4 : 0), wr = this.O.filter(p => !p.ol && p !== this.qb && (p.posName === 'WR' || p.posName === 'TE')).sort((a, b) => val(b) - val(a))[0];
+      if (wr) { const sd = Math.sign(wr.p.x - bx) || 1, far = d => (Math.sign(d.p.x - bx) === sd ? 0 : 4) + Math.abs(d.p.x - wr.p.x) * 0.1; this.dblR = wr;
+        const top = this.D.filter(d => d.posName === 'S' && d.job !== 'rush').sort((a, b) => far(a) - far(b))[0];
+        const under = this.D.find(d => d.job === 'man' && d.cover === wr) || this.D.filter(d => d.posName === 'CB' && d.job !== 'rush').sort((a, b) => Math.abs(a.p.x - wr.p.x) - Math.abs(b.p.x - wr.p.x))[0];
+        if (top) { if (top.cover !== wr) release(top); top.job = 'man'; top.cover = wr; top.zone = null; top.bracket = true; top.qbSpy = false; walk(top, lp(top.p.x, wr.p.x, 0.5), Math.max(top.p.z, los + 11 * YD)); }
+        if (under && under !== top) { if (under.cover !== wr) release(under); under.job = 'man'; under.cover = wr; under.zone = null; under.under = true; under.cush = 1.4; under.jump = Math.max(under.jump || 0, 0.3); }
+        const s2 = this.D.find(d => d !== top && d.posName === 'S' && d.zone && d.zone.deep); if (s2) s2.zone = { x: lp(s2.zone.x, bx * 0.5, 0.75), z: Math.max(s2.zone.z, los + 15 * YD), deep: true };     // the other safety: the whole deep middle is his
+      }
+    }
+    if (C.spy && !this.D.some(d => d.qbSpy)) {
+      const rank = d => (d.job === 'spy' ? 0 : d.zone && !d.zone.deep ? 2 : d.job === 'rush' ? 4 : d.job === 'man' ? 6 : 9) + Math.abs(d.p.x - bx) * 0.08 - ((d.A.spd || 60) - 70) * 0.04;
+      const s = this.D.filter(d => !d.dl && !d.bracket && !d.under && (d.posName === 'LB' || d.posName === 'S')).sort((a, b) => rank(a) - rank(b))[0];
+      if (s) { release(s); s.job = 'spy'; s.rushMove = null; s.qbSpy = true; s.gapAim = null; walk(s, lp(s.p.x, bx, 0.6), cl(s.p.z, los + 4 * YD, los + 7 * YD)); }
+    }
+    if (C.gap) {
+      const gx = C.gx < 0 ? -1 : 1, ol = this.O.filter(p => p.ol).map(p => ({ p, s: (p.p.x - bx) * gx })).sort((a, b) => a.s - b.s);
+      const c = ol.length ? ol.reduce((m, q) => (Math.abs(q.s) < Math.abs(m.s) ? q : m), ol[0]) : null, out = c ? ol.filter(q => q.s > c.s + 0.4) : [], g = out[0], t = out[1];
+      const te = this.O.find(p => !p.ol && p.posName === 'TE' && p.stance3 !== false && Math.abs(p.p.z - los) < 2.2 && t && (p.p.x - bx) * gx > t.s && (p.p.x - bx) * gx - t.s < 3.4);
+      let s = 1.2;
+      if (c) s = C.gap === 'A' ? (g ? (c.s + g.s) / 2 : c.s + 1.0) : C.gap === 'B' ? (g && t ? (g.s + t.s) / 2 : (g ? g.s + 1.0 : 3)) : (t ? (te ? (t.s + (te.p.x - bx) * gx) / 2 : t.s + 1.2) : 5.5);
+      const gapX = bx + s * gx, rank = d => Math.abs(d.p.x - gapX) * 0.5 + (d.posName === 'LB' ? 0 : d.posName === 'S' ? 3 : 5) + (d.job === 'man' ? 1.5 : 0) + (d.zone && d.zone.deep ? 6 : 0) + (d.qbSpy || d.bracket || d.under ? 50 : 0);
+      const b = this.D.filter(d => !d.dl && d.job !== 'rush').sort((a, b2) => rank(a) - rank(b2))[0];
+      if (b) { release(b); b.job = 'rush'; b.qbSpy = false; b.rushMove = 'speed'; b.gapAim = gapX; walk(b, lp(b.p.x, gapX, 0.75), Math.min(b.p.z, los + 2.6 * YD)); this.gapB = b;
+        for (const d of this.D) if (d.dl && Math.abs(d.p.x - gapX) < 0.9) { d.p.x = cl(d.p.x + (d.p.x >= gapX ? 1 : -1) * 0.7, -FIELD.halfW + 1, FIELD.halfW - 1); this.resetFeet(d); } }     // the lineman in that gap slants out of it
+    }
+    if (C.show) {      // walk up as if they are all coming, drop at the snap: the QB sees pressure and hurries it out, the droppers start a step late
+      this.showB = true; let n = 0; const deepN = this.D.filter(x => (x.zone && x.zone.deep) || x.job === 'deep').length;
+      for (const d of this.D.slice().sort((a, b) => Math.abs(a.p.x - bx) - Math.abs(b.p.x - bx))) {
+        if (n >= 3 || d.dl || d.job === 'rush' || d.qbSpy || d.bracket || d.under) continue; if (!(d.posName === 'LB' || (d.posName === 'S' && deepN >= 2 && !(d.zone && d.zone.deep)))) continue;
+        walk(d, lp(d.p.x, bx + (Math.sign(d.p.x - bx) || 1) * 1.4, 0.5), los + 1.6 * YD); d.react += 0.05; d.showDrop = true; n++; }
+    }
+  }
+  // motion you call at the line: 'jet' (full speed across, the ball is snapped as he passes the QB), 'orbit' (in, around behind the QB and
+  // back out to his side), 'across' (to the same spot on the other side, where he gets set). The defense gives itself away: in man the
+  // man on him runs with him; in zone nobody does and the whole defense slides toward where he is going.
+  setMotion(slot, type) {
+    if (this.phase !== 'pre' || this.ret || (this.umo && !this.umo.set)) return false;
+    const p = this.O.find(q => q.slot === slot); if (!p || p.ol || p === this.qb || p.role === 'rb' || !(p.posName === 'WR' || p.posName === 'TE' || p.role === 'route')) return false;
+    const bx = this.ballX, los = this.losZ, side = Math.sign(p.p.x - bx) || 1, qz = this.qb.p.z, W = x => cl(x, -FIELD.halfW + 1.5, FIELD.halfW - 1.5), z0 = Math.min(p.p.z, los - 0.9);
+    const path = type === 'jet' ? [v2(W(bx - side * 6), z0)] : type === 'orbit' ? [v2(bx + side * 2.2, qz - 1.4), v2(bx - side * 0.9, qz - 2.1), v2(W(bx + side * 4), qz - 1.4)] : [v2(W(bx - (p.p.x - bx) * 0.85), p.p.z)];
+    const then = p.role === 'route' ? 'route' : this.op.type === 'run' && p.posName === 'WR' ? 'block' : 'keep';
+    const m = { p, type, then, user: true, go: false, done: true, path, i: 0, side, t0: this.t, set: false, man: this.D.find(d => d.job === 'man' && d.cover === p) || null };
+    this.motion = this.umo = m; p.route0 = p.route; p.route = null;      // his route is drawn again from where he ends up
+    if (!m.man) { const end = path[path.length - 1], sh = cl((end.x - p.p.x) / 10, -1, 1) * 1.8;
+      for (const d of this.D) if (!d.dl && d.job !== 'rush' && (d.zone || d.job === 'deep' || d.job === 'spy')) { const deep = (d.zone && d.zone.deep) || d.job === 'deep'; d.slideX = cl(d.p.x + sh * (deep ? 1.2 : 0.8), -FIELD.halfW + 1, FIELD.halfW - 1); if (d.zone) d.zone = Object.assign({}, d.zone, { x: d.zone.x + sh * 0.5 }); } }
+    return true;
+  }
+  // a pre-snap step for the motion man and the defenders reacting to him (true = he moved this step)
+  umoStep(p, dt, env) {
+    const m = this.umo, mp = m.p;
+    if (p === mp) {
+      if (m.set) return false;
+      const last = m.i >= m.path.length - 1, t = m.path[m.i], dx = t.x - p.p.x, dz = t.z - p.p.z, dd = Math.hypot(dx, dz) || 1e-6, top = m.type === 'jet' ? 7.8 : 6.2, sp = Math.min(top, 1.2 + dd * (last && m.type !== 'jet' ? 2.6 : 9));
+      locomote(p, v2(dx / dd * sp, dz / dd * sp), dt, env); slewHeading(p, Math.atan2(dx, dz), 9, dt); p.stance = false; p.crouchT = 0.1;
+      if (m.type === 'jet' && (p.p.x - this.ballX) * m.side < 1.2) m.snapNow = true;        // passing the QB: snap it (the match does, so a jump at the line still counts)
+      if (dd < (last ? 0.35 : 0.9)) { if (!last) m.i++; else if (m.type === 'jet') m.snapNow = true; else { m.set = true; m.setNow = true; p.stance = true; p.crouchT = 0.25; if (p.role === 'route') this.buildRoute(p); else p.route = p.route0; } }
+      return true;
+    }
+    if (p === m.man) { const tx = mp.p.x + (mp.p.x > this.ballX ? -0.8 : 0.8); locomote(p, v2(cl((tx - p.p.x) * 3, -7.5, 7.5), 0), dt, env); slewHeading(p, Math.atan2(mp.p.x - p.p.x, mp.p.z - p.p.z), 6, dt); return true; }
+    if (p.slideX != null) { const dx = p.slideX - p.p.x; locomote(p, v2(cl(dx * 2.2, -3.2, 3.2), 0), dt, env); return true; }
+    return false;
+  }
+  // at the snap: the jet man still flying keeps going, out to the flat on the side he is running to
+  umoLive() {
+    const m = this.umo, p = m.p; m.done = true; if (m.set) return;
+    if (!p.route && p.role !== 'route') p.route = p.route0 || null;
+    if (m.type === 'jet' && p.role === 'route') { const dir = -m.side, W = x => cl(x, -FIELD.halfW + 0.8, FIELD.halfW - 0.8); p.route = [v2(W(p.p.x + dir * 5 * YD), p.p.z + 1 * YD), v2(W(p.p.x + dir * 13 * YD * FIELD.wk), p.p.z + 3.5 * YD)]; p.ri = 0; p.settle = false; p.deepR = false; }
   }
 
   // ---------------- kick returns: kickoffs and punts, played out ----------------
@@ -515,7 +598,7 @@ class Play {
     const awr = q.A.awr, op = this.op;
     // the drop sets the clock: quick game is out in ~1 s, a normal read starts after a full drop, deep shots and play action take longer
     if (this.quickGame === undefined) this.quickGame = !op.pa && !op.deep && this.receivers.every(r => !r.deepR);
-    const t0 = (op.pa ? 1.75 : op.deep ? 1.55 : this.quickGame ? 0.95 : 1.3) + (80 - awr) / 160, rt = 0.5 + (85 - awr) / 200;
+    const t0 = (op.pa ? 1.75 : op.deep ? 1.55 : this.quickGame ? 0.95 : 1.3) + (80 - awr) / 160 - (this.showB ? 0.3 : 0), rt = 0.5 + (85 - awr) / 200;     // (showB: they showed blitz, he hurries it out)
     if (this.liveT < t0) return;
     if (!this.reads) { const rs = this.receivers.slice(), keys = Object.keys(op.routes || {}); rs.sort((a, b) => keys.indexOf(a.slot) - keys.indexOf(b.slot)); const check = rs.filter(r => ['RB', 'FB'].includes(r.slot) || /flat|drag|angle|screen/.test(r.routeName || '')); this.reads = { main: rs.filter(r => !check.includes(r)).slice(0, 3), check: check.length ? check : rs.slice(-1) }; }
     const pr = this.pressureOn(q), pressured = pr < 1.8, idx = Math.floor((this.liveT - t0) / rt), need = -0.45 - awr / 400, wt = cl(0.3 - awr / 650, 0.12, 0.28);
@@ -764,6 +847,7 @@ class Play {
       return this.coverAI(d, dt, env);
     }
     // run (or catch made): read, fit, pursue
+    if (d.gapAim != null && !this.handed && this.kind === 'run' && !this.qbRun && d.p.z > this.losZ - 0.4) return this.rushAI(d, dt, env, false);     // a gap blitz on a run: he shoots it
     // a draw shows pass first: the rush goes upfield and the linebackers drop until they see the handoff
     if (!this.handed && this.kind === 'run' && !this.qbRun && (this.op.scheme === 'draw' || this.op.delay)) return d.job === 'rush' || d.dl ? this.rushAI(d, dt, env, false) : this.coverAI(d, dt, env);
     if (!this.handed && this.kind === 'run' && !this.qbRun) {     // mesh point: linebackers flow with the backfield, line attacks gaps
@@ -819,6 +903,7 @@ class Play {
       if (d.edge && side === qs && (d.p.x - q.p.x) * side > -0.5) { tx = side > 0 ? Math.max(tx, q.p.x + 1.3) : Math.min(tx, q.p.x - 1.3); tz = Math.max(tz, q.p.z + 0.8); } }
     else if (d.edge && d.contain && d.p.z > q.p.z + 0.6) { tx = q.p.x + side * 1.8; tz = q.p.z + 0.7; }     // contain rush: squeeze the pocket from outside, never rush past his depth (a QB who runs gets out the back door)
     else if (d.edge && d.rushMove === 'speed' && d.p.z > q.p.z + 1.2) { const out = Math.sign(d.p.x - q.p.x) || 1; tx = q.p.x + out * 2.4; tz = q.p.z - 0.4; }
+    if (d.gapAim != null && d.p.z > this.losZ - 0.4) { tx = d.gapAim; tz = this.losZ - 1.1; }      // a gap blitz: through his gap first, then to the ball
     const mx = tx - d.p.x, mz = tz - d.p.z, mm = Math.hypot(mx, mz) || 1, sp = runRead ? Math.min(d.vmax, mm * 3 + 1) : d.vmax;
     locomote(d, v2(mx / mm * sp, mz / mm * sp), dt, env); d.crouchT = this.liveT < 0.6 ? 0.45 : 0.25; slewHeading(d, Math.atan2(dx, dz), 8, dt);
   }
@@ -834,6 +919,7 @@ class Play {
     const lagged = r => { d.seenV.x += (r.vel.x - d.seenV.x) * k; d.seenV.z += (r.vel.z - d.seenV.z) * k; return d.seenV; };
     let tx, tz, track = null;
     if (d.job === 'deep') { let deepest = null; for (const r of this.receivers) if (!deepest || r.p.z > deepest.p.z) deepest = r; tx = deepest ? lp(0, deepest.p.x, 0.6) : 0; tz = Math.max(los + 13, deepest ? deepest.p.z + 5 : 0); }
+    else if (d.bracket && d.cover) { const r = d.cover, v = lagged(r); tx = r.p.x + v.x * 0.3 + (r.p.x > this.ballX ? -1.1 : 1.1); tz = Math.max(r.p.z + 3.4 + Math.max(0, v.z) * 0.3, los + 7); track = r; }     // the double: over the top of their best man, a step inside
     else if (d.job === 'man' && d.cover) {
       const r = d.cover, v = lagged(r), inside = r.p.x > this.ballX ? -0.55 : 0.55, depth = r.p.z - los;
       if (d.cush === undefined) d.cush = cl(d.p.z - r.p.z, 1, 5);

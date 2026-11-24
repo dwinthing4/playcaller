@@ -55,6 +55,7 @@ function init() {
   addEventListener('keydown', onKey); addEventListener('keyup', e => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
   addEventListener('resize', () => applyRot()); addEventListener('orientationchange', () => setTimeout(applyRot, 120));
+  gmInit();      // game modes, calls at the line, the play clock (section at the end)
 }
 function ensureGL() { if (glOk) return true; try { R3D.init(el.canvas); glOk = true; } catch (e) { console.error(e); glOk = false; } return glOk; }
 
@@ -71,6 +72,7 @@ function open(o) {
     diff: (L0 && L0.diff) || 'pro', playoffs: !!(L0 && L0.phase === 'playoffs'), seed: (Math.random() * 1e9) >>> 0, playN: 0, userSlot: 'LB1', flip: false,
     userSide: null, sheet: null, ready: false, lastEv: 0, bubT: 0, open: {} };
   G.wx = conditions(H, L0); G.pen = { [H.id]: { n: 0, yds: 0 }, [A.id]: { n: 0, yds: 0 } }; G.fouls = []; G.fev = 0; G.pre = null; G.penK = 1; condKey = crowdKey = '';
+  gmOpen(o);
   G.phone = phoneMode(); PHYS.setWidth(G.phone ? PHONE_W : 1); if (typeof R3D !== 'undefined') R3D.phone = G.phone; document.body.classList.toggle('phonemode', G.phone);
   document.body.classList.add('ingame'); el.game.hidden = false; setTimeout(applyRot, 0); el.ovl.className = 'ovl'; el.sheet.className = 'sheet on';
   G.auto = null; setSpeed(1); speedBar(G.mode === 'watch');
@@ -127,6 +129,7 @@ function startGame() {
 // kickoffs: deep (the usual), squib (a low skipper: no big return, but a shorter field), onside (a live ball at 10 yards: about 1 in 10 when
 // they expect it, half the time as a surprise). The kicking unit picks: you on the power bar, the CPU by the score and the clock.
 function doKickoff(kicker, free, q) {
+  gmKick(kicker);      // offense / defense only: who kicks, covers and returns
   const recv = opp(kicker), KT = TM(kicker), k = P(has('depthPick') ? LG.depthPick(KT, 'K', 0) : null), kp = k ? k.a.kpw : 70;
   G.freeKick = false; G.stage = 'kick';
   const visual = glOk && !G.sim && G.mode !== 'instant', from = free ? 20 : 35, wy = RULES.kickYds(kickWx(kicker)), user = userCalls(kicker) && !G.sim, kind = user ? null : kickKindFor(kicker, free);
@@ -208,6 +211,7 @@ function score(tid, pts, why, td) {
 }
 function nextSnap() {
   if (!G || G.over) return;
+  if (G.daily && gmDailyCheck()) return;      // the daily drive ends with its drive
   G.userSide = null; actsFor('none');
   if (G.pat) return patStage();
   if (G.clock <= 0) return endQuarter();
@@ -216,6 +220,7 @@ function nextSnap() {
     G.clock = G.WARN; G.runoff = 0; G.warned[G.q] = true; banner('TWO-MINUTE WARNING', '', '', 1700); return after(1700, nextSnap); }
   if (!G.toChecked) { G.toChecked = true; if (cpuTimeout()) return after(1300, nextSnap); }
   const off = G.poss;
+  if (gmSnap(off)) return;      // auto-side bookkeeping, the CPU's no-huddle and spikes
   if (G.down === 4 && (!userCalls(off) || G.sim)) { const d = has('cpuFourth') ? LG.cpuFourth(off, ctxFor(off, 'O')) : (G.yl > 62 ? 'fg' : 'punt'); if (d === 'punt' && G.yl < 72) return cpuFake(off, 'punt') ? fakePlay('punt', off) : punt(off); if (d === 'fg' && G.yl >= 52) return cpuFake(off, 'fg') ? fakePlay('fg', off) : fieldGoal(off); }
   if (G.sim) return after(0, simPlay);
   if (G.mode === 'play') return showSheet(isU(off) ? 'O' : 'D');
@@ -544,6 +549,7 @@ function wxKickTxt(tid, aim) { if (!G.wx || G.wx.dome) return ''; const kw = kic
 function kickerOf(tid, pos) { const id = has('depthPick') ? LG.depthPick(TM(tid), pos, 0) : null; return P(id); }
 function clockOut() { if (G.runoff > 0 && G.clock - G.runoff <= 0 && !G.pat) { G.clock = 0; G.runoff = 0; hideSheet(); banner('CLOCK RUNS OUT', '', '', 1300); after(1300, nextSnap); return true; } return false; }
 function punt(tid, pq) {
+  if (pq == null) gmKick(tid);
   if (pq == null && clockOut()) return;
   G.stage = 'kick'; G.toChecked = false; G.clock = Math.max(0, G.clock - G.runoff); G.runoff = 0; const recv = opp(tid), pp = kickerOf(tid, 'P'), kp = pp ? pp.a.kpw : 65;
   const visual = glOk && !G.sim && G.mode !== 'instant';
@@ -910,6 +916,7 @@ function hudFrame() {
   bubbles(); pchip();
   if (pl && G.stage === 'live' && pl.flagEv && pl.flagEv.length > (G.fev || 0)) flagWatch(pl);
   condHud();
+  gmFrame();      // the play clock, motion at the line
 }
 // the player you control and the ratings that matter for what he is doing right now
 const CHIP_KEYS = { pass: ['thp', 'tha', 'awr'], run: ['spd', 'elu', 'btk'], rec: ['spd', 'cth', 'elu'], def: ['spd', 'tak', 'pur'], cov: ['spd', 'mcv', 'zcv'], rush: ['prs', 'pow', 'spd'] };
@@ -1002,8 +1009,8 @@ function ctxKey() {
 const ACTS = {     // [buttons, hint with a mouse + keyboard, hint on a touch screen]
   none: ['', '', ''],
   motion: [`<button class="a wide" style="opacity:.7">Motion…</button>`, 'Man in motion: the ball is snapped when he gets set', 'Man in motion…'],
-  preO: [`<button class="a big on" data-a="snap">SNAP</button><button class="a wide on" data-a="audible">Audible</button>`, 'Click the field (or Space) to snap · pass plays: click a tag for a hot route', 'Tap to snap · tap a tag: hot route'],
-  preD: [`<button class="a on" data-a="switch">Switch</button><button class="a on" data-a="audible">Audible</button>`, 'E switch player · WASD move after the snap', 'Switch picks your defender'],
+  preO: [`<button class="a big on" data-a="snap">SNAP</button><button class="a on" data-a="audible">Audible</button><button class="a on" data-a="motion">Motion</button>`, 'Click the field (or Space) to snap · pass plays: click a tag for a hot route', 'Tap to snap · tap a tag: hot route'],
+  preD: [`<button class="a on" data-a="switch">Switch</button><button class="a on" data-a="dcall">Calls</button>`, 'E switch player · WASD move after the snap', 'Switch picks your defender'],
   qb: [`<button class="a wide on" data-a="away">Throw away</button>`, 'Drag back to aim, let go to throw · drag forward to run · WASD moves in the pocket', 'Drag back to throw · drag forward to run · stick moves the QB'],
   run: [`<button class="a on" data-a="juke">Juke<span class="key">J</span></button><button class="a on" data-a="spin">Spin<span class="key">K</span></button><button class="a on" data-a="stiff">Stiff arm<span class="key">L</span></button><button class="a hot on" data-a="truck">Truck<span class="key">I</span></button>`, 'WASD or drag to run · let go and he keeps running', ''],
   d: [`<button class="a on" data-a="switch">Switch<span class="key">E</span></button><button class="a big on" data-a="tackle">TACKLE<span class="key">Space</span></button>`, 'WASD or drag to take over · let go and he plays on his own', ''],
@@ -1016,6 +1023,7 @@ function actsFor(k) { if (k === actKey) return; actKey = k; const a = ACTS[k] ||
   if (k === 'none') { stickUp({ pointerId: stick.id }); joyUp({ pointerId: joy.id }); slingEnd(false); }
   if (k !== 'qb' && sling.mode === 'aim') slingEnd(false); }
 function doAct(a) {
+  if (lnAct(a)) return;      // Audible, Motion, Calls: the panels at the line
   const pl = G.play; if (!pl) return; const inp = pl.input;
   if (a === 'snap' && G.stage === 'pre') snapCall(pl);
   else if (a === 'audible' && G.stage === 'pre') { if (G.userSide === 'O' && G.noise > 0.5) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); } G.stage = 'call'; R3D.overlay(null); G.keepO = G.userSide === 'D' && G.cur ? G.cur.op : null; G.keepFlip = G.keepO && pl.op ? !!pl.op.flip : null; showSheet(G.userSide); }
@@ -1151,6 +1159,7 @@ function endAuto(msg) { if (!G || !G.auto) return; G.auto = null; G.mode = G.aut
 
 // ------------------------------------------------------------ play-call sheet
 function showSheet(side) {
+  if (gmSheet(side)) return;      // offense / defense only, no huddle
   G.stage = 'call'; actsFor('none');
   const off = G.poss, tid = G.user, s = { side, filter: 'coach', cc: null, pool: [], cpuO: null };
   if (side === 'PAT') { G.sheet = s; renderSheet(); return; }
@@ -1236,6 +1245,7 @@ function renderSheet() {
       ${side === 'O' && !G.pat && G.down === 4 && fg && G.yl >= 55 ? `<button class="on ghost" data-act="fakefg" title="Line up for the kick, then ${G.togo <= 2 ? 'run it' : 'throw it'}">Fake FG</button>` : ''}
       ${side === 'O' && !G.pat && late && lead > 0 && G.down < 4 ? `<button class="on" data-act="kneel">Kneel</button>` : ''}
       ${side === 'O' && !G.pat && G.runoff > 0 && G.down < 4 ? `<button class="on" data-act="spike">Spike</button>` : ''}
+      ${hqBtn(side)}
       <span class="grp"><button class="on ghost" data-act="min">▾</button><button class="on ghost" data-act="simd">Sim drive</button><button class="on ghost" data-act="menu">☰</button></span>
     </div>`;
   sh.classList.add('show'); sh.classList.remove('min'); G.sheetT = performance.now();
@@ -1277,9 +1287,9 @@ function introCard(f, building) {
   overlay(`<div class="card"><div class="small mute" style="text-align:center;letter-spacing:.08em">${G.playoffs ? 'PLAYOFFS' : G.g && G.g.wk != null ? 'WEEK ' + (G.g.wk + 1) : 'GAME DAY'} · ${G.mode === 'watch' ? 'WATCHING' : 'YOU COACH THE ' + uSide.toUpperCase() + ' TEAM'}</div>
     <div class="mu">${side(G.A)}<div class="at">@</div>${side(G.H)}</div>
     ${ready ? '' : `<div class="small mute" style="text-align:center">${building ? 'Sculpting players (first game only)…' : 'Loading…'}</div><div class="prog"><i style="width:${Math.round(f * 100)}%"></i></div>`}
-    <div class="row" style="margin-top:10px">${ready ? `<button class="pri big on" id="mKick">${G.mode === 'watch' ? 'Starting…' : 'Kick off'}</button>` : ''}<button class="ghost on" id="mBack">Back</button></div></div>`);
+    ${gmIntroRow(ready)}</div>`);
   if (typeof paintArt === 'function') { try { paintArt(el.ovl); } catch (e) { } }
-  const k = document.getElementById('mKick'); if (k && G.mode !== 'watch') k.onclick = () => { closeOverlay(); G.stage = 'kick'; startGame(); };
+  gmIntroBind();      // Play full game (#mKick) / offense only / defense only, or the daily drive
   document.getElementById('mBack').onclick = () => close({ quit: true });
 }
 function simCard() { overlay(`<div class="card"><h2>Simulating…</h2><div class="small mute">Both coordinators call it; every snap is still played out with the full physics.</div><div class="prog"><i></i></div></div>`); }
@@ -1288,6 +1298,7 @@ function pauseMenu() {
   if (!G || G.stage === 'final' || G.stage === 'load' || G.kickCb || G.penWait) return; G.paused = true;
   overlay(`<div class="card"><h2>Paused</h2><div class="small mute">${esc(TM(G.aid).abbr)} ${G.score[G.aid]} — ${esc(TM(G.hid).abbr)} ${G.score[G.hid]} · ${qTxt(G.q)} ${clockTxt(G.clock)}</div>
     <div class="row" style="margin-top:14px;flex-direction:column;align-items:stretch"><button class="pri on" data-m="resume">Resume</button><button class="on" data-m="cam">Camera…</button>${G.mode === 'watch' ? '<button class="on" data-m="take">Take over (play)</button>' : '<button class="on" data-m="watch">Sim to the end (watch, any speed)</button>'}<button class="on" data-m="simg">Finish instantly</button><button class="bad on" data-m="quit">Quit game (not saved)</button></div></div>`);
+  gmPause();      // switch between full game / offense only / defense only
   el.ovl.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
     const m = b.dataset.m; if (m === 'resume') return resume();
     if (m === 'cam') { closeOverlay(); G.paused = false; camPanel(); G.camWasPaused = false; return; }
@@ -1330,6 +1341,298 @@ function finalCard(pog) {
     ${gameLogs()}
     <div class="row" style="margin-top:14px"><button class="pri big on" id="mDone">Continue</button></div></div>`);
   if (typeof paintArt === 'function') { try { paintArt(el.ovl); } catch (e) { } }
+  document.getElementById('mDone').onclick = () => close(G.result);
+}
+
+// ------------------------------------------------------------ game modes and calls at the line
+// (gm = game mode here, not the general manager.) The pregame choice: the full game, offense only or defense only; the other side's
+// drives run as sim drives (watch at any speed, or take over that drive: the next one goes back to auto). At the line: audibles,
+// motion and quick defensive calls. The two-minute drill: a play clock, no huddle, spikes (the CPU hurries too). The daily drive.
+// Hooks into the code above: init, open, introCard, nextSnap, doKickoff, punt, showSheet, renderSheet, doAct, pauseMenu, hudFrame.
+const GM_KEY = 'pc_gmode', PCL_KEY = 'pc_pclock';
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+function gmInit() {
+  el.lpan = document.createElement('div'); el.lpan.className = 'lpan cx-sheet'; el.gui.appendChild(el.lpan); el.lpan.addEventListener('click', lnClick);
+  el.pclk = document.createElement('div'); el.pclk.className = 'pclk cx-plate'; el.pclk.innerHTML = '<small>PLAY CLOCK</small><b></b>'; el.hud.appendChild(el.pclk);
+  el.sheet.addEventListener('click', hqClick);
+}
+function gmOpen(o) { G.daily = o.daily || null; G.sideMode = 'full'; G.pc = null; G.hurry = null; G.ln = null; lnClose(); pcKey = '-'; pcShow(null); }
+// ---- the pregame screen: Play full game is the big button; the last choice is remembered (and marked)
+function gmIntroRow(ready) {
+  const back = '<button class="ghost on" id="mBack">Back</button>';
+  if (!ready) return `<div class="row" style="margin-top:10px">${back}</div>`;
+  if (G.mode === 'watch') return `<div class="row" style="margin-top:10px"><button class="pri big on" id="mKick">Starting…</button>${back}</div>`;
+  if (G.daily) return `<div class="dlyi"><b>DAILY DRIVE · ${esc(G.daily.date)}</b><span>${esc(G.daily.txt)}</span></div><div class="row" style="margin-top:10px"><button class="pri big on" id="mKick">Start the drive</button>${back}</div>`;
+  const last = lsGet(GM_KEY, 'full'), b = (id, m, t, s) => `<button class="on gmb${last === m ? ' last' : ''}" id="${id}"><b>${t}</b><small>${s}</small>${last === m ? '<em>LAST TIME</em>' : ''}</button>`;
+  return `<div class="gmodes"><button class="pri big on" id="mKick">Play full game</button><div class="gm2">${b('mOff', 'O', 'Offense only', 'Your defense sims itself')}${b('mDef', 'D', 'Defense only', 'Your offense sims itself')}</div>${back}</div>`;
+}
+function gmIntroBind() {
+  const go = m => () => { if (!G || G.stage !== 'load') return; G.sideMode = m; if (!G.daily) lsSet(GM_KEY, m); closeOverlay(); G.stage = 'kick'; if (G.daily) dlyStart(); else startGame(); };
+  const k = document.getElementById('mKick'); if (k && G.mode !== 'watch') k.onclick = go('full');
+  for (const [id, m] of [['mOff', 'O'], ['mDef', 'D']]) { const b = document.getElementById(id); if (b) b.onclick = go(m); }
+}
+// ---- offense only / defense only: the side you are not playing is a sim drive (your coordinator calls it)
+function gmAutoOn(tid, msg) {
+  G.auto = { kind: 'drive', tid, side: true }; G.autoFrom = G.mode === 'watch' ? 'watch' : 'play'; G.mode = 'watch'; G.sheet = null;
+  slingEnd(false); G.userSide = null; if (G.play) G.play.userSide = null; actsFor('none'); hideSheet(); lnClose();
+  setSpeed(G.sideSpd || 4); speedBar(true); if (msg) tick(msg);
+}
+function gmWants(side) { return !!G.sideMode && G.sideMode !== 'full' && G.mode === 'play' && !G.auto && !G.sim && !G.over && (side === 'O' || side === 'D') && side !== G.sideMode; }
+// showSheet asks first: true = taken care of (an auto drive, or the no-huddle bar instead of the playbook)
+function gmSheet(side) {
+  if (!G) return false; el.sheet.classList.remove('hq');
+  if (side === 'O' && G.hqFull) { G.hqFull = false; return false; }
+  if (G.mode !== 'play') return false;
+  if (side === 'PAT' && G.sideMode === 'D' && !G.auto && !G.sim && G.pat && !G.pat.two) { const t = G.pat.tid; gmAutoOn(t, null); if (cpuGoFor2(t)) startTwo(t); else kickXP(t); return true; }
+  if (gmWants(side) && !(G.drive && G.sideSeen === G.drive)) { gmAutoOn(G.poss, side === 'D' ? 'Offense only: watching their drive' : 'Defense only: watching your drive'); G.stage = 'call'; autoCalls(); return true; }
+  if (side === 'O' && hqWanted()) { hqShow(); return true; }
+  return false;
+}
+// every snap, before the call (nextSnap): remember the drive the auto side had (a take-over keeps the rest of it yours) and its speed
+function gmSnap(off) {
+  if (G.auto && G.auto.side) { G.sideSeen = G.drive; G.sideSpd = G.speed; }
+  return hqCpu(off);
+}
+// kicks: offense only, the CPU kicks and covers and you return; defense only, you kick and cover and the CPU returns
+function gmKick(kicker) {
+  if (!G || !G.sideMode || G.sideMode === 'full' || G.sim || G.over || G.daily || (G.auto && !G.auto.side)) return;
+  const uKicks = isU(kicker), want = G.sideMode === 'O' ? uKicks : !uKicks;
+  if (want && !G.auto && G.mode === 'play') gmAutoOn(opp(kicker), null);
+  else if (!want && G.auto && G.auto.side) endAuto(uKicks ? 'Your kick: you cover it' : 'Your ball: you return it');
+}
+function gmPause() {
+  if (!G || G.daily || G.over || !(G.mode === 'play' || (G.auto && G.auto.side))) return;
+  const card = el.ovl.querySelector('.card'), row = card && card.querySelector('.row'); if (!row) return; const cur = G.sideMode || 'full';
+  row.insertAdjacentHTML('beforebegin', `<div class="gmp"><span class="small mute">You play</span><div class="seg">${[['full', 'Full game'], ['O', 'Offense only'], ['D', 'Defense only']].map(([m, t]) => `<button class="on${cur === m ? ' sel' : ''}" data-gm="${m}">${t}</button>`).join('')}</div></div>`);
+  card.querySelectorAll('[data-gm]').forEach(b => b.onclick = () => gmSwitch(b.dataset.gm));
+}
+function gmSwitch(m) {
+  if (!G || G.over) return; G.sideMode = m; lsSet(GM_KEY, m); resume(); G.sideSeen = null;
+  if (G.auto && G.auto.side) endAuto(null);
+  const mine = G.poss === G.user ? 'O' : 'D';
+  if (m === 'full' || mine === m || G.auto) { tick(m === 'full' ? 'Full game: every snap is yours' : `${m === 'O' ? 'Offense' : 'Defense'} only`); return; }
+  if (G.stage === 'call' && G.sheet) { const s = G.sheet.side; hideSheet(); G.sheet = null; return showSheet(s === 'PAT' ? 'PAT' : mine); }
+  gmAutoOn(G.poss, m === 'O' ? 'Offense only: watching their drive' : 'Defense only: watching your drive'); if (glOk) R3D.overlay(null);
+  if (G.stage === 'pre') { const pl = G.play; after(500, () => { if (G && G.play === pl && pl.phase === 'pre' && G.stage === 'pre') snapCall(pl); }); }
+}
+// every frame (hudFrame): panels at the line, the motion man, the play clock
+function gmFrame() {
+  if (!G || G.sim) return; const pl = G.play;
+  if (G.ln && (G.stage !== 'pre' || !pl || pl.phase !== 'pre' || G.mode !== 'play')) lnClose();
+  const m = pl && pl.umo;
+  if (m && G.stage === 'pre' && pl.phase === 'pre' && !G.paused && G.userSide === 'O') {
+    if (m.snapNow) { m.snapNow = false; snapCall(pl); }
+    else {
+      if (glOk && (m.setNow || (!m.set && G.time - (G.motDraw || 0) > 0.25))) { m.setNow = false; G.motDraw = G.time; R3D.overlay(pl, 'O'); }
+      if (!G.motRead && G.time - (G.motT || 0) > 0.75) { G.motRead = true; tick(m.man ? `#${m.man.num} ${m.man.name} goes with him: man coverage` : 'Nobody goes with him: zone, they slide over'); }
+    }
+  }
+  pcFrame();
+}
+
+// ---- the play clock: yours on offense, 40 seconds after a play, 25 after a stoppage (timeout, flag, new drive, new quarter); zero = delay of game
+function pcOn() { return lsGet(PCL_KEY, 'on') !== 'off'; }
+function pcSig() { const pn = (G.pen[G.hid] ? G.pen[G.hid].n : 0) + (G.pen[G.aid] ? G.pen[G.aid].n : 0); return [G.q, G.poss, G.to[G.hid], G.to[G.aid], pn, G.warned[2] ? 1 : 0, G.warned[4] ? 1 : 0, G.drives.length].join('|'); }
+function pcRun() {
+  if (!pcOn() || G.mode !== 'play' || G.auto || G.over || G.pat || G.poss !== G.user || G.retPlay || G.kaim || G.kpow || G.penWait || G.kickCb) return false;
+  if (G.stage === 'call') return !!(G.sheet && G.sheet.side === 'O' && el.sheet.classList.contains('show'));
+  return G.stage === 'pre' && G.userSide === 'O' && !!G.play && G.play.phase === 'pre' && !G.play.ret;
+}
+let pcKey = '';
+function pcShow(v) { const k = v == null ? '' : String(v); if (k === pcKey || !el.pclk) return; pcKey = k; el.pclk.classList.toggle('show', v != null); el.game.classList.toggle('pcon', v != null); if (v != null) { el.pclk.querySelector('b').textContent = v; el.pclk.classList.toggle('lo', v <= 5); } }
+function pcFrame() {
+  const pl = G.play;
+  if (pl && G.stage === 'live' && G.pcPlay !== pl) { G.pcPlay = pl; G.pcSnap = pcSig();
+    if (!pl.ret && G.cur && G.cur.off === G.user && G.userSide === 'O' && G.cur.op && G.cur.op.side === 'O' && !/^fake/.test(G.cur.op.id || '')) { G.lastO = { op: G.cur.op, flip: !!(pl.o && pl.o.op && pl.o.op.flip), drive: G.drive }; if (G.daily && !G.dlyHq) { G.dlyHq = true; G.hurry = G.drive; } } }
+  if (!pcRun()) { if (G.pc && G.stage !== 'call' && G.stage !== 'pre') G.pc = null; pcShow(null); return; }
+  const sig = pcSig();
+  if (!G.pc) G.pc = { t0: G.time, len: G.pcSnap === sig ? 40 : 25, sig };
+  else if (G.pc.sig !== sig) G.pc = { t0: G.time, len: 25, sig };          // a timeout (or a flag) on the way: 25 from here
+  const left = G.pc.len - (G.time - G.pc.t0);
+  if (left <= 0) { G.pc = null; pcShow(null); return pcDog(); }
+  pcShow(Math.ceil(left));
+  if (left <= 5 && !G.pc.warned) { G.pc.warned = true; tick('Play clock: 5 seconds'); buzz(40); }
+}
+function pcDog() {     // delay of game (RULES.PEN.DOG): 5 yards, the down again
+  const qb = has('depthPick') ? LG.depthPick(TM(G.poss), 'QB', 0) : null, f = { code: 'DOG', by: G.poss, pid: qb, pre: true, dead: true };
+  lnClose(); G.pre = null;
+  if (G.stage === 'pre' && G.play && G.play.phase === 'pre') { if (G.play.qb) f.pid = G.play.qb.pid; return deadBall(G.play, f); }
+  hideSheet(); G.stage = 'dead'; actsFor('none'); G.wasRunning = G.runoff > 0; G.clock = Math.max(0, G.clock - G.runoff); G.runoff = 0;
+  banner('DELAY OF GAME', 'The play clock hit zero', 'bad', 1500); buzz(30);
+  after(1200, () => { if (!G) return; const d = applyFoul(f, null, null); if (d >= 0) after(d, nextSnap); });
+}
+
+// ---- no huddle: after a play a quick bar (same play, run left / right, a quick pass, a shot) instead of the playbook, and less clock runs
+function hqSuggest() { return (G.q === 2 || G.q >= 4) && G.clock - G.runoff < G.qlen * 0.3 && G.score[G.user] <= G.score[opp(G.user)]; }
+function hqBtn(side) {
+  if (side !== 'O' || !G || G.pat || G.mode !== 'play') return ''; const on = !!G.hurry && G.hurry === G.drive;
+  return `<button class="on${on || hqSuggest() ? ' pri' : ''}" data-hq="hurry" title="After each play: a quick menu instead of the playbook, and less clock runs off">${on ? 'No huddle: on' : 'No huddle'}</button>`;
+}
+function hqWanted() { return !!G.hurry && G.hurry === G.drive && G.mode === 'play' && !G.auto && !G.sim && !G.pat && G.poss === G.user && G.down < 4; }
+function hqShow() {
+  G.stage = 'call'; actsFor('none'); lnClose(); hideSheet();
+  if (G.runoff > 0 && G.hqCut !== G.playN) { G.hqRun = G.runoff; G.runoff *= 0.45; G.hqCut = G.playN; }      // on the ball in a hurry: less clock runs off
+  const last = G.lastO && G.lastO.drive === G.drive ? G.lastO : null, alts = altCalls(last ? last.op.form : null, last ? last.op.id : null);
+  G.sheet = { side: 'O', hq: true, alts, last };
+  const lead = G.score[G.user] - G.score[opp(G.user)], late = G.q >= 4 || G.q === 2, fg = has('fgProb') ? fgOdds(G.user, G.yl) : null;
+  const btn = (k, t, s, cls) => `<button class="on hqc${cls ? ' ' + cls : ''}" data-hq="${k}"><b>${esc(t)}</b>${s ? `<small>${esc(s)}</small>` : ''}</button>`;
+  el.sheet.innerHTML = `<div class="sh-top"><span class="side">NO HUDDLE</span><span class="sit">${esc(ddTxt())}</span><span class="sp"></span><span class="small mute">${qTxt(G.q)} ${clockTxt(G.clock - G.runoff)}${G.runoff > 0 ? ' <i class="clk">running</i>' : ''}</span></div>
+    <div class="hqg">${last ? btn('same', 'Same play', last.op.name, 'pri') : ''}${alts.map((a, i) => btn('a' + i, a.lab, a.p.name)).join('')}</div>
+    <div class="sh-acts">${G.runoff > 0 ? '<button class="on" data-hq="spike">Spike</button>' : ''}${late && lead > 0 ? '<button class="on" data-hq="kneel">Kneel</button>' : ''}${G.to[G.user] > 0 && G.runoff > 0 ? `<button class="on" data-hq="to">Timeout (${G.to[G.user]})</button>` : ''}${fg && G.yl >= 55 ? `<button class="on" data-hq="fg">FG ${fg.d} yd · ${Math.round(fg.p * 100)}%</button>` : ''}<span class="sp"></span><button class="on ghost" data-hq="huddle">Huddle</button><button class="on ghost" data-hq="off">No huddle off</button></div>`;
+  el.sheet.classList.add('show', 'hq'); el.sheet.classList.remove('min'); G.sheetT = performance.now();
+}
+function hqClick(e) {
+  const t = e.target.closest('[data-hq]'); if (!t || !G || G.stage !== 'call' || !G.sheet) return; const k = t.dataset.hq, s = G.sheet;
+  if (k === 'hurry') { if (G.hurry && G.hurry === G.drive) { G.hurry = null; renderSheet(); } else { G.hurry = G.drive; if (G.down < 4 && !G.pat) hqShow(); else renderSheet(); } return; }
+  if (!s.hq) return;
+  if (k === 'huddle' || k === 'off') { if (k === 'off') G.hurry = null; if (G.runoff > 0 && G.hqRun) G.runoff = Math.max(G.runoff, G.hqRun); G.hqFull = true; return showSheet('O'); }
+  if (k === 'spike') return spike();
+  if (k === 'kneel') return kneel();
+  if (k === 'fg') { hideSheet(); return fieldGoal(G.user); }
+  if (k === 'to') { callTimeout(G.user); return hqShow(); }
+  const a = k === 'same' ? (s.last ? { p: s.last.op, flip: s.last.flip } : null) : s.alts[+k.slice(1)]; if (!a) return;
+  const op = altOp(a), def = opp(G.user), dp0 = G.cur && G.cur.def === def ? G.cur.dp : null;
+  // the defense has to line up in a hurry too: more than half the time it is stuck with the call it had
+  const dp = dp0 && dp0.side === 'D' && dp0.cov && dp0.form !== 'Kick' && R() < 0.55 ? dp0 : callFor(def, 'D', op.form).play;
+  startPlay(op, dp, !!a.flip);
+}
+// the CPU offense behind late: no huddle, and a spike when the clock is running out with no timeouts left
+function hqCpu(off) {
+  if (G.pat || (userCalls(off) && !G.sim) || G.runoff <= 0) return false;
+  const sd = G.score[off] - G.score[opp(off)], late4 = G.q >= 4 && G.clock < G.qlen * 0.3 && sd < 0, late2 = G.q === 2 && G.clock < G.qlen * 0.2 && G.yl >= 35;
+  if (!late4 && !late2) return false;
+  if (G.hqCut !== G.playN) { G.hqCut = G.playN; G.runoff *= 0.45; if (G.hqTold !== G.drive) { G.hqTold = G.drive; tick(`${TM(off).name}: no huddle`); } }
+  const left = G.clock - G.runoff;
+  if (G.to[off] === 0 && G.down <= 2 && G.yl >= 30 && left > 2 && left < Math.max(8, G.RUN * 2.6)) { spike(); return true; }
+  return false;
+}
+// quick calls (audibles and the no-huddle bar): run left, run right, a quick pass, a shot downfield, from the same formation when the book has them
+function altCalls(form, curId) {
+  const pool = poolFor(G.user, 'O').filter(p => p.side === 'O' && (p.form !== 'Goal Line' || G.yl >= 90)), rts = p => Object.values(p.routes || {});
+  const best = (arr, sc) => { const a = form ? arr.filter(p => p.form === form) : arr, b = a.length ? a : arr; return b.slice().sort((x, y) => sc(y) - sc(x))[0] || null; };
+  const QK = ['slant', 'hitch', 'stick', 'flat', 'out', 'screen', 'drag', 'curl', 'angle'];
+  const run = best(pool.filter(p => p.type === 'run' && p.carrier !== 'QB' && !(p.paths && p.carrier && p.paths[p.carrier])), p => (p.scheme === 'zone' || p.scheme === 'outside' ? 1 : 0.5) - (p.id === curId ? 2 : 0) - (p.delay || p.scheme === 'draw' ? 0.6 : 0));
+  const quick = best(pool.filter(p => p.type === 'pass' && !p.deep && !p.pa), p => rts(p).filter(r => QK.includes(r)).length - rts(p).filter(r => DEEP_ROUTES[r]).length * 0.7 + (/Quick|Slant|Stick|Hitch|Mesh|Snag|Spot/.test(p.name) ? 1 : 0) - (p.id === curId ? 1.5 : 0));
+  const deep = best(pool.filter(p => p.type === 'pass' && p !== quick), p => (p.deep ? 3 : 0) + rts(p).filter(r => DEEP_ROUTES[r]).length + (p.pa ? 0.5 : 0) - (p.id === curId ? 1.5 : 0));
+  const out = []; if (run) out.push({ lab: 'Run left', p: run, rside: 'L' }, { lab: 'Run right', p: run, rside: 'R' }); if (quick) out.push({ lab: 'Quick pass', p: quick }); if (deep) out.push({ lab: 'Deep shot', p: deep });
+  return out;
+}
+function altOp(a) { return a.rside ? Object.assign({}, a.p, { rside: a.rside }) : a.p; }
+
+// ---- the panels at the line: Audible and Motion (offense), Calls (defense)
+function lnAct(a) {
+  if (!G || G.stage !== 'pre' || !G.play || G.play.phase !== 'pre' || G.mode !== 'play') return false;
+  if (a === 'audible' && G.userSide === 'O') { lnToggle('aud'); return true; }
+  if (a === 'motion' && G.userSide === 'O') { lnToggle('mot'); return true; }
+  if (a === 'dcall' && G.userSide === 'D') { lnToggle('dc'); return true; }
+  if (a === 'snap') lnClose();
+  return false;
+}
+function lnToggle(k) {
+  if (G.ln === k) return lnClose(); lnClose();
+  if (k === 'dc') { const pl0 = G.play, pl = lnSwap(Object.assign({}, pl0.o, { userSlot: G.userSlot })); if (!pl) return; dcSnapLater(pl); }      // the offense waits while you make the call (a fresh copy of the snap: the old snap timer is void)
+  if (k === 'mot' && G.play.umo && !G.play.umo.set) return tick('He is already in motion');
+  G.ln = k; el.lpan.innerHTML = k === 'aud' ? audPanel() : k === 'mot' ? motPanel() : dcPanel(); el.lpan.classList.add('show', 'on'); el.lpan.dataset.k = k;
+}
+function lnClose() { if (!el.lpan) return; el.lpan.classList.remove('show', 'on'); el.lpan.innerHTML = ''; if (G) { if (G.ln === 'dc') G.dcClosedT = G.time; G.ln = null; } }
+function lnClick(e) {
+  const b = e.target.closest('[data-ln]'); if (!b || !G) return; e.stopPropagation(); const k = b.dataset.ln;
+  if (k === 'x') return lnClose();
+  if (G.stage !== 'pre' || !G.play || G.play.phase !== 'pre') return lnClose();
+  if (G.ln === 'aud') { if (k === 'book') return audBook(); const a = (G.lnAlts || [])[+k.slice(1)]; if (a) audGo(a); return; }
+  if (G.ln === 'mot') { const [, slot, t] = k.split(':'); return motGo(slot, t); }
+  if (G.ln === 'dc') { if (k === 'book') return dcBook(); return dcSet(k); }
+}
+// a new call at the line: the same snap (clock, crowd, seed), a new play on the field
+function lnSwap(o2, op) {
+  let pl; try { pl = new PHYS.Play(o2); } catch (e) { console.error(e); return null; }
+  G.play = pl; acc = 0; if (op) G.cur.op = op; G.cur.lists = [o2.off.list, o2.def.list];
+  if (glOk) { R3D.setPlayers(pl, u => TM(u === 'O' ? G.cur.off : G.cur.def), u => G.kits[u === 'O' ? G.cur.off : G.cur.def] || {}); R3D.overlay(G.userSide ? pl : null, G.userSide); }
+  bubKey = ''; return pl;
+}
+function audPanel() {
+  const pl = G.play, alts = G.lnAlts = altCalls(pl.o.op.form, pl.o.op.id), loud = G.noise > 0.5;
+  return `<div class="lh"><b>Audible</b><button class="on x" data-ln="x" aria-label="Close">✕</button></div>${loud ? '<div class="lw">Loud in here: the line may not hear it (false start risk)</div>' : ''}
+    <div class="lg2">${alts.map((a, i) => `<button class="on" data-ln="a${i}"><b>${esc(a.lab)}</b><small>${esc(a.p.name)}</small></button>`).join('')}</div>
+    <button class="on ghost lbook" data-ln="book">Full playbook</button>`;
+}
+function audGo(a) {
+  const pl0 = G.play, op = altOp(a), fresh = buildOpts(op, G.cur.dp, !!a.flip);      // (the same seed, crowd and weather as the call it replaces)
+  const o2 = Object.assign({}, fresh, { seed: pl0.o.seed, weather: pl0.o.weather, wx: pl0.o.wx, off: Object.assign({}, fresh.off, { bonus: pl0.o.off.bonus }), def: Object.assign({}, fresh.def, { bonus: pl0.o.def.bonus }) });
+  if (G.noise > 0.5) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); }
+  G.pre = preRoll(o2);      // the new call has to reach everybody: in a loud building that is a gamble (RULES.preSnap, ctx.audible)
+  if (!lnSwap(o2, op)) return;
+  if (has('noteCall')) { try { LG.noteCall(G.user, op.id, ctxFor(G.user, 'O')); } catch (e) { } }
+  lnClose(); if (!G.audLoud) tick(`Audible: ${a.lab.toLowerCase()} · ${op.name}`); buzz(15);
+}
+function audBook() { lnClose(); if (G.noise > 0.5) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); } G.stage = 'call'; if (glOk) R3D.overlay(null); G.keepO = null; G.hqFull = true; showSheet('O'); }
+function motPanel() {
+  const pl = G.play, ms = pl.O.filter(p => !p.ol && p !== pl.qb && p.role !== 'rb' && (p.posName === 'WR' || p.posName === 'TE' || p.role === 'route')).sort((a, b) => b.p.x - a.p.x);
+  return `<div class="lh"><b>Motion</b><button class="on x" data-ln="x" aria-label="Close">✕</button></div><div class="lsub">Watch the defense: a man who runs with him means man coverage. If they all slide over, it is zone.</div>
+    ${ms.map(p => `<div class="lrow"><span>${esc(p.slot)} <b>${esc((p.rp && p.rp.ln) || '')}</b></span>${[['jet', 'Jet'], ['orbit', 'Orbit'], ['across', 'Across']].map(([t, n]) => `<button class="on" data-ln="m:${esc(p.slot)}:${t}">${n}</button>`).join('')}</div>`).join('')}`;
+}
+function motGo(slot, type) {
+  const pl = G.play; if (!pl.setMotion || !pl.setMotion(slot, type)) return; lnClose();
+  G.motT = G.time; G.motRead = false; G.motDraw = 0; if (glOk) R3D.overlay(pl, 'O'); bubKey = '';
+  tick(`${pl.umo.p.name}: ${type === 'jet' ? 'jet motion, the ball is snapped as he gets to the QB' : type === 'orbit' ? 'orbit motion' : 'motion across'}`); buzz(10);
+}
+function dcBest(pl) { const val = p => (p.rp.ovr || 60) + (p.posName === 'WR' ? 4 : 0); return pl.O.filter(p => !p.ol && p !== pl.qb && (p.posName === 'WR' || p.posName === 'TE')).sort((a, b) => val(b) - val(a))[0] || null; }
+function dcLeftX() { if (!glOk || !R3D.basis) return 1; const b = R3D.basis(); return Math.abs(b.rx) > 0.3 ? -Math.sign(b.rx) : 1; }      // the world side that is on your left of the screen
+function dcPanel() {
+  const pl = G.play, C = (pl.o.dp && pl.o.dp.calls) || {}, wr = dcBest(pl);
+  const btn = (k, t, on, s) => `<button class="on${on ? ' sel' : ''}" data-ln="${k}"><b>${t}</b>${s ? `<small>${esc(s)}</small>` : ''}</button>`;
+  const gaps = [['C', 'L'], ['B', 'L'], ['A', 'L'], ['A', 'R'], ['B', 'R'], ['C', 'R']];
+  return `<div class="lh"><b>Calls</b><button class="on x" data-ln="x" aria-label="Close">✕</button></div>
+    <div class="lg2">${btn('spy', 'Spy the QB', C.spy, 'a man mirrors him')}${btn('dbl', 'Double WR', C.dbl, wr ? `#${wr.num} ${wr.name}` : '')}${btn('show', 'Show blitz', C.show, 'then drop')}${btn('clr', 'Clear', false, 'the call as drawn')}</div>
+    <div class="lsub">Blitz a gap</div><div class="lgap">${gaps.map(([g, s]) => btn(`gap:${g}:${s}`, g, C.gap === g && C.gs === s, s === 'L' ? 'left' : 'right')).join('')}</div>
+    <button class="on ghost lbook" data-ln="book">Change the play</button>`;
+}
+function dcSet(k) {
+  const pl0 = G.play, C = Object.assign({}, (pl0.o.dp && pl0.o.dp.calls) || {});
+  if (k === 'clr') { for (const x of Object.keys(C)) delete C[x]; }
+  else if (k.startsWith('gap:')) { const [, g, s] = k.split(':'); if (C.gap === g && C.gs === s) { delete C.gap; delete C.gs; delete C.gx; } else { C.gap = g; C.gs = s; C.gx = s === 'L' ? dcLeftX() : -dcLeftX(); } }
+  else C[k] = !C[k];
+  const pl = lnSwap(Object.assign({}, pl0.o, { dp: Object.assign({}, pl0.o.dp, { calls: C }), userSlot: G.userSlot })); if (!pl) return;
+  dcSnapLater(pl); el.lpan.innerHTML = dcPanel(); buzz(10);
+  const msg = []; const s = pl.D.find(d => d.qbSpy);
+  if (C.spy && s) msg.push(`${s.name} spies the QB`); if (C.dbl && pl.dblR) msg.push(`double on #${pl.dblR.num} ${pl.dblR.name}`); if (C.gap && pl.gapB) msg.push(`${pl.gapB.name} through the ${C.gap} gap`); if (C.show) msg.push('show blitz, then drop');
+  tick(msg.length ? msg.join(' · ') : 'The call as drawn');
+}
+function dcBook() { const pl = G.play; lnClose(); G.stage = 'call'; if (glOk) R3D.overlay(null); G.keepO = G.cur ? G.cur.op : null; G.keepFlip = G.keepO && pl.o && pl.o.op ? !!pl.o.op.flip : null; showSheet('D'); }
+function dcSnapLater(pl) {      // the offense snaps it once you are done (or after 10 seconds of waiting)
+  const t0 = G.time, go = () => { if (!G || G.play !== pl || G.stage !== 'pre' || pl.phase !== 'pre') return; if ((G.ln === 'dc' && G.time - t0 < 10) || G.time - (G.dcClosedT || -9) < 1.1) return after(250, go); snapCall(pl); };
+  after(1400, go);
+}
+
+// ---- the daily drive: one situation a day (src/ui/20_title.js builds it from the date); it ends with the drive and is scored
+function dlyStart() {
+  const D = G.daily, u = G.user, o = opp(u);
+  G.q = 4; G.clock = D.clock; G.score[u] = D.us; G.score[o] = D.them; G.to[u] = D.to; G.to[o] = 2; G.warned[2] = true; if (D.clock <= G.WARN) G.warned[4] = true; G.recvFirst = u;
+  banner('DAILY DRIVE', D.short, 'good', 2200); tick(D.txt);
+  after(2200, () => { if (G) setPossession(u, D.yl, 'Daily drive'); });
+}
+function gmDailyCheck() {
+  const u = G.user;
+  if (!G.dailyD) { if (G.drive && G.drive.tid === u && G.poss === u) G.dailyD = G.drive; return false; }
+  if (G.pat && G.pat.tid === u) return false;
+  if (G.poss === u && G.drive === G.dailyD && G.clock > 0 && G.kickNext == null && !G.pat) return false;
+  dlyEnd(); return true;
+}
+const DLY_HOW = { TD: 'Touchdown', FG: 'Field goal', INT: 'Intercepted', Fumble: 'Fumble', Downs: 'Turnover on downs', Punt: 'Punt', 'Missed FG': 'Missed field goal', Safety: 'Safety' };
+function dlyEnd() {
+  const D = G.daily, u = G.user, o = opp(u), d = G.dailyD || {}, pts = Math.max(0, G.score[u] - D.us), yds = Math.round(d.yds || 0), left = Math.max(0, Math.round(G.clock)), won = G.score[u] > G.score[o], tie = G.score[u] === G.score[o];
+  let how = DLY_HOW[d.result] || (G.clock <= 0 ? 'Time ran out' : d.result || 'Drive over'); if (d.result === 'TD') how += pts >= 8 ? ' + two' : pts === 7 ? ' + extra point' : '';
+  const score = Math.max(0, pts * 100 + Math.max(0, yds) + left * 2), verdict = won ? 'WON' : tie ? 'TIED' : 'LOST';
+  const copy = `Playcaller Daily Drive ${D.date}\n${D.txt}\n${how}: ${verdict} · ${yds} yds, ${d.plays || 0} plays, ${clockTxt(left)} left · Score ${score}`;
+  G.over = true; G.stage = 'final'; G.auto = null; G.timers = []; hideSheet(); actsFor('none'); lnClose(); pcShow(null); speedBar(false); if (glOk) R3D.overlay(null);
+  G.result = { quit: false, daily: { date: D.date, pts, yds, left, plays: d.plays || 0, won, tie, how, verdict, score, copy } };
+  overlay(`<div class="card dlyc"><div class="small mute" style="text-align:center;letter-spacing:.08em">DAILY DRIVE · ${esc(D.date)}</div>
+    <div class="dlyv ${won ? 'good' : tie ? '' : 'bad'}">${won ? 'You won it' : tie ? 'Tied it' : 'Not today'}</div><div class="dlyh">${esc(how)}</div>
+    <div class="dlys"><div><b>${pts}</b><span>points</span></div><div><b>${yds}</b><span>yards</span></div><div><b>${clockTxt(left)}</b><span>left</span></div><div class="sc"><b>${score}</b><span>score</span></div></div>
+    <div class="small mute" style="text-align:center">${esc(D.txt)}<br>Score: points × 100 + yards + 2 a second left</div>
+    <div class="row" style="margin-top:12px"><button class="on" id="mCopy">Copy result</button><button class="pri big on" id="mDone">Done</button></div></div>`);
+  document.getElementById('mCopy').onclick = e => { if (typeof dailyCopyText === 'function') dailyCopyText(copy, e.currentTarget); };
   document.getElementById('mDone').onclick = () => close(G.result);
 }
 
