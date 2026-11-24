@@ -202,6 +202,7 @@ function poolFor(tid, side) { const p = has('playsFor') ? LG.playsFor(tid, side)
 function callFor(tid, side, offForm) {
   const ctx = Object.assign(ctxFor(tid, side), offForm ? { offForm } : {});
   if (side === 'D' && !isU(tid) && G.film) ctx.film = filmThreats(offForm);
+  if (side === 'D' && !isU(tid)) ctx.scout = qbScout();
   if (G.yl >= 98 && side === 'O') ctx.yl = 98;
   let id = null, say = null, who = null;
   // the coordinator mixes his top three calls (a play caller who always runs his favourite gets read)
@@ -245,8 +246,8 @@ function buildOpts(op, dp, flip) {
   const fat = {}; for (const pid in G.fat) fat[pid] = clamp(1 - G.fat[pid] * 0.045, 0.35, 1);
   const bonus = (T, side) => { const c = T.coach, co = side === 'O' ? T.oc : T.dc; return clamp((c ? ((side === 'O' ? c.off : c.def) - 5) * 0.5 : 0) + (co && co.r != null ? (co.r - 5) * 0.35 : 0) + (T.id === G.hid ? 0.6 : 0), -4, 5); };
   const userSide = G.mode === 'play' ? (isU(off) ? 'O' : isU(def) ? 'D' : null) : null;
-  const film = isU(off) ? filmFor(op) : null;
-  return { losZ: G.yl * YDm, ballX: G.ballX, down: G.down, togo: G.togo, op: Object.assign({}, op, { flip: !!flip }), dp: film ? Object.assign({}, dp, { film }) : dp,
+  const film = isU(off) ? filmFor(op) : null, scout = isU(off) ? qbScout() : null;
+  return { losZ: G.yl * YDm, ballX: G.ballX, down: G.down, togo: G.togo, op: Object.assign({}, op, { flip: !!flip }), dp: film || scout ? Object.assign({}, dp, film ? { film } : {}, scout ? { scout } : {}) : dp,
     off: { tid: off, list: list(OT, op.form, 'O'), bonus: bonus(OT, 'O'), style: OT.offStyle }, def: { tid: def, list: list(DT2, dp.form, 'D'), bonus: bonus(DT2, 'D'), style: DT2.defStyle },
     userSide, userSlot: G.userSlot, diff: G.diff, seed: (G.seed + (++G.playN) * 7919) >>> 0, weather: 'clear', fatigue: fat };
 }
@@ -277,6 +278,7 @@ function processResult(res, info) {
   const off = G.poss, def = opp(off), yl0 = G.yl, togo0 = G.togo, clock0 = G.clock, two = G.pat && G.pat.two, uOff = isU(off);
   const desc = describe(res, info), y = Math.round(res.yards || 0);
   if (uOff && !two && G.cur && G.cur.op) filmNote(G.cur.op, res, info);
+  if (uOff && !two && PHYS.qbScout) { const k0 = (qbScout() || { k: 0 }).k; G.qbs = PHYS.qbScout.note(G.qbs, res, G.playN || 0); if (k0 < 0.4 && (qbScout() || { k: 0 }).k >= 0.4) after(1100, () => tick('They have seen your QB run: expect a spy on him and the ends keeping contain')); }
   if (G.cur && G.cur.op && G.cur.op.type === 'run') (G.runLog = G.runLog || []).push({ n: G.cur.op.name, sc: G.cur.op.scheme, f: G.cur.op.form, yl: Math.round(yl0), d: G.cur.down0, t: Math.round(togo0), y: res.yards || 0, ty: res.type, k: res.kind, dp: G.cur.dp.name });   // QA: run breakdown
   if (!two) {
     for (const pid in (res.stats || {})) { const s = res.stats[pid]; for (const k of KEEP) if (s[k]) addSt(pid, k, s[k]); }
@@ -858,9 +860,12 @@ function filmFor(op) {
 }
 // what has hurt the defense from this formation: the CPU coordinator calls against it
 function filmThreats(form) { return Object.values(G.film || {}).filter(e => !form || e.form === form).map(e => ({ type: e.type, deep: e.deep, w: filmSeen(e) * (Math.max(0, e.yds / Math.max(1, e.n)) + 2 + e.big * 3) })).filter(x => x.w > 2); }
+// the defense scouts a QB who keeps taking off (PHYS.qbScout): after two or three scrambles they spy him and rush to contain
+function qbScout() { return G && G.qbs && PHYS.qbScout ? PHYS.qbScout.read(G.qbs, G.playN || 0) : null; }
 function filmLine() {
+  const sc = qbScout(), qbN = sc && sc.k >= 0.35 ? `<div class="mu bad">They have seen your QB take off ${Math.round(sc.n)} times: expect a spy and the ends keeping contain.</div>` : '';
   const top = Object.values(G.film || {}).map(e => [e, filmSeen(e)]).filter(x => x[1] >= 2.5).sort((a, b) => b[1] - a[1])[0];
-  return top ? `<div class="mups"><div class="mu bad">They have seen ${esc(top[0].name)} ${Math.round(top[1])} times. Mix it up or they will jump it.</div></div>` : '';
+  return top || qbN ? `<div class="mups">${top ? `<div class="mu bad">They have seen ${esc(top[0].name)} ${Math.round(top[1])} times. Mix it up or they will jump it.</div>` : ''}${qbN}</div>` : '';
 }
 function renderSheet() {
   const s = G.sheet, sh = el.sheet, T = TM(G.user), off = G.poss;

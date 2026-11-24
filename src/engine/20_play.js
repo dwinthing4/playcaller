@@ -5,7 +5,8 @@
 (() => {
 const { G, DT, FIELD, latM, v2, len2, cl, lp, smooth, sstep, V3, add3, sub3, mul3, dot3, norm3, wrapAng, physFrom, Player, slewHeading, locomote, startFall, balance, gait, hitBody, bodyDynamics, bodyOverlap, quickCaps, poseBody, poseArms } = PHYS._;
 const OLS = { LT: 1, LG: 1, C: 1, RG: 1, RT: 1 };
-const DIFF = { rookie: { ai: -6, user: 6, react: 0.08, tk: -0.06 }, pro: { ai: 0, user: 0, react: 0, tk: 0 }, allpro: { ai: 4, user: 0, react: -0.03, tk: 0.04 }, legend: { ai: 8, user: -2, react: -0.06, tk: 0.08 } };
+// iq: how smart the defense playing against the user is (angles, leverage, not biting on a jab, adjusting to what he keeps doing). CPU vs CPU and your own teammates use pro.
+const DIFF = { rookie: { ai: -6, user: 6, react: 0.08, tk: -0.06, iq: 0.55 }, pro: { ai: 0, user: 0, react: 0, tk: 0, iq: 0.85 }, allpro: { ai: 4, user: 0, react: -0.03, tk: 0.04, iq: 1 }, legend: { ai: 8, user: -2, react: -0.06, tk: 0.08, iq: 1.1 } };
 
 const R_TB = k => k === 'punt' ? 'Into the end zone: touchback' : 'He takes a knee: touchback';
 class Play {
@@ -15,7 +16,7 @@ class Play {
     this.fx = []; this.events = []; this.poses = {}; this.near = {}; this.stats = {}; this.perf = {}; this.bigHit = 0; this.broken = 0;
     this.losZ = o.losZ; this.ballX = cl(o.ballX || 0, -FIELD.hashX, FIELD.hashX); this.op = o.op; this.dp = o.dp; this.offUnit = 'O';
     this.pass = o.op.type === 'pass'; this.kind = this.pass ? 'pass' : 'run'; this.air = false; this.thrown = false; this.handed = false;
-    this.diff = DIFF[o.diff || 'pro'] || DIFF.pro; this.userSide = o.userSide || null;
+    this.diff = DIFF[o.diff || 'pro'] || DIFF.pro; this.userSide = o.userSide || null; this.iq = this.userSide === 'O' ? this.diff.iq : DIFF.pro.iq;
     this.input = { x: 0, z: 0 }; this.userTouched = false; this.contactZ = null; this.fpZ = null;
     this.env = (o.weather === 'rain' || o.weather === 'snow') ? { mu: 0.78, wet: true } : { mu: 1.2, wet: false };
     this.setup(); if (o.ret) this.setupReturn(o.ret);
@@ -89,7 +90,7 @@ class Play {
       d.recog += this.diff.react * (this.userSide === 'O' ? 1 : this.userSide === 'D' ? -1 : 0);
       d.react = cl(0.3 - awr / 520 + (this.userSide === 'O' ? this.diff.react : 0), 0.08, 0.36);
     }
-    this.assignCoverage(); this.applyFilm();
+    this.assignCoverage(); this.applyFilm(); this.applyScout();
     // receivers and corners line up in a staggered stance: the inside foot back
     for (const p of this.players) { if (p.posName !== 'WR' && p.posName !== 'CB') continue; const back = p.unit === 'O' ? -1 : 1, inX = Math.sign(this.ballX - p.p.x) || 1, r = p.right();
       const f = p.feet.slice().sort((a, b) => ((b.x - p.p.x) * inX) - ((a.x - p.p.x) * inX))[0]; if (f) f.z += back * 0.32; }
@@ -152,6 +153,23 @@ class Play {
     const key = r.route && r.route[Math.min(1, r.route.length - 1)]; if (!key) return;
     const z = this.D.filter(d => d.zone && !d.zone.deep).sort((a, b) => Math.hypot(a.zone.x - key.x, a.zone.z - key.z) - Math.hypot(b.zone.x - key.x, b.zone.z - key.z))[0];
     if (z) { z.zone = { x: lp(z.zone.x, key.x, 0.45 * k), z: lp(z.zone.z, key.z, 0.45 * k), deep: false }; z.jump = k; }
+  }
+  // a QB who keeps running on them (dp.scout.k: the match's scouting of this game, see PHYS.qbScout), or one with real wheels: they spy him
+  // (the hook linebacker mirrors the QB instead of dropping), the edge rushers keep contain, and the second level reads him quicker
+  applyScout() {
+    const sc = cl((this.dp && this.dp.scout && this.dp.scout.k) || 0, 0, 1), q = this.qb, legs = q && q.A ? cl(((q.A.spd || 60) - 70) / 45, 0, 0.35) : 0, iq = this.iq || 0.85;
+    this.scoutK = sc; if (sc + legs <= 0.02) return;
+    const had = this.D.find(d => d.job === 'spy'); if (had && sc > 0.3) had.qbSpy = true;     // the spare man already spying: he stays on the QB (no peeling off to a back leaking out)
+    if (this.r() < cl((sc * 1.25 + legs) * Math.min(1, iq + 0.15), 0, 0.95) && !had) {
+      const mid = d => Math.abs(d.zone.x - this.ballX) * 0.15 - (d.A.spd || 60) * 0.1, under = this.D.filter(d => d.zone && !d.zone.deep), cand = under.filter(d => d.posName === 'LB' || d.posName === 'S').sort((a, b) => mid(a) - mid(b))[0] || under.sort((a, b) => mid(a) - mid(b))[0];     // (the quickest hook/curl player, a step toward the middle)
+      // all-man with nobody spare: a blitzer stays home to spy instead (or, once they have really seen it, one of two deep safeties comes down to spy, and failing that the quickest end drops off the rush)
+      const deep = this.D.filter(d => d.zone && d.zone.deep && d.posName === 'S'), spare = cand || this.D.filter(d => d.job === 'rush' && !d.dl).sort((a, b) => b.A.spd - a.A.spd)[0]
+        || (sc > 0.5 && deep.length >= 2 ? deep.sort((a, b) => Math.abs(a.p.x - this.ballX) - Math.abs(b.p.x - this.ballX))[0] : null) || (sc > 0.5 ? this.D.filter(d => d.job === 'rush' && d.posName === 'DE').sort((a, b) => b.A.spd - a.A.spd)[0] : null);
+      if (spare) { spare.job = 'spy'; spare.zone = null; spare.rushMove = null; spare.qbSpy = true; }
+    }
+    // contain: the ends line up a step wider and keep the QB inside them (they give up some pass rush for it)
+    if (this.r() < sc * 1.3 * Math.min(1, iq + 0.1)) for (const d of this.D) if (d.edge && d.job === 'rush') { d.contain = true; const sd = Math.sign(d.p.x - this.ballX) || 1; d.p.x = cl(d.p.x + sd * 1.2 * Math.min(1, iq), -FIELD.halfW + 1, FIELD.halfW - 1); this.resetFeet(d); }
+    for (const d of this.D) if (!d.dl) d.react = Math.max(0.06, d.react - 0.05 * sc * iq);
   }
   resetFeet(p) { const r = p.right(); p.feet.forEach(f => { f.x = p.p.x + r.x * f.side * 0.15; f.z = p.p.z + r.z * f.side * 0.15; }); }
   buildRoute(r) {
@@ -240,7 +258,7 @@ class Play {
     cov.forEach((d, i) => { const kicker = i === 10, lx = kicker ? 0 : lanes[i], gun = punt && (i === 0 || i === 9);
       const z = kicker ? R.kickZ + (punt ? 0 : 1.5) : punt ? (gun ? R.losZ + 0.8 : R.losZ + 1 + (i % 2) * 1.2) : R.kickZ + 0.9;
       place(d, kicker ? R.kickX : lx, z, Math.PI, kicker ? 0 : -(punt ? (gun ? 3.5 : 1.5) : 5.5)); d.role = 'cover'; d.lane = lx; d.gunner = gun; d.kicker = kicker; d.dl = false;
-      d.safe = punt && (i === 4 || i === 5); d.fit = kicker || d.safe ? 'alley' : Math.abs(lx) >= 17 * FIELD.wk ? 'contain' : 'attack'; d.react = cl(0.3 - d.A.awr / 520, 0.08, 0.3); d.seenV = v2(); });
+      d.safe = punt ? (i === 4 || i === 5) : i === 5; d.fit = kicker || d.safe ? 'alley' : gun ? 'attack' : Math.abs(lx) >= 17 * FIELD.wk ? 'contain' : 'attack'; d.cSide = d.fit === 'contain' && !punt ? Math.sign(lx) : 0; /* kickoff contain men keep their own side; on punts the gunners go get him */ d.react = cl(0.3 - d.A.awr / 520, 0.08, 0.3); d.seenV = v2(); });
     if (this.userSide === 'D') this.userD = cov[4] || this.D[0];
     { const bs = blk.slice().sort((a, b) => a.p.x - b.p.x), cs = cov.filter(d => !d.kicker).sort((a, b) => a.p.x - b.p.x); bs.forEach((b, i) => { b.assign = cs[i] || null; b.retMan = b.assign; }); }
     // your kick: everyone lines up and waits for the power meter (kickNow); otherwise the ball is in the air right away
@@ -299,8 +317,9 @@ class Play {
       if (c === d && B.state === 'held') { this.runnerAI(d, dt, env); continue; }
       if (B.state === 'loose') { const dx = B.p.x - d.p.x, dz = B.p.z - d.p.z, m = Math.hypot(dx, dz) || 1; locomote(d, v2(dx / m * d.vmax, dz / m * d.vmax), dt, env); continue; }
       if (inF && R.kind === 'punt' && !d.gunner && !d.kicker && this.liveT < 0.3) { locomote(d, v2(), dt, env); continue; }     // protect the punter first
-      if (inF) {                   // down the lane, squeezing toward the ball as he gets close; the kicker hangs back as the last man
-        const prog = cl(1 - (d.p.z - L.z) / Math.max(10, R.kickZ - L.z), 0, 1), tx = d.kicker ? lp(d.p.x, L.x, 0.3) : lp(d.lane, L.x, 0.2 + 0.65 * prog), tz = d.kicker ? Math.max(L.z + 22, d.p.z - 4) : d.safe ? Math.max(L.z + 11, d.p.z - 6) : L.z + (d.gunner ? 1.5 : 3);
+      if (inF) {                   // down the lane, squeezing toward the ball as he gets close but keeping his spacing (no two in the same lane); the kicker hangs back as the last man
+        const prog = cl(1 - (d.p.z - L.z) / Math.max(10, R.kickZ - L.z), 0, 1), keep = R.kind === 'punt' ? 0.15 : lp(0.15, 0.4, Math.min(1, this.iq)), spread = lp(1, keep, prog);
+        const tx = d.kicker ? lp(d.p.x, L.x, 0.3) : lp(0, L.x, 0.2 + 0.8 * prog) + d.lane * spread, tz = d.kicker ? Math.max(L.z + 22, d.p.z - 4) : d.safe ? Math.max(L.z + 11, d.p.z - 6) : L.z + (d.gunner ? 1.5 : 3);
         const mx = tx - d.p.x, mz = tz - d.p.z, mm = Math.hypot(mx, mz) || 1, sp = d.kicker ? Math.min(d.vmax * 0.6, mm * 2) : d.vmax * (d.gunner ? 0.96 : 0.92);
         if (d.bondBy) { this.pursueAI(d, dt, env, d.fit); continue; }
         locomote(d, v2(mx / mm * sp, mz / mm * sp), dt, env); slewHeading(d, Math.atan2(mx, mz), 6, dt); d.crouchT = 0.05; continue; }
@@ -317,6 +336,9 @@ class Play {
     if (this.userD && inp.tackle) { inp.tackle = false; const p = this.userD, cc = this.carrier; if (cc && cc.unit === 'O' && p.upright() && p.cooldown <= 0 && !p.engaged && this.facing(p, cc) > -0.6) { const dd = Math.hypot(cc.p.x - p.p.x, cc.p.z - p.p.z); if (dd < 3.4) this.startLunge(p, cc, dd > 2.1); } }
     if (this.pass && !this.thrown && c === this.qb && !this.pressured && this.liveT > 0.3 && this.pressureOn(this.qb) < 2.0) this.pressured = true;
     if (uc === this.qb && this.pass && !this.thrown && !this.scramble && this.qb.p.z > this.losZ + 0.4) { this.scramble = true; this.kind = 'scramble'; this.emit(`${this.qb.name} scrambles`, 'info'); }
+    // the QB has left the pocket (outside the tackle box, or climbing toward the line with the ball): from here the defense plays him as a runner too
+    if (!this.qbOutT && this.pass && !this.thrown && c === this.qb && this.ball.state === 'held' && this.liveT > 0.4) { const q = this.qb, lat = Math.abs(q.p.x - this.ballX);
+      if (this.scramble || lat > 4.8 || (lat > 3 && Math.abs(q.vel.x) > 4.5) || (q.p.z > this.losZ - 1.6 && q.vel.z > 2.5)) this.qbOutT = this.t; }
     for (const p of this.O) {
       if (p === uc && this.userDriven(p)) { this.userMove(p, dt, env); continue; }
       if (c && c.unit === 'D') { this.pursueAI(p, dt, env, 'attack'); continue; }            // turnover: offense chases
@@ -630,7 +652,7 @@ class Play {
       if (h) { h.helper = b; b.help = h; const side = Math.sign(h.p.x - q.p.x) || 1; go(h.p.x - side * 0.55, h.p.z - 0.65, 4); b.crouchT = 0.5; return; } }
     if (!t && !b.ol && b.role === 'pp' && this.liveT > 1.3) { b.role = 'route'; b.routeName = 'flat'; this.buildRoute(b); this.receivers.push(b);   // nobody came: release to the flat
       // the defender with eyes on the backfield picks him up: a spy / hook player in man, the nearest underneath zone defender otherwise
-      const pk = this.D.filter(x => x.upright() && !x.bondBy && (x.job === 'spy' || (x.zone && !x.zone.deep) || (x.job === 'rush' && !x.dl && Math.hypot(x.p.x - b.p.x, x.p.z - b.p.z) < 5))).sort((a, c2) => Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z) - Math.hypot(c2.p.x - b.p.x, c2.p.z - b.p.z))[0];
+      const pk = this.D.filter(x => x.upright() && !x.bondBy && !x.qbSpy && (x.job === 'spy' || (x.zone && !x.zone.deep) || (x.job === 'rush' && !x.dl && Math.hypot(x.p.x - b.p.x, x.p.z - b.p.z) < 5))).sort((a, c2) => Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z) - Math.hypot(c2.p.x - b.p.x, c2.p.z - b.p.z))[0];
       if (pk && (pk.job === 'spy' || pk.job === 'rush')) { pk.job = 'man'; pk.cover = b; pk.cush = 1.5; }
       return; }
     if (t) { const ux = q.p.x - t.p.x, uz = q.p.z - t.p.z, m = Math.hypot(ux, uz) || 1; let sx = t.p.x + ux / m * 1.0, sz = t.p.z + uz / m * 1.0;
@@ -653,7 +675,15 @@ class Play {
     if (this.ball.state === 'loose') return this.looseAI(d, dt, env);
     const qbHolds = this.pass && !this.thrown && c === this.qb && !this.qbRun;
     if (qbHolds) {
-      if ((c.p.z > this.losZ + 0.5 || this.scramble) && (!d.dl || Math.hypot(c.p.x - d.p.x, c.p.z - d.p.z) < 6)) { if (!d.scrT) d.scrT = this.t + d.react; if (this.t > d.scrT) return this.pursueAI(d, dt, env, 'attack'); }
+      const crossed = c.p.z > this.losZ + 0.5 || this.scramble, dq = Math.hypot(c.p.x - d.p.x, c.p.z - d.p.z);
+      if (crossed && (!d.dl || d.job === 'spy' || dq < 6)) { if (!d.scrT) d.scrT = this.t + d.react; if (this.t > d.scrT) return this.pursueAI(d, dt, env, this.scrFit(d)); }
+      // out of the pocket and still behind the line he can still throw, so the coverage holds; but the spy comes as soon as he heads upfield,
+      // and an underneath defender near his path comes up to meet him once he is about to cross
+      if (this.qbOutT && !crossed && d.job !== 'rush' && (!d.dl || d.job === 'spy') && this.iq > 0) {
+        if (d.job === 'spy' && this.t > this.qbOutT + d.react * 0.6 && c.vel.z > 1.2 && c.p.z > this.losZ - 4) return this.pursueAI(d, dt, env, 'attack');
+        if (d.zone && !d.zone.deep && dq < 9 + 4 * this.iq && c.vel.z > 2 && c.p.z > this.losZ - 1.4 && this.t > this.qbOutT + d.react) return this.pursueAI(d, dt, env, 'attack');
+        if (d.job === 'man' && this.scoutK > 0.3 && dq < 8 && c.vel.z > 2 && c.p.z > this.losZ - 1.2 && this.t > this.qbOutT + d.react) return this.pursueAI(d, dt, env, 'attack');     // scouted: a man defender near his path peeks and comes up too
+      }
       if (this.op.pa && this.liveT < 0.6 && !d.dl && d.job !== 'rush' && (d.posName === 'LB' || d.posName === 'S')) { locomote(d, v2(-this.sideX * 1.5 * (d.A.awr < 70 ? 1 : 0.3), -1.8 * (d.A.awr < 70 ? 1 : 0.3)), dt, env); return; }
       if (d.job === 'rush') return this.rushAI(d, dt, env);
       const W = this.windSpot;
@@ -681,13 +711,14 @@ class Play {
   assignFit(d) {
     const c = this.carrier; if (!c) return 'attack'; const dirZ = c.unit === 'O' ? 1 : -1;
     if (c.unit !== 'O') return 'attack';
-    const ps = Math.sign((c.p.x - this.ballX) || this.sideX) || this.sideX;
+    // playside: where the ball is going (his run, or the design when he is still square), not just which side of the ball he happens to be on
+    const ps = Math.abs(c.vel.x) > 1.5 ? Math.sign(c.vel.x) : Math.abs(c.p.x - this.ballX) > 1.5 ? Math.sign(c.p.x - this.ballX) : (this.sideX || 1);
     if (!this.fits) {
       this.fits = new Map();
       const front = this.D.filter(x => x.upright() && Math.abs(x.p.z - this.losZ) < 7 && x.posName !== 'S');
       const playEdge = front.filter(x => (x.p.x - this.ballX) * ps > 0).sort((a, b) => (b.p.x - a.p.x) * ps)[0];
       const backEdge = front.filter(x => (x.p.x - this.ballX) * ps < 0).sort((a, b) => (a.p.x - b.p.x) * ps)[0];
-      if (playEdge) this.fits.set(playEdge, 'contain'); if (backEdge) this.fits.set(backEdge, 'cutback');
+      if (playEdge) { this.fits.set(playEdge, 'contain'); playEdge.cSide = ps; } if (backEdge) { this.fits.set(backEdge, 'cutback'); backEdge.cSide = -ps; }
       const saf = this.D.filter(x => x.posName === 'S').sort((a, b) => b.p.z - a.p.z); if (saf[0]) this.fits.set(saf[0], 'alley'); if (saf[1]) this.fits.set(saf[1], 'alley');
       for (const x of this.D) if (x.posName === 'LB' && !this.fits.has(x)) this.fits.set(x, 'fill');
     }
@@ -708,12 +739,24 @@ class Play {
     const q = this.carrier && this.carrier.unit === 'O' ? this.carrier : this.qb, dx = q.p.x - d.p.x, dz = q.p.z - d.p.z, dist = Math.hypot(dx, dz) || 1;
     if (dist < 2.4) return this.pursueAI(d, dt, env, 'attack');
     let tx = q.p.x, tz = q.p.z;
+    const side = Math.sign(d.p.x - this.ballX) || 1, qs = Math.sign(q.p.x - this.ballX);
     if (runRead) { tx = lp(d.p.x, this.carrier.p.x, 0.35); tz = this.losZ - 0.6; }      // play the gap, don't fly upfield past the run
+    else if (this.qbOutT && this.pass && this.iq > 0) {     // he is out of the pocket: take the angle that cuts him off (don't chase his back); the edge on his side stays outside him
+      const iq = Math.min(1, this.iq), lead = cl(dist / d.vmax, 0, 0.9) * (0.4 + 0.5 * iq); tx = q.p.x + q.vel.x * lead; tz = q.p.z + q.vel.z * lead;
+      // still between him and the line: he has to come to the line sometime, so beat him to where he will hit it (run along the line, don't chase his back)
+      if (d.p.z > q.p.z + 0.5) { const tL = cl((this.losZ - q.p.z) / Math.max(2.5, q.vel.z + 1.5), 0, 1.2); tx = lp(tx, q.p.x + q.vel.x * tL, iq); tz = lp(tz, Math.max(q.p.z + 1, this.losZ - 0.3), iq); }
+      if (d.edge && side === qs && (d.p.x - q.p.x) * side > -0.5) { tx = side > 0 ? Math.max(tx, q.p.x + 1.3) : Math.min(tx, q.p.x - 1.3); tz = Math.max(tz, q.p.z + 0.8); } }
+    else if (d.edge && d.contain && d.p.z > q.p.z + 0.6) { tx = q.p.x + side * 1.8; tz = q.p.z + 0.7; }     // contain rush: squeeze the pocket from outside, never rush past his depth (a QB who runs gets out the back door)
     else if (d.edge && d.rushMove === 'speed' && d.p.z > q.p.z + 1.2) { const out = Math.sign(d.p.x - q.p.x) || 1; tx = q.p.x + out * 2.4; tz = q.p.z - 0.4; }
     const mx = tx - d.p.x, mz = tz - d.p.z, mm = Math.hypot(mx, mz) || 1, sp = runRead ? Math.min(d.vmax, mm * 3 + 1) : d.vmax;
     locomote(d, v2(mx / mm * sp, mz / mm * sp), dt, env); d.crouchT = this.liveT < 0.6 ? 0.45 : 0.25; slewHeading(d, Math.atan2(dx, dz), 8, dt);
   }
-  spyAI(d, dt, env) { const q = this.qb, tx = q.p.x, tz = Math.max(this.losZ + 4, q.p.z + 6.5), dx = tx - d.p.x, dz = tz - d.p.z, m = Math.hypot(dx, dz) || 1, sp = Math.min(d.vmax, m * 2.5);
+  // after he crosses the line: deep men keep the top on (alley) until they are close, everyone else runs to him on the team pursuit plan
+  scrFit(d) { const q = this.qb; return (d.zone && d.zone.deep) || d.job === 'deep' || (d.posName === 'S' && d.p.z - q.p.z > 9) ? 'alley' : 'attack'; }
+  // where a QB out of the pocket will hit the line if he keeps going (he has to come up sometime): the point the spy, the rushers and the zones all work toward
+  qbCross() { const q = this.qb, tL = cl((this.losZ - q.p.z) / Math.max(2.5, q.vel.z + 1.5), 0, 1.2); return cl(q.p.x + q.vel.x * tL, -FIELD.halfW + 1, FIELD.halfW - 1); }
+  // the spy mirrors the QB a few yards off the line, a step inside him, and leads his drift; once the QB is out of the pocket he works to where the QB will hit the line
+  spyAI(d, dt, env) { const q = this.qb, iq = Math.min(1, this.iq || 0.85), tx = this.qbOutT ? lp(q.p.x, this.qbCross(), iq) : q.p.x + (q.vel.x * 0.35 - Math.sign(q.p.x - this.ballX) * 0.6) * iq, tz = Math.max(this.losZ + 4 - 0.8 * iq, q.p.z + 6.5), dx = tx - d.p.x, dz = tz - d.p.z, m = Math.hypot(dx, dz) || 1, sp = Math.min(d.vmax, m * 2.5);
     locomote(d, v2(dx / m * sp, dz / m * sp), dt, env); d.crouchT = 0.3; slewHeading(d, Math.atan2(q.p.x - d.p.x, q.p.z - d.p.z), 6, dt); }
   coverAI(d, dt, env) {
     const los = this.losZ, k = Math.min(1, dt / (d.react + 0.05));
@@ -738,6 +781,9 @@ class Play {
       tx = lx + (this.qb.p.x - this.ballX) * 0.2; tz = lz;
       if (threat) { const v = lagged(threat), w = deep ? 0.7 : cl(0.82 + (d.A.zcv - 70) / 150, 0.7, 0.95); tx = lx + (threat.p.x + v.x * 0.3 - lx) * w; tz = lz + (threat.p.z + v.z * 0.3 - lz) * w;
         if (deep) { const cush = 2.6 + (d.A.zcv - 70) / 40 + Math.max(0, threat.vel.z) * 0.25; tz = Math.max(tz, threat.p.z + cush); } track = threat; }
+      // the QB is out of the pocket: underneath defenders stop carrying routes deep (the safeties have them) and shade to his side, eyes on him
+      if (!deep && this.qbOutT && this.pass && !this.thrown && this.iq > 0) { const iq = Math.min(1, this.iq); tz = Math.min(tz, lz + 2.5 - 1.5 * iq); tx = lp(tx, this.qbCross(), 0.35 * iq); }
+      else if (deep && this.qbOutT && this.pass && !this.thrown && this.iq > 0) tx = lp(tx, this.qbCross(), 0.3 * Math.min(1, this.iq));     // and the deep man on his side stays over the top of him instead of chasing a route away
     } else { tx = this.qb.p.x; tz = los + 5; }
     const ex = tx - d.p.x, ez = tz - d.p.z, em = Math.hypot(ex, ez), sp = Math.min(d.vmax, em * 2.8 + (track ? len2(d.seenV) * 0.95 : 0));
     locomote(d, em > 0.05 ? v2(ex / em * sp, ez / em * sp) : v2(), dt, env); d.crouchT = 0.2;
@@ -783,23 +829,35 @@ class Play {
     if (d.lungeT > 0) { this.lungeStep(d, c, dt, env); return; }
     d.headOffset *= 0.9;
     if (d.engaged && d.disengageT <= 0 && d.cooldown <= 0) d.engaged = false;
-    // perceived carrier velocity: smoothed, so a cut takes a beat to register (better awareness = shorter beat)
-    const tau = (d.react || 0.2) + 0.04, k = Math.min(1, dt / tau); d.seenV.x += (c.vel.x - d.seenV.x) * k; d.seenV.z += (c.vel.z - d.seenV.z) * k;
-    const V = d.seenV, dirZ = c.unit === 'O' ? 1 : -1, s = d.vmax * 0.96;
+    // perceived carrier velocity: smoothed, so a cut takes a beat to register (better awareness = shorter beat).
+    // A jab step only fools the men close enough to touch him: further off, a defender doesn't chase the fake, he keeps his angle
+    // (his read of the runner holds through the juke) - so one juke beats the man in front, not the whole defense
+    const iq = this.iq || 0.85, tau = (d.react || 0.2) + 0.04, jab = c.jukeT > 0 && dist > 4.5 - 1.5 * Math.min(1, iq), k = Math.min(1, dt / tau) * (jab ? 1 - Math.min(1, iq + 0.1) : 1);
+    d.seenV.x += (c.vel.x - d.seenV.x) * k; d.seenV.z += (c.vel.z - d.seenV.z) * k;
+    let V = d.seenV;
+    const dirZ = c.unit === 'O' ? 1 : -1, s = d.vmax * 0.96;
     // intercept time: |rel + V t| = s t
     const A = V.x * V.x + V.z * V.z - s * s, Bq = 2 * (toC.x * V.x + toC.z * V.z), Cq = dist * dist;
     let tI; if (Math.abs(A) < 1e-6) tI = Bq < 0 ? -Cq / Bq : dist / s; else { const disc = Bq * Bq - 4 * A * Cq; if (disc < 0) tI = dist / s; else { const r1 = (-Bq - Math.sqrt(disc)) / (2 * A), r2 = (-Bq + Math.sqrt(disc)) / (2 * A); tI = [r1, r2].filter(x => x > 0).sort((a, b) => a - b)[0] ?? dist / s; } }
-    tI = Math.min(tI, 4.2) * (mode === 'cutback' ? 1.15 : 1) * cl(0.6 + (d.A.pur || 60) / 220, 0.75, 1.04);     // pursuit rating: a poor one under-leads and ends up chasing      // far pursuers take the true angle (to where they can meet him), not a chase
+    tI = Math.min(tI, 4.2) * (mode === 'cutback' ? 1.15 : 1) * cl(0.6 + (d.A.pur || 60) / 220 + 0.06 * iq, 0.75, 1.04);     // pursuit rating: a poor one under-leads and ends up chasing      // far pursuers take the true angle (to where they can meet him), not a chase
     let ax = c.p.x + V.x * tI, az = c.p.z + V.z * tI;
-    const out = Math.sign(c.p.x) || 1;      // toward the nearer sideline
+    // use the sideline: a runner heading for it has to turn upfield along it, so take the angle to where he will be on the sideline, not past it
+    { const lim = FIELD.halfW - 1.3, sx = Math.sign(V.x); if (iq > 0 && Math.abs(ax) > lim && sx && (sx * lim - c.p.x) * sx > 0) { const tS = cl((sx * lim - c.p.x) / V.x, 0, tI), sp = len2(V);
+      ax = lp(ax, sx * lim, Math.min(1, iq)); az = lp(az, c.p.z + V.z * tS + dirZ * Math.max(sp * 0.9, Math.abs(V.z)) * (tI - tS), Math.min(1, iq)); } }
+    // leverage is kept on his own side: the edge man keeps the ball inside him, the backside man stays home for the cutback (he never crosses the field to the ball's sideline)
+    const out = (mode === 'contain' ? d.cSide : mode === 'cutback' ? -(d.cSide || 0) : 0) || Math.sign(c.p.x) || 1;
+    // ...and a contain man the ball has gone away from stays home: he closes only part of the gap across the field, so a cutback all the way back runs into him
+    if ((mode === 'contain' || mode === 'cutback') && d.cSide && !(this.ret && this.ret.kind === 'punt') && dist > 8) { const gap = (d.p.x - c.p.x) * d.cSide, keep = 0.5; if (gap > 7) ax = lp(ax, c.p.x + d.cSide * Math.max(1.4, gap * keep + 1), Math.min(1, iq)); }
     if (mode === 'contain' && dist > 3.5 && (d.p.z - c.p.z) * dirZ > 1) { ax = out > 0 ? Math.max(ax, c.p.x + 1.4) : Math.min(ax, c.p.x - 1.4); }
     else if (mode === 'cutback' && dist > 4) ax = c.p.x - out * 1.0 + V.x * tI * 0.8;
     else if (mode === 'alley' && dist > 6) az = c.p.z + dirZ * Math.max(2.5, (az - c.p.z) * dirZ);
     else if (mode === 'fill' && c.unit === 'O' && c.p.z < this.losZ + 0.5 && dist > 4) { ax = lp(this.holeX, c.p.x, 0.4); az = this.losZ + 0.9; }
+    else if ((mode === 'attack' || mode === 'fill') && dist > 4) { if (this.ret && d.lane != null && dist > 8) ax = lp(ax, c.p.x + d.lane * cl((dist - 6) / 45, 0, 0.35) + (ax - c.p.x) * 0.6, 0.55 * Math.min(1, iq)); }     // kick coverage: stay in your lane until he commits, squeezing as you close
     ax = cl(ax, -FIELD.halfW + 0.3, FIELD.halfW + 0.3);
     let fx = ax - d.p.x, fz = az - d.p.z; const fm = Math.hypot(fx, fz) || 1; fx = fx / fm * d.vmax; fz = fz / fm * d.vmax;
     // close quarters: constant-bearing pursuit. Match his sideways motion so the angle holds, spend what speed is left closing in.
-    const lead = 0.3, na = norm3(V3(toC.x + V.x * lead, 0, toC.z + V.z * lead)), close = cl(dist * 1.3, 2.2, 4.5);
+    // (from in front of him there is no leading to do: he is coming to you, so square up on him and mirror; leading him there only turns you to run away with him)
+    const vm = len2(V), aheadOf = vm > 1.5 ? -(toC.x * V.x + toC.z * V.z) / vm : 0, lead = lp(0.3, 0.03, sstep(0.2, 1.2, aheadOf) * Math.min(1, iq / 0.85)), na = norm3(V3(toC.x + V.x * lead, 0, toC.z + V.z * lead)), close = cl(dist * 1.3, 2.2, 4.5);
     const Vpar = V.x * na.x + V.z * na.z, pX = V.x - Vpar * na.x, pZ = V.z - Vpar * na.z, pM = Math.hypot(pX, pZ), budget = Math.sqrt(Math.max(0, d.vmax * d.vmax - pM * pM));
     let sAl = Math.min(budget, Math.max(0, Vpar) + close), kP = 1;
     // up close he must actually close: running level with the carrier, matching his speed would leave nothing to close with (the shadowing bug), so give up some of the matching
@@ -808,6 +866,10 @@ class Play {
     let cx = pX * kP + na.x * sAl, cz = pZ * kP + na.z * sAl;
     const w = sstep(2.2, 5.5, dist);
     let dx = lp(cx, fx, w), dz = lp(cz, fz, w);
+    // break down: closing on him head-on, he gathers himself (short steps, square, under control) so a cut doesn't send him flying past;
+    // the faster they are coming together the earlier he starts. A runner going away or across is not slowed for, and with help close by he doesn't wait (gang tackle).
+    if (dist < 7 && dist > 2 && iq > 0 && !this.mates(d).some(m => m !== d && m.upright() && !m.bondBy && !m.wrapped && Math.hypot(m.p.x - c.p.x, m.p.z - c.p.z) < dist + 1.5)) { const nx = toC.x / dist, nz = toC.z / dist, own = dx * nx + dz * nz, theirs = V.x * nx + V.z * nz, vOk = Math.sqrt(2 * 8 * Math.max(0, dist - 1.0)) + 3.5 + 2 * (1 - Math.min(1, iq));
+      if (own > 3 && theirs < 1 && own - theirs > vOk) { const cut = Math.min(own - 3, own - theirs - vOk) * Math.min(1, iq); dx -= nx * cut; dz -= nz * cut; } }     // (he keeps coming forward, ~3 m/s at least: a tackler who stops dead gets run around)
     // don't stack on a teammate's line; slip around blockers in the way
     for (const m of this.mates(d)) { if (m === d || !m.upright()) continue; const rx = d.p.x - m.p.x, rz = d.p.z - m.p.z, rr = Math.hypot(rx, rz); if (rr < 1.4 && rr > 1e-3 && Math.hypot(m.p.x - c.p.x, m.p.z - c.p.z) < dist) { const push = (1.4 - rr) * 2.2; dx += rx / rr * push; dz += rz / rr * push; } }
     if (dist > 2.5) for (const b of this.foes(d)) { if (b === c || !b.upright() || b.bond) continue; const bx = b.p.x - d.p.x, bz = b.p.z - d.p.z, bd = Math.hypot(bx, bz); if (bd < 2.2 && (bx * toC.x + bz * toC.z) > 0) { const side = Math.sign(bx * toC.z - bz * toC.x) || 1; dx += -toC.z / dist * side * 2.2; dz += toC.x / dist * side * 2.2; } }
@@ -1023,7 +1085,7 @@ class Play {
       if (!ov && !armLen) continue;
       // after a catch the other receivers need a beat to turn into blockers (they were running routes)
       const lateB = !!(bl && this.catchT && !bl.ol && this.t - this.catchT < 0.45);
-      if (canBlock && !lateB && !bl.bond && !df.bondBy && !(df.shedCd > 0 && df.lastShedBy === bl) && bl.upright() && df.upright() && df !== this.userD) { bl.bond = df; df.bondBy = bl; df.bondT = 0; df.shedNeed = undefined; }
+      if (canBlock && !lateB && !bl.bond && !df.bondBy && !(df.shedCd > 0 && df.lastShedBy === bl) && !(df.noBondT > this.t) && bl.upright() && df.upright() && df !== this.userD) { bl.bond = df; df.bondBy = bl; df.bondT = 0; df.shedNeed = undefined; }
       if (canBlock && !bl.bond && df === this.userD && !df.bondBy && bl.upright() && df.upright() && !(df.shedCd > 0)) { bl.bond = df; df.bondBy = bl; df.bondT = 0; df.shedNeed = undefined; }
       if (ov) { if (bl && bl.bond === df && ov.depth < 0.08) continue; this.resolve(A, B, ov); }
     }
@@ -1042,6 +1104,15 @@ class Play {
     else { const c = this.carrier || this.qb, side = Math.sign(d.p.x - c.p.x) || Math.sign(d.p.x - b.p.x) || 1; let ux = (b.asgX && this.bondAge(d) < 0.9 ? b.asgX : side) * 0.75 + n.x * 0.35, uz = 0.55 + n.z * 0.35; const um = Math.hypot(ux, uz) || 1; ux /= um; uz /= um;
       const drive = 400 + 9 * Ab.rbk + (b.tr.includes('mauler') ? 150 : 0); d.vel.x += ux * drive / d.mass * dt; d.vel.z += uz * drive / d.mass * dt; }
     d.bondT += dt;
+    // a block only matters while the ball is near it: the QB running out of the pocket, or a returner long gone, and the man works free much sooner
+    const qbLoose = this.qbOutT && this.carrier === this.qb && !this.thrown && d.job !== 'man';
+    if (pp && d.contain && this.qb.vel.x * (Math.sign(d.p.x - this.ballX) || 1) > 2.5) d.bondT += dt * 2 * Math.min(1, this.iq);     // a contain end feels the QB drifting his way and works to get off and stay outside him
+    if (qbLoose && Math.hypot(d.p.x - this.qb.p.x, d.p.z - this.qb.p.z) > 2.5) { d.bondT += dt * 1.4 * Math.min(1, this.iq);
+      // the pocket is gone: a lineman can't wall off a rusher from a QB running around 4+ m away, so the rusher gets off him and chases
+      const sd = Math.sign(d.p.x - this.ballX) || 1, past = (this.qb.p.x - d.p.x) * sd > 0.6;     // (or he got outside of me: off the block and after him)
+      if (this.iq > 0 && (past || Math.hypot(d.p.x - this.qb.p.x, d.p.z - this.qb.p.z) > 4) && this.t > this.qbOutT + 0.3 + (d.react || 0.2) * 1.5) { d.noBondT = this.t + 1.2; return this.shed(b, d, null); } }     // (and the next lineman can't just pick him up again)
+    else if (this.ret && this.carrier && this.carrier.unit === 'O') { const c = this.carrier, ex = d.p.x - c.p.x, ez = d.p.z - c.p.z, ed = Math.hypot(ex, ez) || 1; if (ed > 9 && (c.vel.x * ex + c.vel.z * ez) / ed < 1) d.bondT += dt * 1.5 * Math.min(1, this.iq); }
+    if (Math.abs(d.p.x) > FIELD.halfW + 0.6) return this.shed(b, d, null);      // driven out of bounds: the block is over
     if (d.helper && (d.helper.help !== d || Math.hypot(d.helper.p.x - d.p.x, d.helper.p.z - d.p.z) > 1.6)) { if (d.helper.help === d) d.helper.help = null; d.helper = null; }
     if (d.shedNeed === undefined) {
       const massK = Math.pow(b.mass / d.mass, 0.25);
@@ -1277,4 +1348,12 @@ class Play {
   }
 }
 PHYS.Play = Play; PHYS.DIFF = DIFF;
+// scouting a running QB over a game. The match keeps the state (note after every offensive snap) and passes read() in as dp.scout:
+// each scramble goes on film, older ones fade (8% a snap). Two or three in a short spell and they spy him and rush to contain.
+PHYS.qbScout = {
+  note(S, res, n) { n = n || 0; S = S ? Object.assign({}, S) : { runs: 0, yds: 0, last: n }; const dec = Math.pow(0.92, Math.max(0, n - S.last)); S.runs *= dec; S.yds *= dec; S.last = n;
+    if (res && res.kind === 'scramble') { S.runs += 1; S.yds += Math.max(0, res.yards || 0); } return S; },
+  read(S, n) { if (!S || !S.runs) return null; const r = S.runs * (n == null ? 1 : Math.pow(0.92, Math.max(0, n - S.last))), y = S.yds / S.runs;
+    const k = cl((r - 0.6) * 0.3 + Math.max(0, y - 4) * 0.01 * Math.min(r, 3), 0, 0.9); return k > 0.04 ? { k, n: r } : null; },
+};
 })();

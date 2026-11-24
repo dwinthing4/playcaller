@@ -74,6 +74,8 @@ function cpuCall(tid, side, ctx) {
   const man = R() < st.man; c2 = c.filter(p => !!MAN_COVERAGES[p.cov] === man); if (c2.length) c = c2;
   if (ps === 'adaptive' && ctx.oppTid === L.user) { const t = tend(); const pr = (t.pass + 1) / (t.run + t.pass + 2); const third = down === 3 ? (t.third.pass + 1) / (t.third.run + t.third.pass + 2) : pr;
     if (third > 0.68 && R() < 0.5) { const z = c.filter(p => ['c2', 'c4', 'c2t', 'c3'].includes(p.cov)); if (z.length) c = z; } else if (pr < 0.4 && R() < 0.5) { const z = c.filter(p => p.form === '4-3' || p.form === '3-4'); if (z.length) c = z; } }
+  // a QB who keeps running on them (ctx.scout from the match): no all-out pressure that opens his lanes, keep a man home to spy him
+  const scK = (ctx.scout && ctx.scout.k) || 0; if (scK > 0.25 && R() < scK * 0.7) { let c3 = c.filter(p => p.cov !== 'c0' && p.blitz.length <= 1); const z = c3.filter(p => !MAN_COVERAGES[p.cov]); if (z.length) c3 = z; if (c3.length) c = c3; }     // (zone: eyes on the QB, not backs turned in man)
   // in-game film: whatever has been beating them from this formation, every coordinator adjusts to it (most of the time, so he is not predictable either)
   const fl = ctx.film || []; if (fl.length) {
     const w = { run: 0, deep: 0, short: 0 }; for (const e of fl) w[e.type === 'run' ? 'run' : e.deep ? 'deep' : 'short'] += e.w;
@@ -81,6 +83,7 @@ function cpuCall(tid, side, ctx) {
     if (R() < adj) {
       const fits = top === 'run' ? (p => (p.form === '4-3' || p.form === '3-4' || p.form === 'Goal Line D') && (p.blitz.length > 0 || ['c1', 'c3', 'c0'].includes(p.cov)))
         : top === 'deep' ? (p => ['c2', 'c4', 'c2t', 'c2m', 'c6'].includes(p.cov) && p.blitz.length <= 1)
+        : scK > 0.3 ? (p => !MAN_COVERAGES[p.cov] && p.blitz.length <= 1)     // what is beating them is the QB running: eyes on him, not man coverage with backs turned
         : (p => !!MAN_COVERAGES[p.cov] || p.blitz.length > 0 || p.cov === 'c3');
       const pool2 = pool.filter(p => p.form !== 'Goal Line D' || yl >= 96).filter(fits); if (pool2.length) return pick(pool2).id;
     }
