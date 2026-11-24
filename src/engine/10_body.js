@@ -274,7 +274,7 @@ function poseBody(p, lookAt) {
   const dx = tl > 1e-5 ? T.x / tl : 0, dz = tl > 1e-5 ? T.z / tl : 0, U = V3(Math.sin(a) * dx, Math.cos(a), Math.sin(a) * dz);
   const sp = len2(p.vel), run = p.upright(), bounce = run && p.moving ? 0.028 * Math.min(1, sp / 4) * Math.cos(4 * Math.PI * p.cycle) : 0;
   // stance: three-point for linemen (hips low, back flat-ish), two-point for the rest; eased out over ~0.15 s after the snap (p.stK)
-  const stK = sstep(0, 1, p.stK || 0), st3 = p.stance3 ? stK : 0, st2 = p.stance3 ? 0 : stK, engaged = run && (p.bond || p.bondBy) ? 1 : 0;
+  const stK = sstep(0, 1, p.stK || 0), st3 = p.stance3 ? stK : 0, st2 = p.stance3 ? 0 : stK, engaged = run && (p.bond || p.bondBy || p.hfOn || p.holdOn) ? 1 : 0;
   const S = p.size || 1, W = S * (p.girth || 1), pelvisH = (0.93 - 0.22 * p.crouch - Math.min(0.06, sp * 0.006) + bounce - 0.16 * st3 - 0.06 * st2 - 0.05 * engaged) * S;
   const f3 = V3(Math.sin(p.heading), 0, Math.cos(p.heading)), hinge = run ? (0.17 * p.crouch + 0.1 * st3) * S : 0;
   const jy = run ? (p.jumpY || 0) : 0, pelvis = add3(add3(V3(p.p.x, (p.yOff || 0) + jy, p.p.z), mul3(U, pelvisH)), mul3(f3, -hinge));
@@ -339,6 +339,17 @@ function poseArms(p, J, game) {
       if (p.wrapped && o) { const s2 = Math.sign(dot3(rT, o.rT) || 1) * side, waist = add3(o.pelvis, mul3(o.tu, 0.2)); tgt = add3(add3(waist, mul3(o.rT, s2 * 0.25)), mul3(toC, 0.1)); }
       else tgt = add3(add3(J.chest, mul3(fT, 0.55)), mul3(rT, side * 0.2));
       hint = norm3(add3(mul3(rT, side * 0.9), mul3(tu, -0.2)));
+    } else if (p.upright() && (p.hfOn || p.grabOn || p.holdOn || (p.shoveT > 0 && p.shoveOn))) {
+      // hands on another man: hand fighting at the line (a swim goes over the top, a rip comes up under), a fistful of jersey (a grab,
+      // a hold: the hands go outside his frame), or a shove (both hands into his chest)
+      const q = p.hfOn || p.grabOn || p.holdOn || p.shoveOn, o = game.poses[q.id], hf = p.hf && !p.hf.done ? p.hf : null, sg = o ? (dot3(rT, o.rT) < 0 ? -1 : 1) : 1;
+      if (!o) tgt = add3(chest, mul3(fT, 0.4));
+      else if (p.grabOn || p.holdOn) tgt = add3(add3(add3(o.chest, mul3(o.tu, -0.14)), mul3(o.rT, side * sg * 0.27)), mul3(o.fT, -0.06));
+      else if (hf && i === 0 && hf.move === 'swim') tgt = add3(add3(o.head, mul3(o.tu, 0.22)), mul3(o.rT, side * sg * 0.12));
+      else if (hf && i === 0 && hf.move === 'rip') tgt = add3(add3(o.chest, mul3(o.tu, 0.12)), mul3(o.rT, side * sg * 0.24));
+      else tgt = add3(add3(add3(o.chest, mul3(o.tu, -0.08)), mul3(o.fT, 0.12)), mul3(o.rT, side * sg * 0.1));
+      { const reach = (BODY.uarm + BODY.farm) * (p.size || 1) * 0.9, d = sub3(tgt, sh[i]), dl = len3(d); if (dl > reach) tgt = add3(sh[i], mul3(d, reach / dl)); }
+      hint = norm3(add3(add3(mul3(tu, -0.9), mul3(rT, side * 0.45)), mul3(fT, -0.2)));
     } else if ((p.bond || p.bondBy) && p.upright()) {
       const o = game.poses[(p.bond || p.bondBy).id];
       // hands inside on his chest plate, elbows bent: the reach is clamped so the arms never lock out
