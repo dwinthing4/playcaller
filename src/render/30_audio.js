@@ -141,11 +141,12 @@ function makeBus(ctx, dome, raw) {
   B.wx = ctx.createGain(); B.wx.connect(B.master);
   B.send = ctx.createGain(); B.ret = ctx.createGain(); B.ret.gain.value = 1; B.ret.connect(B.master);
   B.verb = ctx.createConvolver(); B.verb.normalize = false; B.verb.buffer = irFor(ctx, dome); B.send.connect(B.verb); B.verb.connect(B.ret);
-  B.cSend = ctx.createGain(); B.cSend.gain.value = dome ? 0.16 : 0.04; B.cHigh.connect(B.cSend); B.cSend.connect(B.send);      // the crowd in the room: a dome booms
+  B.cSend = ctx.createGain(); B.cSend.gain.value = 0.16; B.cSend.connect(B.send); if (dome) B.cHigh.connect(B.cSend);      // the crowd in the room: a dome booms (open air: the reverb rests between effects)
   return B;
 }
 function setVenue(B, dome) {
-  dome = !!dome; B.cLow.gain.setTargetAtTime(dome ? 5 : 0, B.ctx.currentTime, 0.3); B.cSend.gain.setTargetAtTime(dome ? 0.16 : 0.04, B.ctx.currentTime, 0.3); if (B.dome === dome) return;
+  dome = !!dome; B.cLow.gain.setTargetAtTime(dome ? 5 : 0, B.ctx.currentTime, 0.3); if (B.dome === dome) return;
+  try { if (dome) B.cHigh.connect(B.cSend); else B.cHigh.disconnect(B.cSend); } catch (e) { }
   const v = B.ctx.createConvolver(); v.normalize = false; v.buffer = irFor(B.ctx, dome); B.send.connect(v); v.connect(B.ret);
   try { B.send.disconnect(B.verb); B.verb.disconnect(); } catch (e) { } B.verb = v; B.dome = dome;
 }
@@ -570,7 +571,8 @@ function test(name) {
 async function renderOff(name, o = {}) {
   if (!OAC) return null; const sr = o.sr || 48000, dur = o.dur || 3, oc = new OAC(2, Math.round(sr * dur), sr);
   prep(oc, true); const B = makeBus(oc, !!o.dome, !!o.raw); B.master.gain.value = o.vol != null ? o.vol : 1;
-  if (name === 'crowdAt') { const Ly = mkCrowd(B); B.crowd.gain.value = (o.dome ? 1.35 : 1); crowdSet(Ly, 0, crowdMix(o.e != null ? o.e : 0.5, o.val || 0, o.clap || 0, 0), 0.02, 0.02); }
+  if (name === 'load') { const Ly = mkCrowd(B); B.crowd.gain.value = 1; crowdSet(Ly, 0, crowdMix(0.7, 0.3, 0.5, 0), 0.05, 0.05); for (let t = 0.1; t < dur - 1; t += 0.1) SFX.hit(B, t, { k: Math.random(), helmet: Math.random() < 0.4, prio: 2 }); for (let t = 0.3; t < dur - 1; t += 1.5) { SFX.endWhistle(B, t, { two: 1 }); SFX.react(B, t + 0.2, { kind: 'cheer', size: 0.6 }); SFX.bark(B, t + 0.5, { word: 'hut' }); } }
+  else if (name === 'crowdAt') { const Ly = mkCrowd(B); B.crowd.gain.value = (o.dome ? 1.35 : 1); crowdSet(Ly, 0, crowdMix(o.e != null ? o.e : 0.5, o.val || 0, o.clap || 0, 0), 0.02, 0.02); }
   else if (name === 'reactAt') { SFX.react(B, 0.05, { kind: o.kind || 'cheer', size: o.size || 1 }); }
   else play(name, B, 0.05);
   const buf = await oc.startRendering(); const ch = [buf.getChannelData(0), buf.getChannelData(1)], n = buf.length;
