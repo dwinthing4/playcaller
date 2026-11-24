@@ -15,7 +15,7 @@ const exe = path.join(os.homedir(), 'AppData/Local/ms-playwright/chromium-1248/c
 const browser = await chromium.launch({ executablePath: exe, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await ctx.newPage(); const errs = [];
-page.on('pageerror', e => errs.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error' && !/fonts\.g|net::|ERR_/.test(m.text())) errs.push('console: ' + m.text()); });
+page.on('pageerror', e => errs.push('pageerror: ' + e.message)); page.on('console', m => { if ((m.type() === 'error' && !/fonts\.g|net::|ERR_/.test(m.text())) || (m.type() === 'warning' && /^sound:/.test(m.text()))) errs.push('console: ' + m.text()); });
 page.on('dialog', d => d.accept());
 await page.goto('file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/')); await page.waitForTimeout(600);
 let fails = 0; const bad = m => { fails++; console.log('  FAIL ' + m); };
@@ -87,7 +87,13 @@ if (fl2.voices > 12) bad('voices did not drain after the flood');
 console.log('\n4. frame time (watch mode, 1x)');
 await page.evaluate(() => { MATCH._G.speed = 1; });
 const fps = () => page.evaluate(() => new Promise(res => { let n = 0, worst = 0, prev = performance.now(); const t0 = prev, ft = []; const f = () => { const now = performance.now(); ft.push(now - prev); worst = Math.max(worst, now - prev); prev = now; n++; if (now - t0 < 3000) requestAnimationFrame(f); else { ft.sort((a, b) => a - b); res({ fps: n / ((now - t0) / 1000), worst, p95: ft[Math.floor(ft.length * 0.95)] }); } }; requestAnimationFrame(f); }));
-for (const on of [true, false, true, false]) { await page.evaluate(o => { L.settings.sound = o; SND.apply(); }, on); await page.waitForTimeout(500); const r = await fps(); const d = await page.evaluate(() => SND.debug.ctx); console.log(`  sound ${on ? 'on ' : 'off'} (${d}): ${r.fps.toFixed(1)} fps, p95 ${r.p95.toFixed(1)} ms, worst ${r.worst.toFixed(0)} ms`); }
+// the sound code's own main-thread time (QA only: wraps the two entry points the match and the engine call)
+await page.evaluate(() => { const f = SND.frame, e = PHYS.onEvent; window.__sndT = { frame: 0, nf: 0, ev: 0, ne: 0 }; SND.frame = (G, dt) => { const t = performance.now(); f(G, dt); __sndT.frame += performance.now() - t; __sndT.nf++; }; PHYS.onEvent = (k, p, o) => { const t = performance.now(); e(k, p, o); __sndT.ev += performance.now() - t; __sndT.ne++; }; });
+const res = { on: [], off: [] };
+for (const on of [true, false, true, false, true, false]) { await page.evaluate(o => { L.settings.sound = o; SND.apply(); }, on); await page.mouse.click(5, 5); await page.waitForTimeout(600); const r = await fps(); const d = await page.evaluate(() => SND.debug.ctx); res[on ? 'on' : 'off'].push(r); console.log(`  sound ${on ? 'on ' : 'off'} (${d}): ${r.fps.toFixed(1)} fps, p95 ${r.p95.toFixed(1)} ms, worst ${r.worst.toFixed(0)} ms`); }
+const med = a => a.map(r => r.fps).sort((x, y) => x - y)[Math.floor(a.length / 2)];
+const st = await page.evaluate(() => __sndT);
+console.log(`  median fps: sound on ${med(res.on).toFixed(1)}, off ${med(res.off).toFixed(1)};  SND.frame ${(st.frame / Math.max(1, st.nf)).toFixed(3)} ms a frame (${st.nf} frames), engine events ${(st.ev / Math.max(1, st.ne) * 1000).toFixed(1)} µs each (${st.ne})`);
 
 // ---- 3. the Sound switch
 console.log('\n3. the Sound switch');
@@ -113,6 +119,7 @@ console.log('  test buttons (voices started):', JSON.stringify(tb));
 for (const k in tb) if (!tb[k] && !/Crowd|Rain|Wind/.test(k)) bad('test button made no sound: ' + k);
 await page.waitForTimeout(6000); const tail = await page.evaluate(() => SND.debug); console.log(`  6 s later: ctx ${tail.ctx} voices ${tail.voices} nodes ${tail.nodes}`);
 await page.waitForTimeout(3500); const idle = await page.evaluate(() => SND.debug.ctx); console.log('  idle in the menus:', idle); if (idle === 'running') bad('audio not suspended when idle');
+const se = await page.evaluate(() => SND.debug.errors); console.log('  errors swallowed by the sound engine:', se); if (se) bad(se + ' sound engine errors (see the console warning)');
 console.log('\n' + (errs.length ? 'ERRORS\n' + errs.join('\n') : 'no console errors'));
 console.log(fails ? `${fails} FAILURES` : 'sound test passed');
 await browser.close(); process.exit(fails || errs.length ? 1 : 0);

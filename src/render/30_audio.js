@@ -141,10 +141,11 @@ function makeBus(ctx, dome, raw) {
   B.wx = ctx.createGain(); B.wx.connect(B.master);
   B.send = ctx.createGain(); B.ret = ctx.createGain(); B.ret.gain.value = 1; B.ret.connect(B.master);
   B.verb = ctx.createConvolver(); B.verb.normalize = false; B.verb.buffer = irFor(ctx, dome); B.send.connect(B.verb); B.verb.connect(B.ret);
+  B.cSend = ctx.createGain(); B.cSend.gain.value = dome ? 0.16 : 0.04; B.cHigh.connect(B.cSend); B.cSend.connect(B.send);      // the crowd in the room: a dome booms
   return B;
 }
 function setVenue(B, dome) {
-  dome = !!dome; B.cLow.gain.setTargetAtTime(dome ? 5 : 0, B.ctx.currentTime, 0.3); if (B.dome === dome) return;
+  dome = !!dome; B.cLow.gain.setTargetAtTime(dome ? 5 : 0, B.ctx.currentTime, 0.3); B.cSend.gain.setTargetAtTime(dome ? 0.16 : 0.04, B.ctx.currentTime, 0.3); if (B.dome === dome) return;
   const v = B.ctx.createConvolver(); v.normalize = false; v.buffer = irFor(B.ctx, dome); B.send.connect(v); v.connect(B.ret);
   try { B.send.disconnect(B.verb); B.verb.disconnect(); } catch (e) { } B.verb = v; B.dome = dome;
 }
@@ -152,14 +153,15 @@ function setVenue(B, dome) {
 // ------------------------------------------------------------ one-shot voices: counted, capped, every node disconnected when the last source ends
 function voice(B, prio) {
   const n = B.voices.size; if (n >= MAXV || (prio < 1 && n >= MAXV * 0.6) || (prio < 0 && n >= MAXV * 0.4)) { dbg.dropped++; return null; }
-  const v = { B, nodes: [], srcs: 0, end: 0 }; B.voices.add(v); dbg.made++; dbg.peakV = Math.max(dbg.peakV, B.voices.size); return v;
+  const v = { B, nodes: [], srcs: 0, end: 0, t0: B.ctx.currentTime }; B.voices.add(v); dbg.made++; dbg.peakV = Math.max(dbg.peakV, B.voices.size); return v;
 }
 function free(v) { if (!v.B.voices.has(v)) return; v.B.voices.delete(v); for (const x of v.nodes) { try { x.disconnect(); } catch (e) { } } v.B.nodes -= v.nodes.length; v.nodes.length = 0; dbg.ended++; }
 const nd = (v, x) => { v.nodes.push(x); v.B.nodes++; dbg.peakN = Math.max(dbg.peakN, v.B.nodes); return x; };
-const gn = (v, g) => { const x = nd(v, v.B.ctx.createGain()); x.gain.value = g; return x; };
+const fin = (x, d) => (typeof x === 'number' && isFinite(x) ? x : d);
+const gn = (v, g) => { const x = nd(v, v.B.ctx.createGain()); x.gain.value = fin(g, 0); return x; };
 const fl = (v, type, f, Q, gain) => { const x = nd(v, v.B.ctx.createBiquadFilter()); x.type = type; x.frequency.value = f; if (Q != null) x.Q.value = Q; if (gain != null) x.gain.value = gain; return x; };
 const os = (v, type, f) => { const x = nd(v, v.B.ctx.createOscillator()); if (type === 'voice') x.setPeriodicWave(voiceWave(v.B.ctx)); else x.type = type; x.frequency.value = f; return x; };
-const pn = (v, p) => { const c = v.B.ctx; if (!c.createStereoPanner) return gn(v, 1); const x = nd(v, c.createStereoPanner()); x.pan.value = clamp(p || 0, -1, 1); return x; };
+const pn = (v, p) => { const c = v.B.ctx; if (!c.createStereoPanner) return gn(v, 1); const x = nd(v, c.createStereoPanner()); x.pan.value = clamp(fin(p, 0), -1, 1); return x; };
 function run(v, x, t0, t1, off) { v.srcs++; v.end = Math.max(v.end, t1); x.onended = () => { if (--v.srcs <= 0) free(v); }; if (off != null) x.start(t0, off); else x.start(t0); x.stop(t1); return x; }
 function noise(v, buf, t0, t1, rate) { const b = buf || BUF.white, x = nd(v, v.B.ctx.createBufferSource()); x.buffer = b; x.loop = true; if (rate) x.playbackRate.value = rate; return run(v, x, t0, t1, Math.random() * Math.max(0.01, b.duration - 0.05)); }
 const chain = (...xs) => { for (let i = 0; i < xs.length - 1; i++) xs[i].connect(xs[i + 1]); return xs[xs.length - 1]; };
@@ -257,7 +259,7 @@ SFX.sting = (B, t, o = {}) => {
 // the crowd answering a moment: vowel-shaped swells of noise (cheer rises and brightens, groan falls "aww", ooh, boo, a gasp);
 // a cheer also carries the murmur sped up into shouting
 SFX.react = (B, t, o = {}) => {
-  const kind = o.kind || 'cheer', sz = clamp(o.size != null ? o.size : 0.6, 0.1, 1.2), v = voice(B, 0); if (!v || !BUF.pink) return; const lv = (o.g != null ? o.g : 1) * sz;
+  if (!BUF.pink) return; const kind = o.kind || 'cheer', sz = clamp(fin(o.size, 0.6), 0.1, 1.2), v = voice(B, 0); if (!v) return; const lv = (o.g != null ? o.g : 1) * sz;
   const g = gn(v, lv); g.connect(B.crowd);
   const P = { cheer: { f: [650, 1350, 1100], q: 0.7, f2: 2400, a: 0.22, h: 0.5 + 0.8 * sz, r: 1.6 + 1.4 * sz, pk: 0.36 },
     groan: { f: [880, 520, 360], q: 1.5, f2: 1250, a: 0.14, h: 0.35, r: 1.3, pk: 0.62 },
@@ -358,7 +360,7 @@ function idle() {
   if (!isOn() || hiddenDoc()) { suspend(); return; }
   const inMatch = !!(M && M.G && !M.G.paused && !M.G.over), busy = inMatch || A.voices.size > 0 || T < A.busyUntil || (M && M.G && M.G.stage === 'final');
   if (busy) { A.idleSince = 0; if (inMatch) resume(); } else { if (!A.idleSince) A.idleSince = T; if (T - A.idleSince > 2500) suspend(); }
-  const ct = A.ctx.currentTime; for (const v of Array.from(A.voices)) if (v.end && v.end < ct - 1.5) { dbg.forced++; free(v); }
+  const ct = A.ctx.currentTime; for (const v of Array.from(A.voices)) if ((v.end || v.t0 + 10) < ct - 1.5) { dbg.forced++; free(v); }
 }
 
 // ------------------------------------------------------------ the match: state read off G, the engine's events, the crowd's mood
@@ -368,7 +370,7 @@ function startMatch(G) {
   M = { G, sc: { [G.hid]: G.score[G.hid] || 0, [G.aid]: G.score[G.aid] || 0 }, q: G.q, over: !!G.over, flag: !!G.flagUp, ka: null, paused: !!G.paused,
     swell: 0, clap: 0, val: 0, act: 0, hushT: -99, meter: 0, energy: 0.3, base: 0.35, hq: [], hitsT: [], tick: 0, baseT: 0, nextFan: T + 3, prePl: null, setAt: 0, setSaid: false,
     lastHorn: -99, lastWhistle: -99, lastOoh: -99, intT: -99, hardT: -99, dome: domeOf(G.wx), snow: !!(G.wx && G.wx.weather === 'snow'), C: null, X: null };
-  if (A) build();
+  if (A && isOn() && running()) build();
 }
 function build() {
   if (!A || !M || M.C) return; const G = M.G; setVenue(A, M.dome); A.cHigh.gain.setTargetAtTime(M.snow ? -5 : 0, A.ctx.currentTime, 0.3);
@@ -387,7 +389,8 @@ function react(kind, size) {
   else if (kind === 'boo') M.val = Math.min(M.val, -0.5);
   if (fxOk(M.G)) SFX.react(A, T + 0.02 + Math.random() * 0.05, { kind: kind === 'hush' ? 'groan' : kind, size: kind === 'hush' ? 0.9 : size });
 }
-const mood = (sign, size) => (sign > 0 ? react('cheer', size) : size >= 1 ? react('hush') : react('groan', size));
+// a home crowd cheers its own team's good plays; it groans at the bad ones that matter, and only murmurs at a visitor's first down
+function mood(sign, size) { if (sign > 0) return react('cheer', size); if (size >= 1) return react('hush'); if (size >= 0.5) return react('groan', size); if (M) { M.val = Math.min(M.val, -0.5); M.swell *= 0.6; } }
 function horn(kind) { if (!running() || !M || M.G.sim) return; const T = now(); if (T - M.lastHorn < 3.5) return; M.lastHorn = T; SFX.horn(A, T + 0.05, { kind }); }
 function panOf(x, z) { try { if (typeof R3D === 'undefined' || !R3D.project || !W) return 0; const p = R3D.project(x, 1, z); if (!p || p.behind) return 0; return clamp((p.x / (W.innerWidth || 1)) * 2 - 1, -1, 1) * 0.65; } catch (e) { return 0; } }
 const qbPitch = pl => { const id = pl && pl.qb && pl.qb.pid != null ? +pl.qb.pid || 0 : 0; return 150 + ((id * 37) % 45); };
@@ -421,7 +424,7 @@ function onEnd(G, pl, res) {
   if (ty === 'fumbleLost') return mood(-f, 0.85);
   if (pl.ret) { const z0 = pl.ret.landZ != null ? pl.ret.landZ : pl.losZ, ry = ((res.spotZ || 0) - z0) / YDm; if (/fair|touchback|downed/.test(ty)) return; if (ry >= 25) mood(f, 0.65); return; }
   if (res.sack) return mood(-f, 0.75);
-  if (ty === 'inc') return mood(-f, G.down >= 3 ? 0.55 : 0.25);
+  if (ty === 'inc') { const B0 = pl.ball, deep = B0 && B0.land && (B0.land.z - pl.losZ) / YDm > 16; return mood(-f, G.down >= 3 ? 0.55 : deep ? 0.5 : 0.25); }
   const y = res.yards || 0, first = y >= (G.togo || 10) - 1e-6;
   if (G.down === 4 && !first) mood(-f, 0.9); else if (G.down >= 3 && first) mood(f, 0.65); else if (G.down === 3) mood(-f, 0.6);
   else if (y >= 20) mood(f, 0.8); else if (y >= 10) mood(f, 0.5); else if (y <= -3) mood(-f, 0.35);
@@ -511,12 +514,14 @@ function on(kind, o) {
   if (kind === 'turnover' || kind === 'flag' || kind === 'score') return;      // read off G every frame (kept so callers never break)
 }
 function crowd(n) { if (M) M.meter = clamp(+n || 0, 0, 1); }
-if (typeof PHYS !== 'undefined') PHYS.onEvent = engineEv;
+// an audio problem must never stop a play: every entry point swallows (and counts) its errors
+function safe(fn) { return function () { try { return fn.apply(null, arguments); } catch (e) { if (!dbg.err) console.warn('sound:', e); dbg.err = (dbg.err || 0) + 1; } }; }
+if (typeof PHYS !== 'undefined') PHYS.onEvent = safe(engineEv);
 if (W && typeof document !== 'undefined') {
-  for (const ev of ['pointerdown', 'touchend', 'keydown', 'mousedown']) W.addEventListener(ev, gesture, { capture: true, passive: true });
-  W.addEventListener('click', uiClick, true);
-  document.addEventListener('visibilitychange', () => { if (!A) return; masterTo(); if (hiddenDoc()) suspend(); else if (M && M.G && !M.G.paused) resume(); });
-  setInterval(idle, 500);
+  for (const ev of ['pointerdown', 'touchend', 'keydown', 'mousedown']) W.addEventListener(ev, safe(gesture), { capture: true, passive: true });
+  W.addEventListener('click', safe(uiClick), true);
+  document.addEventListener('visibilitychange', safe(() => { if (!A) return; masterTo(); if (hiddenDoc()) suspend(); else if (M && M.G && !M.G.paused) resume(); }));
+  setInterval(safe(idle), 500);
 }
 
 // ------------------------------------------------------------ settings: the switch, the volume, the sound test
@@ -586,8 +591,8 @@ function meter(onOff) {
   if (onOff === false && dbg.meter) { cancelAnimationFrame(dbg.meter.raf); try { A.clip.disconnect(dbg.meter.an); } catch (e) { } dbg.meter = null; }
   return dbg.meter ? { peak: dbg.meter.peak, reduction: dbg.meter.red, looks: dbg.meter.n } : null;
 }
-return { frame, crowd, on, test, apply, TESTS, SFX, unlock: gesture,
+return { frame: safe(frame), crowd: safe(crowd), on: safe(on), test: safe(test), apply: safe(apply), TESTS, SFX, unlock: safe(gesture),
   get debug() { return { ctx: A ? A.ctx.state : 'none', on: isOn(), vol: vol(), master: A ? A.mGain : 0, voices: A ? A.voices.size : 0, nodes: A ? A.nodes : 0, layerNodes: M && M.C ? M.C.nodes.length + (M.X ? M.X.nodes.length : 0) : 0,
-    match: !!M, energy: M ? Math.round(M.energy * 100) / 100 : 0, meter: M ? M.meter : 0, buffers: Object.keys(BUF).filter(k => BUF[k]), made: dbg.made, ended: dbg.ended, dropped: dbg.dropped, forced: dbg.forced, peakVoices: dbg.peakV, peakNodes: dbg.peakN, events: dbg.events }; },
+    match: !!M, energy: M ? Math.round(M.energy * 100) / 100 : 0, meter: M ? M.meter : 0, buffers: Object.keys(BUF).filter(k => BUF[k]), made: dbg.made, ended: dbg.ended, dropped: dbg.dropped, forced: dbg.forced, errors: dbg.err || 0, peakVoices: dbg.peakV, peakNodes: dbg.peakN, events: dbg.events }; },
   _render: renderOff, _meter: meter };
 })();
