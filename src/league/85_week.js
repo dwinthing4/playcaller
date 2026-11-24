@@ -8,6 +8,7 @@ function applyMatchResult(g, result) {
   for (const pid in (result.snaps || {})) { addStat(+pid, 'snaps', result.snaps[pid]); (lines[pid] = lines[pid] || {}).snaps = result.snaps[pid]; }
   for (const inj of (result.injuries || [])) { const p = L.P[inj.pid]; if (p) { p.inj = Math.max(p.inj || 0, inj.weeks || 1); p.injType = inj.type || 'injury'; if (p.tid === L.user) news(`${p.pos} ${p.fn} ${p.ln} (${p.injType}) is out ${p.inj} wk.`); } }
   g.hs = result.hs; g.as = result.as; g.done = true; g.live = true; g.played = true; rotRecord(g, result);
+  try { g.bx = fsimBoxFromResult(g, result); } catch (e) { }      // the same box score a simmed game gets
   for (const pid in lines) recordGameLine(L.P[pid], lines[pid]);
   finishGame(g, lines);
   const T = UT(); applyGameXP(T, result.snaps, result.perf); closeFilm(result.perf);
@@ -23,18 +24,17 @@ function finishWeekAfterUserGame(g) {
 function instantUserGame() {
   const g = currentUserGame();
   if (!g) { if (L.phase === 'playoffs') simPlayoffRound(); else if (L.phase === 'regular') simWeek(); return; }
-  const lines = {}; const before = {}; const T = UT(); for (const id of T.roster) before[id] = Object.assign({}, L.P[id].st);
-  simGame(g); const snaps = {}; for (const id of T.roster) { const s = L.P[id].st || {}; snaps[id] = (s.snaps || 0) - ((before[id] || {}).snaps || 0); }
+  const T = UT(), r = simGame(g), snaps = {}; for (const id of T.roster) snaps[id] = r.snaps[id] || 0;     // the play-by-play sim, same clock as a live game
   applyGameXP(T, snaps, {}); news(`Final: ${L.teams[g.a].abbr} ${g.as} – ${L.teams[g.h].abbr} ${g.hs}`);
   finishWeekAfterUserGame(g);
 }
 function simWeek() { const wk = L.sched[L.week]; if (!wk) return; for (const g of wk) if (!g.done) simGame(g); advanceWeek(); }
-function simToPlayoffs() { let guard = 0; while (L.phase === 'regular' && guard++ < 20) { const g = userGame(L.week); if (g && !g.done) instantUserGame(); else simWeek(); } }
+function simToPlayoffs() { let guard = 0; while (L.phase === 'regular' && guard++ < 30) { const g = userGame(L.week); if (g && !g.done) instantUserGame(); else simWeek(); } }
 function advanceWeek() {
   const T = UT();
   if (!L.ghost) { practiceWeek(T); devWeekReport(T); }
   for (const t of L.teams) for (const id of t.roster) { const p = L.P[id]; if (p.inj > 0) { p.inj--; if (p.inj === 0 && t.id === L.user) news(`${p.fn} ${p.ln} is healthy again.`); } }
-  L.week++;
+  L.week++; fsimPruneBoxes();
   if (L.week >= L.sched.length) { startPlayoffs(); return; }
   if (L.ghost) return;
   scoutingWeek(); gmWeek(); ownerWeek(); updateMock();

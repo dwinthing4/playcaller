@@ -1,0 +1,47 @@
+/* stats screens: player seasons + game logs, box scores, schedule slots, scores, history book */
+.plst td:first-child{white-space:nowrap}
+.plchev{display:inline-block;width:12px;color:var(--ink2);font-size:10px;transition:transform .15s}
+.plsr.open .plchev{transform:rotate(90deg)}
+.plsr.open td{background:var(--fill)}
+.plcar td{font-weight:700;border-top:2px solid var(--ink)}
+.plgl>td{padding:0 0 8px 10px;background:var(--fill);white-space:normal}
+.plgl table{background:transparent}
+.plgl .plgt td,.plgl .plgt th{padding:4px 6px;font-size:12px}
+.plw{color:var(--good)}.pll{color:var(--bad)}
+/* time slots */
+.slt{display:inline-block;font:var(--cond-w) 10px/1 var(--cond);letter-spacing:.08em;padding:3px 5px 2px;border-radius:var(--r);margin-left:5px;vertical-align:1px;text-transform:uppercase;background:var(--fill2);color:var(--ink)}
+.slt.tnf,.slt.snf,.slt.mnf{background:var(--on);color:var(--onink)}
+.slt.thanksgiving{background:var(--amber);color:#1b1408}
+.slt.intl{background:var(--acc);color:var(--accink)}
+.sch tr.bye td{color:var(--ink2);font-style:italic}
+/* scores */
+.scgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.scg{background:var(--fill);border-radius:var(--r);padding:7px 9px 6px;min-width:0}
+.scg.click:hover{outline:2px solid var(--rule)}
+.scg.me{box-shadow:inset 3px 0 0 var(--acc)}
+.scl{font:var(--cond-w) 11px/1.2 var(--cond);letter-spacing:.05em;color:var(--ink2);text-transform:var(--cond-tt);min-height:13px;margin-bottom:3px}
+.sct{display:flex;align-items:center;gap:6px;padding:2px 0}.sct b{min-width:22px;text-align:right;font-variant-numeric:tabular-nums}
+.sct.w b,.sct.w .sp{font-weight:800}.sct:not(.w) b{color:var(--ink2)}
+.scf{margin-top:2px}
+/* box score */
+.bxhd{display:flex;align-items:center;gap:8px;margin:8px 0 10px}
+.bxt{flex:1 1 0;display:flex;align-items:center;gap:8px;min-width:0}.bxt.h{flex-direction:row-reverse;text-align:right}
+.bxt>div{min-width:0;display:flex;flex-direction:column}.bxt>div b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bxsc{font:var(--disp-w) 2rem/1 var(--disp);font-variant-numeric:tabular-nums;color:var(--ink2);margin:0 4px}.bxsc.w{color:var(--ink)}
+.bxat{color:var(--ink2);font-weight:700}
+.bxls{margin-bottom:10px}.bxls td,.bxls th{text-align:center}.bxls td:first-child,.bxls th:first-child{text-align:left}
+.bxts{margin-bottom:10px}.bxts td{text-align:center}.bxts td:first-child,.bxts th:first-child{text-align:left}.bxts td:last-child,.bxts th:last-child{text-align:right}.bxts th:nth-child(2){width:50%}
+.bxcols h3{margin:6px 0 4px}
+.bxpl td{white-space:normal}.bxpl td:first-child{white-space:nowrap;width:38%}
+.bxg td{font:var(--cond-w) 11px var(--cond);letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);border-bottom:2px solid var(--rule);padding-top:8px}
+.bxdr td{white-space:normal;vertical-align:top}
+/* history */
+.dyn{margin:6px 0}
+.hshd{display:flex;align-items:center;gap:12px;margin:10px 0}.hshd>div{display:flex;flex-direction:column}.hshd b{font-size:1.15rem}
+.hsaws{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px}
+.hsaw{background:var(--fill);border-radius:var(--r);padding:7px 9px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.ri.bye{justify-content:center;opacity:.72}.ri.bye .ro{font-size:.95rem;letter-spacing:.06em}.ri.bye.cur{opacity:1}
+.hb-slot{margin-left:6px}.hb-slot::before{content:"· "}
+.bxls td{color:var(--ink)}
+.hsst{table-layout:fixed;margin-bottom:6px}.hsst th:first-child{width:30%}.hsst th:nth-child(2){width:18%}.hsst th:nth-child(3){width:22%}.hsst td{overflow:hidden;text-overflow:ellipsis}
+@media (max-width:640px){.sch .slt{display:none}.sch .schc{display:none}.sch td,.sch th{padding:5px 4px}.sch .rvl{display:none}}

@@ -7,7 +7,7 @@ function migrate() {
   if (!L.unis) L.unis = {};
   for (const id in L.P) { const p = L.P[id]; ensureBody(p); if (!p.st) p.st = blankStats(); if (!p.car) p.car = {}; if (!p.hist) p.hist = []; ensureLook(p); }
   ensureStaffAll(); if (!L.picking && L.user != null) ensureUserStaff();
-  migrateContracts();
+  migrateContracts(); migrateHistory();
 }
 // contracts v1 (dead money ledger, bonus structure, rookie deals with 5th-year options, comp-pick log)
 function migrateContracts() {
@@ -17,6 +17,12 @@ function migrateContracts() {
   for (const t of L.teams) for (const id of t.roster) { const p = L.P[id]; if (!p || p.rk !== undefined) continue; p.rk = null;
     const d = p.drafted; if (d && d.y && d.r && p.yrs === d.y + 4 - capYear() && p.yrs >= 1 && p.yrs <= 4) p.rk = { y: d.y, r: d.r, pick: d.pick || 0, opt: null }; }
   ctInitLeague(true);
+}
+// league sim v2 (play-by-play sim, game logs, record books per quarter length, career records): older saves
+function migrateHistory() {
+  if (!L.recQ) { L.recQ = {}; const r = L.rec || {}; if (Object.keys(r.lg || {}).length || Object.keys(r.mine || {}).length) L.recOld = r; L.rec = { mine: {}, lg: {} }; }
+  for (const id in L.P) { const p = L.P[id]; if (!Array.isArray(p.gl)) p.gl = []; }
+  if (!L.rcar) { try { histCareer(); } catch (e) { L.rcar = {}; } }
 }
 function deserialize(s) { const d = JSON.parse(s); if (!d || !d.teams || !d.P) throw new Error('Not a Playcaller league'); L = d; UID = L.uid || (Object.keys(L.P).reduce((m, k) => Math.max(m, +k), 0) + 1); migrate(); return L; }
 function slotMeta() { try { return JSON.parse(localStorage.getItem('pc_slots') || '{}'); } catch (e) { return {}; } }

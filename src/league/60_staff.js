@@ -204,8 +204,8 @@ function seasonGoals(T) {
   if (!T.goals || T.goals.y !== L.year) { const op = ownerPersona(T); const exp = T.expect || expectFor(T);
     const list = [{ k: 'wins', v: exp, lab: `Win ${exp}+ games`, r: 3 }, { k: 'playoffs', lab: 'Make the playoffs', r: 4 }, { k: 'rival', lab: `Beat the ${L.teams[T.rival] ? L.teams[T.rival].name : 'rival'}`, r: 3 }];
     if (op === 'cheap') list.push({ k: 'budget', lab: 'Finish the season under the cap', r: 3 });
-    if (op === 'winnow') list.push({ k: 'pf', v: 400, lab: 'Score 400+ points', r: 3 });
-    if (op === 'patient') list.push({ k: 'pa', v: 380, lab: 'Allow fewer than 380 points', r: 2 });
+    if (op === 'winnow') { const v = Math.round(400 * lgScale() / 10) * 10; list.push({ k: 'pf', v, lab: `Score ${v}+ points`, r: 3 }); }
+    if (op === 'patient') { const v = Math.round(380 * lgScale() / 10) * 10; list.push({ k: 'pa', v, lab: `Allow fewer than ${v} points`, r: 2 }); }
     T.goals = { y: L.year, list }; }
   return T.goals;
 }
@@ -286,7 +286,7 @@ function userAfterGame(T, g, lines) {
 }
 function coordSeasonReview(T) {
   for (const k of ['oc', 'dc']) { const co = T[k]; if (!co) continue;
-    const g = Math.max(1, T.w + T.l + T.tie); const ok = k === 'oc' ? T.pf / g >= 22 : T.pa / g <= 22;
+    const g = Math.max(1, T.w + T.l + T.tie); const ok = k === 'oc' ? T.pf / g >= lgPtsPerGame() * 1.05 : T.pa / g <= lgPtsPerGame() * 0.95;
     if (co.hot) { if (!ok) { news(`You fired ${k.toUpperCase()} ${co.fn} ${co.ln} after a season on the hot seat.`); T[k] = genCoord(k, 2); T[k].fn = 'Interim'; T[k].ln = k.toUpperCase(); T[k].cost = 0; } else { co.hot = false; relAdd(k, 8); news(`${co.fn} ${co.ln} saved his job.`); } }
     else if (ok && R() < 0.35) { co.r = Math.min(10, co.r + 1); news(`${k.toUpperCase()} ${co.fn} ${co.ln} grew as a coach (rating ${co.r}).`); }
   }

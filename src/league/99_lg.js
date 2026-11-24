@@ -59,3 +59,5 @@ Object.assign(LG._t, { teamLineup, rotInfo, rotRoles, rotSetPreset, rotSetShare,
 Object.assign(LG, { coachPerk: id => coachPerk(id), coachEdge: (tid, ctx) => coachEdge(tid, ctx) });
 Object.assign(LG._t, { capYear, ctSplit, ctDeadFor, ctJ1Left, ctOptPrice, ctOptOpen, optionDecide, ctTradeDead, ctRookieApy, coachTree, coachXP, coachLearn, coachRespec, coachPerk, coachCanLearn, CTREE, deadIfCut, kBase, execTrade, finishResign });
 Object.assign(LG._t, { rfParse, rfMatch, rfPlan, rfApply, rfExport, imgGet, imgPut, IMG: () => IMGS });
+// league sim, game logs, box scores, schedule, history (22_fastsim.js, 24_gamelog.js, 26_schedule.js, 95_history.js)
+Object.assign(LG._t, { fastGame, fsimNorm, glParse, glSeason, simGame, makeSchedule, byeWeek, recBook, histDynasties, histScaledCareer, lgPtsPerGame, lgScale });
