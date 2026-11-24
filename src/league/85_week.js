@@ -34,7 +34,7 @@ function advanceWeek() {
   const T = UT();
   if (!L.ghost) { practiceWeek(T); devWeekReport(T); }
   for (const t of L.teams) for (const id of t.roster) { const p = L.P[id]; if (p.inj > 0) { p.inj--; if (p.inj === 0 && t.id === L.user) news(`${p.fn} ${p.ln} is healthy again.`); } }
-  L.week++;
+  L.week++; fsimPruneBoxes();
   if (L.week >= L.sched.length) { startPlayoffs(); return; }
   if (L.ghost) return;
   scoutingWeek(); gmWeek(); ownerWeek(); updateMock();

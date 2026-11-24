@@ -304,12 +304,12 @@ function fastGame(g, opt) {
   return { hs: S.score[H.id], as: S.score[A.id], st, snaps, box, t: { h: TS[0], a: TS[1] }, q: S.q };
 }
 // ---------- box scores ----------
-// g.bx = { v:1, q: quarters played, ls: [[away by quarter], [home by quarter]], ts: [away, home] team totals, dr: drive chart [q, clock, side(0 away / 1 home), plays, yds, result, text], pl: [away lines, home lines] }
+// g.bx = { v:1, q: quarters played, ls: [[away by quarter], [home by quarter]], ts: [away, home] team totals, dr: drive chart [q, clock, side(0 away / 1 home), plays, yds, result, text] }
+// (the player lines come from the game logs: glBoxLines, 24_gamelog.js)
 const FSIM_BOXK = ['pa', 'pc', 'py', 'ptd', 'pint', 'ra', 'ry', 'rtd', 'rec', 'recy', 'rectd', 'tgt', 'tk', 'sk', 'int', 'pd', 'ff', 'fum', 'fgm', 'fga', 'xpm', 'xpa', 'pnt', 'pnty'];
 function fsimBox(H, A, TS, LS, DR, st, q) {
   const tsOut = s => ({ fd: s.fd, py: s.py - s.sky, ry: s.ry, ty: s.py - s.sky + s.ry, pa: s.pa, pc: s.pc, ra: s.ra, sk: s.sk, to: s.to, pen: s.pen, peny: s.peny, td3: `${s.tdc}-${s.tda}`, top: Math.round(s.top), plays: s.plays });
-  const lines = T => { const ids = new Set(T.roster); const out = []; for (const pid in st) { if (!ids.has(+pid)) continue; const c = glPack(st[pid], true); if (c) out.push([+pid, c]); } return out; };
-  return { v: 1, q, ls: [LS[1].slice(), LS[0].slice()], ts: [tsOut(TS[1]), tsOut(TS[0])], dr: DR.map(d => [d.q, d.clk, d.tid === H.id ? 1 : 0, d.plays, Math.round(d.yds), d.res, d.txt || '']), pl: [lines(A), lines(H)] };
+  return { v: 1, q, ls: [LS[1].slice(), LS[0].slice()], ts: [tsOut(TS[1]), tsOut(TS[0])], dr: DR.map(d => [d.q, d.clk, d.tid === H.id ? 1 : 0, d.plays, Math.round(d.yds), d.res, d.txt || '']) };
 }
 // a box score for a game played live, from the match result (same shape as the fast sim's)
 function fsimBoxFromResult(g, result) {
@@ -339,6 +339,9 @@ function fsimBoxFromResult(g, result) {
   return box;
 }
 // keep play-by-play only for recent weeks (the box score and the scoring drives stay all season)
-function fsimPruneBoxes() {
-  if (!L.sched) return; for (let w = 0; w < L.week - 3; w++) for (const g of L.sched[w] || []) if (g.bx && g.bx.dr && !g.bx.pruned && !(g.h === L.user || g.a === L.user)) { g.bx.dr = g.bx.dr.filter(d => /TD|FG|Safety/.test(d[5])); g.bx.pruned = 1; }
+// (all: every season, at the rollover)
+function fsimPruneBoxes(all) {
+  for (const r of L.results || []) { const b = r.bx; if (!b) continue; if (r.y < L.year && !r.po && r.h !== L.user && r.a !== L.user) { delete r.bx; continue; } if (!b.dr || b.pruned || r.h === L.user || r.a === L.user || r.po) continue; if (!all && (r.y !== L.year || r.w >= L.week - 3)) continue; b.dr = b.dr.filter(d => /TD|FG|Safety/.test(d[5])); b.pruned = 1; }
 }
+// the box score of a game: its result row (y, week or playoff round, teams)
+function boxFor(y, w, h, a, rd) { return (L.results || []).find(r => r.y === y && r.h === h && r.a === a && (rd != null ? r.po && r.rd === rd : !r.po && r.w === w)) || null; }

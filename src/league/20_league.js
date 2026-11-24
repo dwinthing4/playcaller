@@ -70,7 +70,7 @@ function newLeague(opts) {
   L = { v: 3, diff: opts.diff || 'pro', qlen: opts.qlen || 120, year: 2026, week: 0, phase: 'regular', off: null, user: opts.team ?? 0,
     P: {}, teams: [], fa: [], draft: [], sched: [], results: [], news: [], inbox: [], playoff: null, plays: buildPlaybook(), champs: [], awards: [],
     draftOrder: [], draftPick: 0, rel: {}, coachHist: [], offers: [], settings: { sound: true, haptics: true, theme: 'stadium', tags: true, view: 'auto' },
-    rec: { mine: {}, lg: {} }, hof: [], lhist: [], lhof: [], ach: {}, unis: {}, uid: 0, picking: true };
+    rec: { mine: {}, lg: {} }, recQ: {}, hof: [], lhist: [], lhof: [], ach: {}, unis: {}, uid: 0, picking: true };
   const cities = shuffle(R_CITIES.slice()), masc = shuffle(R_MASCOTS.slice()), cols = shuffle(R_COLORS.slice());
   const usedAbbr = new Set(); L.real = !!opts.real;
   if (L.real) REAL_TEAMS.forEach((d, i) => { const t = genTeam(i, { conf: d[2], div: d[3], abbr: d[0], city: d[1], name: d[1], c1: d[4], c2: d[5], q: d[7] }); t.hel = d[6]; t.logo = { v: 2, sh: d[9], icon: d[8], st: i % 3 }; L.teams.push(t); });
@@ -138,8 +138,9 @@ function finishGame(g, lines) {
   H.pf += g.hs; H.pa += g.as; A.pf += g.as; A.pa += g.hs;
   const po = L.phase === 'playoffs';
   if (g.hs > g.as) win(H, A, po); else if (g.as > g.hs) win(A, H, po); else if (!po) { H.tie++; A.tie++; H.coach.t++; A.coach.t++; H.streak = A.streak = 0; }
-  L.results.push(Object.assign({ y: L.year, w: L.week, po, h: g.h, a: g.a, hs: g.hs, as: g.as }, g.bx && g.bx.q > 4 ? { ot: 1 } : {}));
-  glLog(g, lines);      // a game-log line for every player who dressed (24_gamelog.js)
+  // the result row keeps the box score (g.bx is handed over, so a save holds it once); playoff rows know their round
+  L.results.push(Object.assign({ y: L.year, w: L.week, po, h: g.h, a: g.a, hs: g.hs, as: g.as }, po && L.playoff ? { rd: L.playoff.round } : {}, g.bx && g.bx.q > 4 ? { ot: 1 } : {}, g.bx ? { bx: g.bx } : {})); delete g.bx;
+  glLog(g, lines); histNoteQlen();      // a game-log line for every player who dressed (24_gamelog.js); the quarter length this season
   for (const T of [H, A]) if (T.id === L.user && !L.ghost) userAfterGame(T, g, lines || {});
   // injuries for teams not played live
   if (!g.live) for (const T of [H, A]) if (R() < 0.35) { const id = pick(T.roster); const p = L.P[id]; if (p && !p.inj) { const t = pick(INJ_TYPES); p.inj = Math.max(1, ri(t[1], t[2]) - ((T.fac && T.fac.train || 1) >= 4 ? 1 : 0)); p.injType = t[0]; if (T.id === L.user) { news(`${p.pos} ${p.fn} ${p.ln} injured (${p.injType}, ${p.inj} wk).`); } } }
@@ -200,8 +201,9 @@ function awards() {
 // ---------- records ----------
 const REC_KEYS = [['passYdsG', 'Passing yards, game', 'game', 'py'], ['passTdG', 'Passing TDs, game', 'game', 'ptd'], ['rushYdsG', 'Rushing yards, game', 'game', 'ry'], ['recYdsG', 'Receiving yards, game', 'game', 'recy'], ['recG', 'Receptions, game', 'game', 'rec'], ['sackG', 'Sacks, game', 'game', 'sk'], ['intG', 'Interceptions, game', 'game', 'int'], ['tklG', 'Tackles, game', 'game', 'tk'],
   ['passYdsS', 'Passing yards, season', 'season', 'py'], ['passTdS', 'Passing TDs, season', 'season', 'ptd'], ['rushYdsS', 'Rushing yards, season', 'season', 'ry'], ['rushTdS', 'Rushing TDs, season', 'season', 'rtd'], ['recYdsS', 'Receiving yards, season', 'season', 'recy'], ['recTdS', 'Receiving TDs, season', 'season', 'rectd'], ['sackS', 'Sacks, season', 'season', 'sk'], ['intS', 'Interceptions, season', 'season', 'int'], ['tklS', 'Tackles, season', 'season', 'tk']];
-function setRec(key, v, p) { if (!v || !p) return; const T = L.teams[p.tid]; const mine = p.tid === L.user; const ent = { v, pid: p.id, name: p.fn + ' ' + p.ln, pos: p.pos, team: T ? T.abbr : '', y: L.year };
-  if (!L.rec.lg[key] || v > L.rec.lg[key].v) L.rec.lg[key] = ent; if (mine && (!L.rec.mine[key] || v > L.rec.mine[key].v)) L.rec.mine[key] = Object.assign({}, ent); }
+// one record book per quarter length (recBook, 95_history.js): a 1-minute-quarter game is not measured against 5-minute ones
+function setRec(key, v, p, mix) { if (!v || !p) return; const T = L.teams[p.tid]; const mine = p.tid === L.user && !L.ghost; const ent = { v, pid: p.id, name: p.fn + ' ' + p.ln, pos: p.pos, team: T ? T.abbr : '', y: L.year, w: L.phase === 'playoffs' ? -1 : L.week };
+  if (mix) ent.mix = 1; const B = recBook(); if (!B.lg[key] || v > B.lg[key].v) B.lg[key] = ent; if (mine && (!B.mine[key] || v > B.mine[key].v)) B.mine[key] = Object.assign({}, ent); }
 function recordGameLine(p, s) { if (!p || !s) return; for (const [key, , kind, stat] of REC_KEYS) if (kind === 'game') setRec(key, s[stat] || 0, p); }
-function recordSeasonLines() { for (const id in L.P) { const p = L.P[id]; const s = p.st; if (!s || !s.gp || p.tid == null) continue; for (const [key, , kind, stat] of REC_KEYS) if (kind === 'season') setRec(key, s[stat] || 0, p); } }
+function recordSeasonLines() { for (const id in L.P) { const p = L.P[id]; const s = p.st; if (!s || !s.gp || p.tid == null) continue; for (const [key, , kind, stat] of REC_KEYS) if (kind === 'season') setRec(key, s[stat] || 0, p, histMixed()); } }
 function addHighlight(s) { const c = UT().coach; c.hl = c.hl || []; c.hl.unshift({ y: L.year, s }); if (c.hl.length > 40) c.hl.pop(); }

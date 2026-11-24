@@ -20,8 +20,6 @@ function showPlayer(id) {
   const rev = k => !prospect || (p.sc && p.sc.rev.includes(k));
   const ovrShown = prospect ? (scouted(p) ? ovrTag(p.scout) : starsHTML(gradeStars(p))) : ovrTag(p.ovr);
   const potShown = prospect ? (potKnown(p) ? `Potential ${potBadge(p)} ${archTag(p)}` : 'Potential unknown: keep scouting') : `Potential ${p.pot} ${potBadge(p)}`;
-  const st = p.st || {}; const rows = [...(p.hist || []), ...(st.gp ? [Object.assign({ y: L.year, t: p.tid, cur: 1 }, st)] : [])];
-  const cols = p.pos === 'QB' ? [['pc', 'Cmp'], ['pa', 'Att'], ['py', 'Yds'], ['ptd', 'TD'], ['pint', 'INT']] : ['RB', 'FB'].includes(p.pos) ? [['ra', 'Car'], ['ry', 'Yds'], ['rtd', 'TD'], ['rec', 'Rec'], ['recy', 'RecYds']] : ['WR', 'TE'].includes(p.pos) ? [['rec', 'Rec'], ['recy', 'Yds'], ['rectd', 'TD'], ['tgt', 'Tgt']] : p.pos === 'K' ? [['fgm', 'FGM'], ['fga', 'FGA'], ['xpm', 'XPM']] : p.pos === 'P' ? [['pnt', 'Punts'], ['pnty', 'Yds']] : ['OT', 'OG', 'C'].includes(p.pos) ? [['gp', 'GP'], ['snaps', 'Snaps']] : [['tk', 'Tkl'], ['sk', 'Sacks'], ['int', 'INT'], ['pd', 'PD']];
   let extra = '';
   if (prospect) { const S = scoutState(); const pri = (L.scoutPri.ids || []).includes(id);
     extra = `${p.comb ? `<div class="comb">${[['40', p.comb.forty + 's'], ['Vert', p.comb.vert + '"'], ['Bench', p.comb.bench], ['3-cone', p.comb.cone + 's'], ['Shuttle', p.comb.shuttle + 's']].map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div>` : ''}
@@ -47,7 +45,7 @@ function showPlayer(id) {
    ${extra}
    <h3 style="margin-top:10px">Key ratings</h3><div class="attrs">${key.map(k => attrRow(p, k, rev(k))).join('')}</div>
    ${other.length ? `<details><summary class="small mute">Other ratings</summary><div class="attrs">${other.map(k => attrRow(p, k, rev(k))).join('')}</div></details>` : ''}
-   ${!prospect ? `<h3 style="margin-top:10px">Stats</h3><div class="tbl"><table><tr><th>Year</th><th>Team</th><th>GP</th>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr>${rows.map(r => `<tr><td>${r.y}${r.cur ? '*' : ''}</td><td>${r.t != null && L.teams[r.t] ? L.teams[r.t].abbr : '-'}</td><td>${r.gp || 0}</td>${cols.map(c => `<td>${r[c[0]] || 0}</td>`).join('')}</tr>`).join('') || '<tr><td colspan=8 class="mute">No games yet</td></tr>'}</table></div>` : ''}`);
+   ${!prospect ? plStatsBlock(p) : ''}`);
 }
 // growth at a glance: development tier, ceiling, OVR by season, what changed last offseason
 function devPanel(p, mine) {

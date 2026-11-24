@@ -12,6 +12,7 @@ function beginOffseason() {
   awards();
   const aw = L.awards[L.awards.length - 1] || {}; const P = id => { const p = L.P[id]; return p ? `${p.pos} ${p.fn} ${p.ln} (${L.teams[p.tid] ? L.teams[p.tid].abbr : ''})` : '—'; };
   L.lhist.push({ y: L.year, champ: champRec ? champRec.name : '—', ru: ru ? teamName(ru) : '—', mvp: P(aw.mvp), dpoy: P(aw.dpoy), you: `${T.w}-${T.l}` });
+  histSeason();      // the history book: standings, awards, leaders, quarter length (95_history.js)
   // owner goals and verdict
   const made = !!(L.playoff && (L.playoff.elim[T.id] !== undefined || L.playoff.alive[T.id]));
   const G = seasonGoals(T); const rivalBeat = L.results.some(r => r.y === L.year && !r.po && ((r.h === T.id && r.a === rivalOf(T) && r.hs > r.as) || (r.a === T.id && r.h === rivalOf(T) && r.as > r.hs)));
@@ -34,7 +35,7 @@ function beginOffseason() {
   L.recap = { y: L.year, w: T.w, l: T.l, t: T.tie, result: champRec && champRec.t === T.id ? 'Champions' : made ? 'Playoffs' : 'Missed playoffs', goals: G.list.map(g => ({ lab: g.lab, ok: g.ok, r: g.r })), creditGoals: got, mvp: aw.mvp, dpoy: aw.dpoy, champ: champRec ? champRec.name : '', seen: false,
     top: T.roster.map(id => L.P[id]).filter(p => p.st && p.st.gp).sort((a, b) => perfScore(b.st) - perfScore(a.st)).slice(0, 4).map(p => p.id) };
   // archive stats
-  for (const id in L.P) { const p = L.P[id]; if (p.st && p.st.gp) { p.hist.push(Object.assign({ y: L.year, t: p.tid }, p.st)); for (const k in p.st) p.car[k] = (p.car[k] || 0) + p.st[k]; } p.st = blankStats(); p._snap = {}; p._prevSnap = {}; }
+  seasonArchive();      // stats + game logs onto each player's history, career totals, career records (95_history.js)
   // draft order: worst first, playoff teams by round
   const elimRound = id => L.playoff.elim[id] === undefined ? (L.playoff.alive[id] ? 5 : -1) : L.playoff.elim[id];
   const order = L.teams.slice().sort((a, b) => elimRound(a.id) - elimRound(b.id) || pct(a) - pct(b) || (a.pf - a.pa) - (b.pf - b.pa)).map(t => t.id);
@@ -154,7 +155,7 @@ function progressPlayers() {
   L.offProg = { y: L.year, ...rep }; growthMemo(rep);
 }
 function hofVote(retired) {
-  for (const p of retired) { const c = Object.assign({}, p.car || {}); const aw = L.awards.filter(a => a.mvp === p.id || a.dpoy === p.id).length;
+  for (const p of retired) { const c = histScaledCareer(p); const aw = L.awards.filter(a => a.mvp === p.id || a.dpoy === p.id).length;
     const s = p.pos === 'QB' ? (c.py || 0) / 220 + (c.ptd || 0) * 1.6 : ['RB', 'FB'].includes(p.pos) ? (c.ry || 0) / 75 + (c.rtd || 0) * 1.6 : ['WR', 'TE'].includes(p.pos) ? (c.recy || 0) / 75 + (c.rectd || 0) * 1.6 : ['OT', 'OG', 'C'].includes(p.pos) ? (c.gp || 0) * 0.55 + p.ovr * 0.6 : (c.sk || 0) * 3 + (c.int || 0) * 3.5 + (c.tk || 0) * 0.14;
     if (s + aw * 12 >= 120) { L.lhof.push({ y: L.year + 1, id: p.id, name: p.fn + ' ' + p.ln, pos: p.pos, sc: Math.round(s + aw * 12), teams: [...new Set((p.hist || []).map(h => h.t))].map(t => L.teams[t] ? L.teams[t].abbr : ''), lk: p.lk, num: p.num }); news(`League Hall of Fame class of ${L.year + 1}: ${p.pos} ${p.fn} ${p.ln}.`); } }
 }
