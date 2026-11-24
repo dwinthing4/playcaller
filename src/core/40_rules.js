@@ -73,10 +73,23 @@ const ordT = n => ['1st', '2nd', '3rd', '4th'][n - 1] || n + 'th';
 const yardsTxt = (o, P) => (P.spot ? 'spot foul' : o.half ? 'half the distance to the goal' : `${Math.round(Math.abs(o.yds))} yard${Math.round(Math.abs(o.yds)) === 1 ? '' : 's'}`);
 
 // ---------------- how often a flag comes out ----------------
-// ev: an engine event (play.flagEv) or a pre-snap roll; ctx: { noise, qlen, ... }. Returns the chance the officials throw a flag.
-// Tuned against qa/match_sim.mjs (full CPU games): see penalty_rates.mjs
+// The players commit the fouls in the engine (a hold that drags a rusher, a grab downfield, a shove, a late hit: see 'flag watch' in
+// src/engine/20_play.js), each try at these odds (per chance to do it, times disc(awareness)). The officials then flag what they
+// see plainly: an event's sev (0..1) is how clear it was. Tuned against qa/penalty_rates.mjs (full CPU games).
+const TRY = {
+  hold: 0.05, rhold: 0.03,       // a beaten blocker hangs on (per beaten block; pass pro x1.25)
+  grab: 0.1,                     // a man DB being beaten downfield before the throw grabs him (one look a play)
+  pi: 0.8, opi: 0.08,           // ball in the air: a beaten DB grabs an arm; a receiver shoves off a man who has position
+  push: 0.02,                   // a receiver pushes off at the top of his break
+  fm: 0.004, helm: 0.05,        // a hand in the face mask (high tackles); a shot to the passer's head
+  ibb: 0.3,                     // a return blocker who meets a man from behind goes ahead and blocks him in the back
+};
+// the officials' eye: nothing marginal (below 0.4), almost everything plain
+const seen = sev => clamp01((sev - 0.4) / 0.5) * 0.95;
+// ev: an engine event (play.flagEv); ctx: { k }. Returns the chance the officials throw a flag.
 function chance(ev, ctx) {
   const k = RATE * (ctx && ctx.k != null ? ctx.k : 1);
+  if (ev.sev != null) return seen(ev.sev);
   switch (ev.k) {
     case 'beat': return clamp01((ev.pp ? 0.02 : 0.014) * k * disc(ev.awr) * (ev.ol ? 1 : 0.8));     // a beaten blocker who grabs as his man gets by
     case 'rbeat': return clamp01(0.018 * k * disc(ev.awr));                                        // return blocks
@@ -107,6 +120,14 @@ function preSnap(ctx, r) {
   if ((u -= dog) < 0) return 'DOG';
   return null;
 }
+// the hard count (your QB, before the snap): does a defensive lineman jump? c: { dAwr, oAwr (the two lines' awareness), uses (times
+// already this game: they learn it), diff ('rookie'..'legend', the CPU's level), noise }. 'ENC' / 'NZI' = a free 5 yards, 'FS' = your
+// own man flinched, null = nobody bit
+function hardCount(c, r) {
+  const lvl = { rookie: 1.6, pro: 1, allpro: 0.7, legend: 0.5 }[c.diff] || 1;
+  const jump = clamp01(0.17 * lvl * disc(c.dAwr) * Math.pow(0.6, c.uses || 0)), flinch = clamp01(0.035 * disc(c.oAwr) * (1 + 1.5 * (c.noise || 0)));
+  const u = r(); if (u < jump) return r() < 0.55 ? 'ENC' : 'NZI'; if (u < jump + flinch) return 'FS'; return null;
+}
 
 // ---------------- crowd noise: the home crowd when the visitors have the ball ----------------
 // ctx: { awayBall, down, sd (home lead), q, clock, qlen, yl (offense yard line), dome, playoffs, fan (0..100) }
@@ -130,5 +151,5 @@ function windTxt(mph, ang) {      // ang: wind direction relative to the offense
   const a = ((ang % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI, c = Math.cos(a);
   return c > 0.7 ? 'at their back' : c < -0.7 ? 'in their face' : c > 0.25 ? 'quartering behind' : c < -0.25 ? 'quartering in' : 'across the field';
 }
-return { PEN, RATE, enforce, yardsTxt, ordT, ep, ep1, EP_TD, EP_SAFETY, chance, preSnap, noise, disc, kickYds, windTxt };
+return { PEN, RATE, TRY, seen, enforce, yardsTxt, ordT, ep, ep1, EP_TD, EP_SAFETY, chance, preSnap, hardCount, noise, disc, kickYds, windTxt };
 })();

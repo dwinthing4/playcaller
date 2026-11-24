@@ -664,56 +664,95 @@ function condHud() {
 }
 
 // ------------------------------------------------------------ penalties: the flag, the call, the enforcement (the rule book is RULES in src/core/40_rules.js)
-// The engine records what the officials could see (a beaten blocker grabbing, a defender's hands on a receiver, contact with a ball
-// in the air, a late hit on the passer, a high tackle, a block in the back on a return); here the flag comes out or not, the
-// offended team takes the penalty or the play (you choose when it matters, the CPU picks the better), and it goes in the books.
+// The players commit the fouls on the field and you can see each one: before the snap the guilty man moves (a lineman flinches, a
+// defender jumps into the neutral zone); live, the engine records what a player actually did (a blocker hanging on to a man who beat
+// him, a DB with a fistful of jersey, a shove, a late hit) and how plain it was. Here the officials flag the plain ones, the offended
+// team takes the penalty or the play (you choose when it matters, the CPU picks the better), and it goes in the books.
+// Every foul in G.fouls: { code, by (team), pid (the offender), t (seconds after the snap; 0 before it), at (engine time), x, z, what }.
 const OLSM = { LT: 1, LG: 1, C: 1, RG: 1, RT: 1 };
-const EV2PEN = { beat: 'OH', rbeat: 'RH', grab: 'DH', push: 'OPI', pi: 'DPI', opi: 'OPI', late: 'RTP', rel: 'RTP', helm: 'RTP', tk: 'FM', ur: 'UR', ibb: 'IBB', grd: 'IG' };
-const EV_BY_O = { beat: 1, rbeat: 1, push: 1, opi: 1, grd: 1, ibb: 1 };
+const EV2PEN = { hold: 'OH', rhold: 'RH', grab: 'DH', ic: 'IC', push: 'OPI', pi: 'DPI', opi: 'OPI', late: 'RTP', rel: 'RTP', helm: 'RTP', fm: 'FM', ur: 'UR', ibb: 'IBB', grd: 'IG' };
+const EV_BY_O = { hold: 1, rhold: 1, push: 1, opi: 1, grd: 1, ibb: 1 };
 const avgAwr = (list, test) => { const a = list.filter(test).map(e => (e.rp && e.rp.a && e.rp.a.awr) || 60); return a.length ? a.reduce((s, v) => s + v, 0) / a.length : 65; };
 const isOL = e => OLSM[e.slot] || e.pos === 'TE', isDL = e => /^D[ET]/.test(e.slot) || e.pos === 'DE' || e.pos === 'DT';
+// who jumps: the least aware man of the group that can commit it (with some luck in it)
+function foulGuy(list, code) {
+  const fit = code === 'FS' ? list.filter(e => OLSM[e.slot]) : code === 'DOG' ? list.filter(e => e.slot === 'QB') : code === 'ILF' ? list.filter(e => e.pos === 'WR' || e.pos === 'TE') : list.filter(e => isDL(e));
+  const pool = fit.length ? fit : list, who = pool.slice().sort((a, b) => ((a.rp.a.awr || 60) + R() * 30) - ((b.rp.a.awr || 60) + R() * 30))[0];
+  return who && who.rp ? who.rp.id : null;
+}
 // before the snap: does somebody jump? (dead-ball fouls stop it right there; offside and illegal formation are live: a free play)
 function preRoll(opts) {
   if (G.pat || G.noFlags === true || G.noFlags === 'pre' || !opts || !opts.off || !opts.def) return null;
   const off = opts.off.tid, def = opts.def.tid, ol = opts.off.list || [], dl = opts.def.list || [], qb = ol.find(e => e.slot === 'QB');
   const code = RULES.preSnap({ k: G.penK, noise: G.noise || 0, oAwr: avgAwr(ol, isOL), dAwr: avgAwr(dl, isDL), qbAwr: qb && qb.rp ? qb.rp.a.awr : 70, cpuO: !userCalls(off) || G.mode !== 'play', late: (G.q === 2 || G.q >= 4) && G.clock < G.WARN * 1.6, audible: !!G.audLoud }, R);
   G.audLoud = false; if (!code) return null;
-  const P0 = RULES.PEN[code], byO = P0.side === 'O', list = byO ? ol : dl;
-  const fit = code === 'FS' ? list.filter(isOL) : code === 'DOG' ? list.filter(e => e.slot === 'QB') : code === 'ILF' ? list.filter(e => e.pos === 'WR' || e.pos === 'TE') : list.filter(e => isDL(e) || e.pos === 'LB');
-  const pool = fit.length ? fit : list, who = pool.slice().sort((a, b) => ((a.rp.a.awr || 60) + R() * 30) - ((b.rp.a.awr || 60) + R() * 30))[0];
-  return { code, by: byO ? off : def, pid: who && who.rp ? who.rp.id : null, pre: true, dead: !!P0.dead };
+  const P0 = RULES.PEN[code], byO = P0.side === 'O';
+  return { code, by: byO ? off : def, pid: foulGuy(byO ? ol : dl, code), pre: true, dead: !!P0.dead, t: 0, at: 0, x: G.ballX || 0, z: G.yl * YDm };
+}
+// what he did, in a few words, for the flag card ("#24 Jones grabbed the receiver 9 yards downfield")
+function foulWhat(f, ev) {
+  const p = P(f.pid), who = p ? `#${p.num} ${p.ln}` : (RULES.PEN[f.code] || {}).side === 'O' ? 'The offense' : 'The defense', yd = v => `${Math.max(5, Math.round(v || 0))} yards downfield`;
+  switch (f.code) {
+    case 'FS': return `${who} moved before the snap`;
+    case 'ENC': return `${who} jumped into the neutral zone and hit a lineman`;
+    case 'NZI': return `${who} jumped into the neutral zone and drew a flinch`;
+    case 'OFS': return `${who} was across the line at the snap`;
+    case 'DOG': return 'The play clock ran out';
+    case 'ILF': return 'Not enough men on the line';
+    case 'KOB': return 'The kickoff went out of bounds';
+  }
+  const k = ev && ev.k;
+  if (k === 'hold') return ev.down ? `${who} pulled ${ev.pp ? 'the rusher' : 'his man'} down` : `${who} grabbed ${ev.pp ? 'the rusher' : 'his man'} and wouldn't let go`;
+  if (k === 'rhold') return `${who} grabbed a cover man on the return`;
+  if (k === 'grab') return `${who} grabbed the receiver ${yd(ev.dz)}`;
+  if (k === 'ic') return `${who} knocked the receiver off his route ${yd(ev.dz)}`;
+  if (k === 'push') return `${who} pushed off at the top of his route`;
+  if (k === 'pi') return ev.grab ? `${who} grabbed the receiver's arm before the ball got there` : `${who} ran into the receiver before the ball got there`;
+  if (k === 'opi') return ev.shove ? `${who} shoved the defender off the ball` : `${who} ran through the defender to get to the ball`;
+  if (k === 'late') return `${who} hit the quarterback well after the throw`;
+  if (k === 'rel') return `${who} drove the quarterback into the ground`;
+  if (k === 'helm') return `${who} hit the quarterback in the head`;
+  if (k === 'fm') return `${who} grabbed the face mask making the tackle`;
+  if (k === 'ur') return `${who} drove the runner out with a late shot`;
+  if (k === 'ibb') return `${who} blocked a man in the back`;
+  if (k === 'grd') return `${who} threw it away with no receiver near`;
+  return '';
 }
 // every snap goes through here: a man who jumps before it is flagged instead
 function snapCall(pl) {
   if (!pl) return; const f = G.pre; G.pre = null;
   if (f && f.dead && pl.phase === 'pre' && !pl.ret) return deadBall(pl, f);
   if (G.fakeKind && !G.sim) { banner(G.fakeKind === 'punt' ? 'FAKE PUNT!' : 'FAKE FIELD GOAL!', '', isU(G.poss) ? 'good' : 'bad', 1300); } G.fakeKind = null;
-  if (f) { G.fouls.push(f); if (!G.sim) { const p = pl.players.find(q => q.pid === f.pid); throwFlag(p ? p.p.x : pl.ballX, pl.losZ + (f.by === G.poss ? -0.5 : 0.5)); } }
+  if (f) {      // a live foul: offside (he jumps a beat early, the ball is snapped with him across) or an illegal formation
+    const p = f.code === 'OFS' && !G.sim && pl.preFoul ? pl.preFoul('OFS', f.pid) : pl.players.find(q => q.pid === f.pid);
+    Object.assign(f, { at: pl.t, x: p ? p.p.x : pl.ballX, z: p ? p.p.z : pl.losZ }); f.what = foulWhat(f); G.fouls.push(f);
+    if (!G.sim && f.code === 'OFS' && p) { after(170, () => { if (!G || G.play !== pl) return; throwFlag(p.p.x, pl.losZ + 0.5); if (pl.phase === 'pre') pl.snap(); }); return; }
+    if (!G.sim) throwFlag(p ? p.p.x : pl.ballX, pl.losZ + (f.by === G.poss ? -0.5 : 0.5));
+  }
   pl.snap();
 }
+// a dead-ball foul: you see him go (a lineman flinches up out of his stance, a defender jumps into the neutral zone), then the whistle
 function deadBall(pl, f) {
   G.stage = 'dead'; actsFor('none'); if (glOk) R3D.overlay(null); el.say.classList.remove('show'); slingEnd(false);
-  const p = pl.players.find(q => q.pid === f.pid); if (p && f.code !== 'DOG') { p.stance = false; p.crouchT = 0.2; p.vel.z += p.unit === 'O' ? 1.9 : -2.6; }     // he flinches, or jumps across
-  throwFlag(p ? p.p.x : pl.ballX, pl.losZ + (p && p.unit === 'D' ? 0.7 : -0.7));
-  tick(f.code === 'DOG' ? 'The play clock hits zero' : f.code === 'FS' ? `${pnm(f.pid)} moves before the snap` : `${pnm(f.pid)} jumps the count`); buzz(30);
-  after(1000, () => { if (!G) return; const d = applyFoul(f, null, null); if (d >= 0) after(d, nextSnap); });
+  const p = f.code !== 'DOG' && pl.preFoul ? pl.preFoul(f.code, f.pid) : pl.players.find(q => q.pid === f.pid);
+  Object.assign(f, { t: 0, at: pl.t, x: p ? p.p.x : pl.ballX, z: p ? p.p.z : pl.losZ }); f.what = foulWhat(f);
+  after(f.code === 'DOG' ? 0 : 420, () => { if (!G || G.play !== pl) return;
+    throwFlag(p ? p.p.x : pl.ballX, pl.losZ + (p && p.unit === 'D' ? 0.7 : -0.7)); tick(f.code === 'DOG' ? 'The play clock hits zero' : f.what); buzz(30);
+    after(1000, () => { if (!G) return; const d = applyFoul(f, null, null); if (d >= 0) after(d, nextSnap); }); });
 }
 function throwFlag(x, z) { G.flagUp = true; if (glOk && !G.sim && R3D.flag) R3D.flag({ x, z }); if (!G.sim) tick('FLAG on the play'); }
-// new engine events since the last look: does the flag come out?
+// new engine events since the last look: does the flag come out? (RULES.chance: the plain ones)
 function flagWatch(pl) {
   if (!pl || !pl.flagEv || (G.pat && G.pat.two) || G.noFlags === true || G.noFlags === 'live') return;
   const evs = pl.flagEv, from = G.fev || 0; G.fev = evs.length;
   for (let i = from; i < evs.length; i++) {
-    const e0 = evs[i], list = [e0]; if (e0.k === 'grab' && !e0.trail) list.push(Object.assign({}, e0, { k: 'push', r: e0.r })); if (e0.k === 'tk' && e0.qb && e0.h > 1.5) list.push(Object.assign({}, e0, { k: 'helm' }));
-    for (const ev of list) {
-      let code = EV2PEN[ev.k]; if (!code) continue; if (code === 'OH' && R() < 0.1) code = 'IUH'; if (code === 'DH' && R() < 0.3) code = 'IC';
-      const byO = !!EV_BY_O[ev.k], tid = pl.ret ? (byO ? G.retPlay && G.retPlay.recv : G.retPlay && G.retPlay.kicker) : (byO ? G.cur.off : G.cur.def);
-      if (tid == null || G.fouls.length >= 2 || G.fouls.some(f => f.code === code && f.by === tid)) continue;
-      if (R() >= RULES.chance(ev, { k: G.penK }) * (G.fouls.some(f => f.by !== tid) ? 0.3 : 1)) continue;     // a flag on both sides (offsetting) is rare
-      const pid = byO ? (ev.k === 'push' || ev.k === 'opi' ? ev.r : ev.b != null ? ev.b : ev.q) : ev.d;
-      G.fouls.push({ code, by: tid, pid, x: ev.x, z: ev.z, spotYl: ev.z / YDm, t: ev.t });
-      if (!G.sim) throwFlag(ev.x, ev.z);
-    }
+    const ev = evs[i]; let code = EV2PEN[ev.k]; if (!code) continue; if (code === 'OH' && ev.pp && !ev.down && R() < 0.08) code = 'IUH';     // (hands to the face)
+    const byO = !!EV_BY_O[ev.k], tid = pl.ret ? (byO ? G.retPlay && G.retPlay.recv : G.retPlay && G.retPlay.kicker) : (byO ? G.cur.off : G.cur.def);
+    if (tid == null || G.fouls.length >= 2 || G.fouls.some(f => f.code === code && f.by === tid)) continue;
+    if (R() >= RULES.chance(ev, { k: G.penK }) * (G.fouls.some(f => f.by !== tid) ? 0.3 : 1)) continue;     // a flag on both sides (offsetting) is rare
+    const pid = byO ? (ev.k === 'push' || ev.k === 'opi' ? ev.r : ev.b != null ? ev.b : ev.q) : ev.d;
+    const f = { code, by: tid, pid, x: ev.x, z: ev.z, spotYl: ev.z / YDm, t: ev.t, at: ev.at, ev: ev.k }; f.what = foulWhat(f, ev); G.fouls.push(f);
+    if (!G.sim) throwFlag(ev.x, ev.z);
   }
 }
 const ddAt = (yl, down, togo, tid) => `${ord(down)} & ${yl + togo >= 99.5 ? 'Goal' : togo < 0.6 ? 'inches' : Math.max(1, Math.round(togo))} at ${spotTxt(yl, tid)}`;
@@ -796,7 +835,7 @@ function refCall(f, o, status) {
   if (!G || G.sim || !el.ref) return; const P0 = RULES.PEN[f.code], T = TM(f.by), p = P(f.pid);
   const unit = G.retPlay ? (f.by === G.retPlay.recv ? 'return team' : 'kicking team') : P0.side === 'K' ? 'kicking team' : P0.side === 'R' ? 'return team' : f.by === G.poss ? 'offense' : 'defense';
   const line = status === 'declined' ? 'Declined' : status === 'offsetting' ? 'Offsetting penalties · replay the down' : o ? `${o.yds ? RULES.yardsTxt(o, P0) + ' · ' : ''}${o.text || ''}` : '';
-  el.ref.innerHTML = `<div class="rt"><span class="fl">FLAG</span><b>${esc(P0.n)}</b></div><div class="rs">${esc(T.abbr)} ${unit}${p ? ` · #${p.num} ${esc(pnm(f.pid))}` : ''}</div>${line ? `<div class="rl ${status}">${esc(line)}${status === 'accepted' ? ' · <em>accepted</em>' : ''}</div>` : ''}`;
+  el.ref.innerHTML = `<div class="rt"><span class="fl">FLAG</span><b>${esc(P0.n)}</b></div><div class="rs">${esc(T.abbr)} ${unit}${p ? ` · #${p.num} ${esc(pnm(f.pid))}` : ''}</div>${f.what ? `<div class="rw">${esc(f.what)}</div>` : ''}${line ? `<div class="rl ${status}">${esc(line)}${status === 'accepted' ? ' · <em>accepted</em>' : ''}</div>` : ''}`;
   el.ref.style.setProperty('--rc', T.c1 || '#333'); el.ref.classList.remove('show'); void el.ref.offsetWidth; el.ref.classList.add('show');
   clearTimeout(refT); refT = setTimeout(() => el.ref && el.ref.classList.remove('show'), 3400); buzz(25);
 }
@@ -805,7 +844,7 @@ function penChoice(f, ac, st, rec, done) {
   const P0 = RULES.PEN[f.code], T = TM(f.by), p = P(f.pid);
   const btn = (k, lab, x) => `<button class="${rec === k ? 'pri' : ''} on pc2" data-pc="${k}">${rec === k ? '<span class="star">COACH</span>' : ''}<em>${lab}</em><b>${esc(x.txt)}</b><span>${esc(x.sub)}</span></button>`;
   overlay(`<div class="card penc"><div class="ph"><span class="fl">FLAG</span><div><h2>${esc(P0.n)}</h2><div class="small mute">${esc(T.name)}${p ? ` · #${p.num} ${esc(p.fn ? p.fn[0] + '. ' : '')}${esc(p.ln)}` : ''}</div></div></div>
-    <div class="small" style="margin:8px 0 6px">The referee needs your answer, coach: take the penalty, or keep the play?</div>
+    ${f.what ? `<div class="penw">${esc(f.what)}</div>` : ''}<div class="small" style="margin:8px 0 6px">The referee needs your answer, coach: take the penalty, or keep the play?</div>
     <div class="pcs">${btn('acc', 'ACCEPT', ac)}${btn('dec', 'DECLINE', st)}</div><div class="small mute kk">A accept · D decline · Space takes the coach's pick</div></div>`);
   G.penWait = k => { if (!G.penWait) return; G.penWait = null; buzz(20); done(k); };
   el.ovl.querySelectorAll('[data-pc]').forEach(b => b.onclick = () => G.penWait && G.penWait(b.dataset.pc)); G.penRec = rec;
@@ -1004,9 +1043,11 @@ function ctxKey() {
   if (G.stage === 'pre') return pl.motion && pl.motion.go && !pl.motion.done ? 'motion' : G.userSide === 'O' ? 'preO' : 'preD';
   if (G.stage !== 'live') return 'none';
   if (pl.ret) return G.userSide === 'O' ? (pl.air ? (pl.ret.kind === 'punt' && !pl.fairCatch ? 'retAir' : 'none') : pl.controlled() ? 'run' : 'none') : 'd';
+  if (G.userSide === 'O' && pl.chaseOn && pl.chaseOn()) return pl.ball.state === 'air' ? 'dAir' : 'd';      // picked off / fumbled: you are the defense now
   if (G.userSide === 'O') { if (pl.pass && !pl.thrown && pl.carrier === pl.qb && pl.ball.state === 'held' && !pl.scramble) return 'qb';
     if (!pl.pass && !pl.handed && !pl.qbRun && pl.ball.state !== 'loose') return 'run';      // run play: the stick is live from the snap, so you have the back the instant he has the ball
     return pl.controlled() ? 'run' : 'none'; }
+  if (pl.carrier && pl.carrier === pl.userD && pl.ball.state === 'held') return 'run';      // your man picked it off: run with it
   return pl.ball.state === 'air' ? 'dAir' : 'd';
 }
 const ACTS = {     // [buttons, hint with a mouse + keyboard, hint on a touch screen]
@@ -1032,6 +1073,7 @@ function doAct(a) {
   else if (a === 'audible' && G.stage === 'pre') { if (G.userSide === 'O' && audLoudRisk()) { G.audLoud = true; tick('Loud in here: the line strains to hear the audible'); } G.stage = 'call'; R3D.overlay(null); G.keepO = G.userSide === 'D' && G.cur ? G.cur.op : null; G.keepFlip = G.keepO && pl.op ? !!pl.op.flip : null; showSheet(G.userSide); }
   else if (a === 'switch') { if (G.stage === 'pre') { const ds = pl.D.slice().sort((a, b) => Math.hypot(a.p.x - pl.ballX, a.p.z - pl.losZ) - Math.hypot(b.p.x - pl.ballX, b.p.z - pl.losZ)), i = ds.indexOf(pl.userD); pl.userD = ds[(i + 1) % ds.length]; /* nearest the ball first, then outward */ G.userSlot = pl.userD.slot; } else { pl.switchDefender(); if (pl.userD) G.userSlot = pl.userD.slot; } }
   else if (a === 'away') { slingEnd(false); pl.throwAwayUser(); }
+  else if (a === 'hard') hardCount(pl);
   else if (a === 'tackle') inp.tackle = true;
   else if (a === 'swat') inp.swat = true;
   else if (a === 'fair' && pl.fairCatchCall) pl.fairCatchCall();
@@ -1059,8 +1101,26 @@ function onKey(e) {
   if ((c === 'KeyE' || c === 'Tab') && (k === 'd' || k === 'dAir' || k === 'preD')) doAct('switch');
   if (c === 'KeyF' && k === 'dAir') doAct('swat');
   if (c === 'KeyF' && k === 'retAir') doAct('fair');
+  if (c === 'KeyH' && k === 'preO') doAct('hard');
   if (k === 'qb') { if (c === 'KeyQ') doAct('away'); const m = /^Digit([1-6])$/.exec(c); if (m) { const r = recvOrder(pl)[+m[1] - 1]; if (r) { slingEnd(false); pl.throwTo(r); } } }
   if (k === 'run') { const mv = { KeyJ: 'juke', KeyK: 'spin', KeyL: 'stiff', KeyI: 'truck' }[c]; if (mv) doAct(mv); }
+}
+// ------------------------------------------------------------ hard count (your offense, before the snap: H or the button)
+// The QB barks a hard count to draw the defense offside. Sometimes a defensive lineman jumps (more often a low-awareness one, and
+// against a rookie-level CPU; less each time you use it in a game): a free 5 yards, and you see him go. Now and then your own
+// low-awareness lineman flinches instead (false start). Otherwise nobody bites and the play clock runs a bit. Once a snap.
+ACTS.preO[0] += `<button class="a wide on" data-a="hard">Hard count</button>`; ACTS.preO[1] += ' · H hard count';
+function hardCount(pl) {
+  if (!pl || !G.cur || G.stage !== 'pre' || G.userSide !== 'O' || pl.phase !== 'pre' || pl.ret || G.pat || (pl.motion && pl.motion.go) || G.hcPl === pl) return;
+  G.hcPl = pl; const off = G.poss, def = opp(off), H = G.hc || (G.hc = {}), n = H[off] || 0; H[off] = n + 1;
+  const b = el.acts.querySelector('[data-a="hard"]'); if (b) b.classList.add('used');
+  const ol = G.cur.lists[0] || [], dl = G.cur.lists[1] || [];
+  const code = G.noFlags === true || G.noFlags === 'pre' ? null : RULES.hardCount({ dAwr: avgAwr(dl, isDL), oAwr: avgAwr(ol, isOL), uses: n, diff: G.diff, noise: G.noise || 0 }, R);
+  tick(`${pnm(pl.qb && pl.qb.pid)}: hard count…`); buzz(15);
+  if (!code) { if (G.wasRunning) G.clock = Math.max(1, G.clock - 2); after(700, () => { if (G && G.play === pl && G.stage === 'pre') tick(n >= 2 ? 'They are not biting any more' : 'Nobody bites'); }); return; }
+  const byO = code === 'FS', f = { code, by: byO ? off : def, pid: foulGuy(byO ? ol : dl, code), pre: true, dead: true, hc: true };
+  G.pre = null;     // what really happened replaces any jump rolled for this snap
+  after(280, () => { if (G && G.play === pl && G.stage === 'pre' && pl.phase === 'pre') deadBall(pl, f); });
 }
 // --- the field layer: a tap snaps, a drag in the pocket is the sling, a drag anywhere else is a floating stick
 let tap = null;
@@ -1643,5 +1703,5 @@ function dlyEnd() {
 
 return { init, open, phoneMode, get _G() { return G; }, _: { processResult, describe, fieldGoal, punt, kickXP, doKickoff, nextSnap, RULES: typeof RULES !== 'undefined' ? RULES : null,
     // QA: put a flag on the current play (code from RULES.PEN; by: 'O' | 'D'), as if the officials had thrown it
-    foul: (code, by) => { if (!G || !G.play) return false; const pl = G.play, tid = by === 'D' ? G.cur.def : G.cur.off, list = (by === 'D' ? pl.D : pl.O).filter(p => !p.ol || code === 'OH'), p = list[Math.floor(R() * list.length)] || pl.players[0]; const z = code === 'DPI' ? pl.losZ + 18 * YDm : p.p.z; G.fouls.push({ code, by: tid, pid: p.pid, x: p.p.x, z, spotYl: z / YDm, t: pl.liveT }); throwFlag(p.p.x, z); return true; }, ctl: () => ({ ctx: G ? ctxKey() : null, sling: Object.assign({}, sling), stick: Object.assign({}, stick), joy: Object.assign({}, joy), input: G && G.play ? Object.assign({}, G.play.input) : null }) } };
+    foul: (code, by) => { if (!G || !G.play) return false; const pl = G.play, tid = by === 'D' ? G.cur.def : G.cur.off, list = (by === 'D' ? pl.D : pl.O).filter(p => !p.ol || code === 'OH'), p = list[Math.floor(R() * list.length)] || pl.players[0]; const z = code === 'DPI' ? pl.losZ + 18 * YDm : p.p.z; const f = { code, by: tid, pid: p.pid, x: p.p.x, z, spotYl: z / YDm, t: pl.liveT, at: pl.t }; f.what = foulWhat(f); G.fouls.push(f); throwFlag(p.p.x, z); return true; }, ctl: () => ({ ctx: G ? ctxKey() : null, sling: Object.assign({}, sling), stick: Object.assign({}, stick), joy: Object.assign({}, joy), input: G && G.play ? Object.assign({}, G.play.input) : null }) } };
 })();
