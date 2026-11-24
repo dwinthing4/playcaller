@@ -563,7 +563,7 @@ function play(name, B, t) {
 function test(name) {
   if (!isOn()) { if (typeof toast === 'function') toast('Sound is off: switch it on first'); return false; }
   const a = ensure(); if (!a) { if (typeof toast === 'function') toast('This browser has no Web Audio'); return false; }
-  a.busyUntil = performance.now() + 7000; resume(); masterTo(true);
+  a.busyUntil = performance.now() + 6000; resume(); masterTo(true);
   const go = () => { if (!BUF.pink) prep(a.ctx, true); play(name, a, a.ctx.currentTime + 0.06); };
   if (a.ctx.state === 'running') go(); else setTimeout(go, 80); return true;
 }

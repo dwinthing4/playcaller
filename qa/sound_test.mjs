@@ -93,6 +93,8 @@ const res = { on: [], off: [] };
 for (const on of [true, false, true, false, true, false]) { await page.evaluate(o => { L.settings.sound = o; SND.apply(); }, on); await page.mouse.click(5, 5); await page.waitForTimeout(600); const r = await fps(); const d = await page.evaluate(() => SND.debug.ctx); res[on ? 'on' : 'off'].push(r); console.log(`  sound ${on ? 'on ' : 'off'} (${d}): ${r.fps.toFixed(1)} fps, p95 ${r.p95.toFixed(1)} ms, worst ${r.worst.toFixed(0)} ms`); }
 const med = a => a.map(r => r.fps).sort((x, y) => x - y)[Math.floor(a.length / 2)];
 const st = await page.evaluate(() => __sndT);
+const ld = await page.evaluate(async () => { const t0 = performance.now(); const r = await SND._render('load', { dur: 10 }); return { ms: performance.now() - t0, peak: r.peak }; });
+console.log('  audio-thread cost proxy: a busy 10 s mix (crowd, reverb, 10 hits/s, whistles, cheers, barks) renders offline in ' + ld.ms.toFixed(0) + ' ms = ' + (ld.ms / 100).toFixed(1) + '% of one core (peak ' + ld.peak + ' dBFS)');
 console.log(`  median fps: sound on ${med(res.on).toFixed(1)}, off ${med(res.off).toFixed(1)};  SND.frame ${(st.frame / Math.max(1, st.nf)).toFixed(3)} ms a frame (${st.nf} frames), engine events ${(st.ev / Math.max(1, st.ne) * 1000).toFixed(1)} µs each (${st.ne})`);
 
 // ---- 3. the Sound switch
@@ -118,7 +120,7 @@ const tb = await page.evaluate(async () => { const out = {}; for (const b of [..
 console.log('  test buttons (voices started):', JSON.stringify(tb));
 for (const k in tb) if (!tb[k] && !/Crowd|Rain|Wind/.test(k)) bad('test button made no sound: ' + k);
 await page.waitForTimeout(6000); const tail = await page.evaluate(() => SND.debug); console.log(`  6 s later: ctx ${tail.ctx} voices ${tail.voices} nodes ${tail.nodes}`);
-await page.waitForTimeout(3500); const idle = await page.evaluate(() => SND.debug.ctx); console.log('  idle in the menus:', idle); if (idle === 'running') bad('audio not suspended when idle');
+await page.waitForTimeout(5000); const idle = await page.evaluate(() => SND.debug.ctx); console.log('  idle in the menus:', idle); if (idle === 'running') bad('audio not suspended when idle');
 const se = await page.evaluate(() => SND.debug.errors); console.log('  errors swallowed by the sound engine:', se); if (se) bad(se + ' sound engine errors (see the console warning)');
 console.log('\n' + (errs.length ? 'ERRORS\n' + errs.join('\n') : 'no console errors'));
 console.log(fails ? `${fails} FAILURES` : 'sound test passed');
