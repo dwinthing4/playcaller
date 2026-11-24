@@ -5,7 +5,7 @@ function serialize() { L.uid = UID; const skip = { _oc: 1, blocks: 1, blocksKey:
 function migrate() {
   if (!L.inbox) L.inbox = []; if (!L.rec) L.rec = { mine: {}, lg: {} }; if (!L.hof) L.hof = []; if (!L.lhist) L.lhist = []; if (!L.lhof) L.lhof = []; if (!L.rel) L.rel = {}; if (!L.coachHist) L.coachHist = []; if (!L.offers) L.offers = []; if (!L.settings) L.settings = { sound: true, haptics: true, theme: 'stadium', tags: true, view: 'auto' };
   if (!L.unis) L.unis = {};
-  for (const id in L.P) { const p = L.P[id]; ensureBody(p); if (!p.st) p.st = blankStats(); if (!p.car) p.car = {}; if (!p.hist) p.hist = []; ensureLook(p); }
+  for (const id in L.P) { const p = L.P[id]; ensureBody(p); msrEnsure(p); if (!p.st) p.st = blankStats(); if (!p.car) p.car = {}; if (!p.hist) p.hist = []; ensureLook(p); }
   ensureStaffAll(); if (!L.picking && L.user != null) ensureUserStaff();
   migrateContracts(); migrateHistory();
 }

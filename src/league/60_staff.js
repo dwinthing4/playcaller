@@ -363,13 +363,8 @@ function reveal(p, n, acc) {
   p.scout = Math.round(clamp(p.ovr + (p.scoutNoise || 0) * f, 30, 99)); p.scoutPot = Math.round(clamp(p.pot + (p.potNoise || 0) * f, p.scout, 99)); return got;
 }
 function projRound(p) { const rank = L.draft.map(id => L.P[id]).filter(Boolean).sort((a, b) => scoutedValue(b) - scoutedValue(a)).indexOf(p); return rank < 0 ? 7 : Math.min(7, Math.floor(rank / 32) + 1); }
-function scoutReportText(s, p, got) {
-  const prof = profAttrs(p).filter(k => p.sc.rev.includes(k)).map(k => [k, p.a[k]]).sort((a, b) => b[1] - a[1]);
-  const strengths = prof.slice(0, 2).map(([k, v]) => `${ATTR_NAME[k].toLowerCase()} (${v})`), concern = prof.slice(-1).map(([k, v]) => `${ATTR_NAME[k].toLowerCase()} (${v})`);
-  const pr = projRound(p); const potL = Math.max(p.scout, p.scoutPot - 4), potH = Math.min(99, p.scoutPot + 4);
-  const comb = p.comb ? ` Ran a ${p.comb.forty}.` : '';
-  return `${p.pos} ${p.fn} ${p.ln}, ${p.col}. ${strengths.length ? 'Wins with ' + strengths.join(' and ') + '.' : ''} ${concern.length && prof.length > 2 ? 'Concern: ' + concern[0] + '.' : ''}${comb} I have him around ${p.scout} now with a ceiling of ${potL}-${potH}. Projects as a round-${pr} pick.${p.arch && ARCH[p.arch] && p.sc.lvl >= 2 ? ' ' + ARCH[p.arch][1] : ''}`.replace(/\s+/g, ' ');
-}
+// draft-guide report (74_report.js): summary, strengths, weaknesses, projection, grade, through this scout's eyes
+function scoutReportText(s, p, got) { return `${p.pos} ${p.fn} ${p.ln}, ${p.col}. ${dgrFile(s, p)}`; }
 function scoutingWeek() {
   if (L.ghost || !L.scouts || !L.draft.length) return; const pri = L.scoutPri || { pos: [], ids: [] }; const lines = []; const seen = new Set();
   for (const s of L.scouts) {
@@ -385,7 +380,7 @@ function scoutingWeek() {
 function scoutState() { if (!L.scouting || L.scouting.y !== L.year) L.scouting = { y: L.year, meet: [], pro: [] }; return L.scouting; }
 function meetProspect(id) { const S = scoutState(); const p = L.P[id]; if (!(L.phase === 'offseason' && (L.off === 'resign' || L.off === 'draft'))) return { ok: false, msg: 'Meetings open right before the draft.' };
   if (S.meet.includes(id)) return { ok: false, msg: 'Already met.' }; if (S.meet.length >= 4) return { ok: false, msg: 'You have used all 4 pre-draft meetings.' }; S.meet.push(id); const got = reveal(p, 3, 0.25); p.sc.met = true; p.mor = clamp(p.mor + 5, 0, 100); return { ok: true, msg: `Met with ${p.fn} ${p.ln}: ${got.length} more ratings revealed` }; }
-function proDay(id) { const S = scoutState(); if (S.pro.includes(id)) return { ok: false, msg: 'Already visited.' }; if (S.pro.length >= 3) return { ok: false, msg: 'No pro-day visits left.' }; S.pro.push(id); const p = L.P[id]; reveal(p, 2, 0.2); if (p.comb) p.comb.forty = +(4.28 + (99 - p.a.spd) * 0.021).toFixed(2); return { ok: true, msg: `Pro day: ${p.ln} worked out for you` }; }
+function proDay(id) { const S = scoutState(); if (S.pro.includes(id)) return { ok: false, msg: 'Already visited.' }; if (S.pro.length >= 3) return { ok: false, msg: 'No pro-day visits left.' }; S.pro.push(id); const p = L.P[id]; reveal(p, 2, 0.2); if (p.comb) { p.comb.forty = msrOf(p).forty; p.comb.pd = p.comb.pd || {}; p.comb.pd.forty = 1; delete (p.comb.sk || {}).forty; } return { ok: true, msg: `Pro day: ${p.ln} worked out for you` }; }
 function setScoutPri(kind, v) { const P = L.scoutPri; const a = P[kind]; const i = a.indexOf(v); if (i >= 0) a.splice(i, 1); else { a.push(v); if (kind === 'ids' && a.length > 6) a.shift(); if (kind === 'pos' && a.length > 3) a.shift(); } }
 function projOrder() { return L.teams.slice().sort((a, b) => pct(a) - pct(b) || teamOvr(a) - teamOvr(b)); }
 function updateMock() {

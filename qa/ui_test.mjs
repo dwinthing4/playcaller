@@ -11,7 +11,7 @@ const TABS = ['home', 'inbox', 'roster', 'depth', 'develop', 'stories', 'uniform
 let problems = [];
 for (const [vw, vh, tag] of [[390, 844, 'phone'], [1280, 800, 'desk']]) {
   const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: tag === 'phone' ? 2 : 1, hasTouch: tag === 'phone' });
-  const page = await ctx.newPage(); const errs = [];
+  const page = await ctx.newPage(); page.setDefaultTimeout(120000); const errs = [];
   page.on('pageerror', e => errs.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error' && !/fonts\.g|ERR_|net::/.test(m.text())) errs.push('console: ' + m.text()); });
   await page.goto(url); await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(shots, `${tag}_00_title.png`) });

@@ -41,7 +41,9 @@ function playerEndurance(p) {
   if (!p) return 70; const h = ((((p.id | 0) + 7) * 2654435761) >>> 0) / 4294967296, age = p.age || 26;
   return Math.round(clamp((END_BASE[p.pos] || 70) + (h - 0.5) * 24 - Math.max(0, age - 28) * 1.8 + Math.max(0, 25 - age) * 0.8 - (p.pos === 'DT' && (p.wt || 300) > 325 ? 4 : 0), 35, 99));
 }
-function roleFit(k, p) {
+// a player's role archetype (73_scoutx.js) nudges the Auto pick toward the job it describes
+function roleFit(k, p) { return roleFitBase(k, p) + (p && typeof rarchRoleBonus === 'function' ? rarchRoleBonus(k, p) : 0); }
+function roleFitBase(k, p) {
   if (!p) return 0; const a = p.a || {}, tr = p.traits || [], v = x => a[x] ?? 50;
   switch (k) {
     case 'X': return (v('spd') * 2.2 + v('acc') * .5 + v('jmp') * .4 + v('cth') * .5 + v('rte') * .4) / 4 + (tr.includes('deep') ? 5 : 0);

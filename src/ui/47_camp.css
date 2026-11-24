@@ -1,0 +1,23 @@
+/* Training camp panel and the drill mini-games (47_camp.js) */
+.mg-camp{margin-bottom:10px;border-left:5px solid var(--acc)}
+.mg-left{font:var(--cond-w) 13px var(--cond);letter-spacing:.05em;text-transform:var(--cond-tt)}
+.mg-row{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--rule)}
+.mg-row:last-of-type{border-bottom:0}
+.mg-row .sp{min-width:0}.mg-row .sp>b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mg-sc{min-width:46px;text-align:center;padding:4px 7px 3px;font:var(--num-w) 18px/1 var(--num);padding-top:calc(4px + var(--disp-pt));background:var(--fill);border-radius:var(--r)}
+.mg-sc.hi{background:var(--good);color:#fff}.mg-sc.lo{box-shadow:inset 0 -3px 0 var(--bad)}
+.mg-sc i{display:block;font:var(--cond-w) 9px var(--cond);font-style:normal;letter-spacing:.06em;text-transform:var(--cond-tt);opacity:.75;margin-top:2px}
+.modal .box.mgbox{max-width:470px}
+.mg-hd{display:flex;align-items:center;gap:10px}.mg-hd .sp>b{display:block;font:var(--disp-w) 20px/1.05 var(--disp);text-transform:var(--disp-tt);padding-top:var(--disp-pt)}
+.mg-how{margin:8px 0 6px}
+.mg-bar{display:flex;justify-content:space-between;align-items:baseline;margin:0 auto 4px;width:min(100%,calc(62vh * .75))}
+.mg-bar span,.mg-bar b{font:var(--num-w) 18px/1 var(--num);padding-top:var(--disp-pt)}
+.mg-wrap{position:relative;width:min(100%,calc(62vh * .75));margin:0 auto}
+.mg-wrap canvas{display:block;width:100%;height:auto;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:var(--r);background:#2e6a3a;box-shadow:0 0 0 2px var(--ink)}
+.mg-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fbf8ef;text-align:center;padding:20px}
+.mg-ov[hidden]{display:none}
+.mg-ov>button{font-size:18px;padding:.7em 1.4em .62em}
+.mg-ov.res{background:rgba(12,16,14,.62);border-radius:var(--r)}
+.mg-res{background:var(--surf);color:var(--ink);border:2px solid var(--ink);border-radius:var(--r);padding:14px 18px 16px;max-width:290px;box-shadow:6px 6px 0 rgba(0,0,0,.35)}
+.mg-res b{display:block;font:var(--num-w) 64px/1 var(--num);padding-top:var(--disp-pt);margin:2px 0 4px}
+.mg-res p{margin:8px 0 12px}
