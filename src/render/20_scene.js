@@ -453,39 +453,11 @@ function applyWidth() {
 // ---------------- venue: every home team plays in a ground of its own ----------------
 // Picked from the team (deterministic, so old saves get one too). T.venue = { stadium: 'dome', mow: 'checker', ... } overrides
 // any key (see VENUE_OPTS), and R3D.venueOverride does the same for QA. The time of day comes from the team and the week.
-const hashS = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
-const rngOf = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const hashS = VENUE.hashS, rngOf = VENUE.rngOf;       // shared with the match (src/core/30_venue.js): the venue and the weather are pure functions
 const pickR = (r, a) => a[Math.min(a.length - 1, Math.floor(r() * a.length))];
-const VENUE_OPTS = {
-  stadium: ['bowl', 'horseshoe', 'dome', 'college', 'retro'], surface: ['grass', 'turf'], mow: ['stripes', 'wide', 'checker', 'diamond', 'lengthwise', 'plain'],
-  ez: ['solid', 'stripes', 'argyle', 'outline', 'script'], ezText: ['name', 'city', 'both'], font: ['block', 'slab', 'italic', 'tall'], border: ['white', 'color', 'line'],
-  seats: ['c1', 'two', 'mixed', 'grey'], backdrop: ['city', 'hills', 'trees', 'none'], tod: ['auto', 'day', 'overcast', 'dusk', 'night'], weather: ['auto', 'clear', 'rain', 'snow'] };
+const VENUE_OPTS = VENUE.OPTS;
 const MOW_ID = { plain: 0, stripes: 1, wide: 2, checker: 3, diamond: 4, lengthwise: 5 };
-function venueOf(T) {
-  const r = rngOf(hashS('venue|' + (T.city || '') + '|' + (T.name || '') + '|' + T.id)), q = Array.from({ length: 20 }, r);
-  const ov = Object.assign({}, T.venue || {}, R3D.venueOverride || {}), ch = (k, i, list) => (ov[k] != null && ov[k] !== 'auto' ? ov[k] : list[Math.min(list.length - 1, Math.floor(q[i] * list.length))]);
-  const v = {}; v.stadium = ch('stadium', 0, ['bowl', 'bowl', 'horseshoe', 'horseshoe', 'dome', 'college', 'college', 'retro', 'retro']); const S = v.stadium;
-  v.surface = ch('surface', 1, S === 'dome' ? ['turf'] : S === 'bowl' ? ['grass', 'grass', 'turf'] : ['grass', 'grass', 'grass', 'turf']);
-  v.mow = ch('mow', 2, v.surface === 'turf' ? ['stripes', 'wide', 'plain', 'stripes'] : ['stripes', 'stripes', 'wide', 'checker', 'diamond', 'lengthwise']);
-  v.grass = ov.grass != null ? ov.grass : Math.floor(q[3] * 4);
-  v.ez = ch('ez', 4, S === 'college' ? ['stripes', 'argyle', 'outline', 'script', 'solid'] : ['solid', 'solid', 'stripes', 'argyle', 'outline', 'script']);
-  v.ezText = ch('ezText', 5, ['name', 'name', 'city', 'both']);
-  v.font = ch('font', 6, S === 'college' ? ['slab', 'slab', 'italic', 'block'] : S === 'retro' ? ['slab', 'block', 'tall'] : ['block', 'block', 'tall', 'italic', 'slab']);
-  v.nums = ch('nums', 7, S === 'college' ? ['outline', 'plain'] : ['plain', 'plain', 'outline']);
-  v.border = ch('border', 8, S === 'college' ? ['color', 'line', 'white'] : S === 'retro' ? ['white', 'line'] : ['white', 'white', 'color']);
-  v.logo = ch('logo', 9, ['plain', 'ring', 'big', 'plain']);
-  v.seats = ch('seats', 10, S === 'retro' ? ['mixed', 'c1', 'grey'] : S === 'college' ? ['grey', 'c1'] : ['c1', 'c1', 'two', 'grey']);
-  v.backdrop = ch('backdrop', 11, S === 'dome' ? ['none'] : S === 'college' ? ['trees', 'hills', 'trees'] : S === 'bowl' ? ['city', 'hills'] : ['city', 'city', 'hills']);
-  v.led = ov.led != null ? !!ov.led : q[12] < (S === 'retro' || S === 'college' ? 0.3 : 0.9);
-  v.posts = ch('posts', 13, S === 'college' ? ['yellow', 'white', 'yellow'] : ['yellow']);
-  v.wall = ch('wall', 14, ['c1', 'c1', 'dark', 'c2']);
-  v.open = ch('open', 15, ['z1', 'z0']);           // horseshoe: which end is open
-  v.track = ov.track != null ? !!ov.track : S === 'college' && q[16] < 0.6;
-  v.wear = ov.wear != null ? +ov.wear : v.surface === 'turf' ? 0 : 0.35 + 0.65 * q[17];
-  v.seed = hashS('venue-art|' + T.id + '|' + (T.name || '') + '|' + S);
-  v.sig = JSON.stringify(v);
-  return v;
-}
+function venueOf(T) { return VENUE.of(T, R3D.venueOverride); }
 // time of day. sun: the key light (the sun, or the stadium lights at night); hemi: sky/ground fill; exp: exposure; zen/hor/hor2: sky
 // colours (sRGB; hor is the horizon toward the sun, hor2 away from it); lights: how lit the lamps are; clouds: cover; sh: stand-shadow strength
 const TOD = {
@@ -495,16 +467,7 @@ const TOD = {
   night: { el: [64, 64], sun: 0xf4f6ff, sunI: 1.9, sky: 0xa3b4d8, gnd: 0x2b3a22, hemiI: 0.34, fill: 0.5, exp: 1, zen: '#05090f', hor: '#2c3340', hor2: '#1c2330', gndC: '#0f1318', fog: '#161c27', fogN: 110, fogF: 460, lights: 1, clouds: 0.3, sunS: 0, cLit: '#a7adba', cDark: '#1f2530', sh: 0 },
   dome: { el: [72, 72], sun: 0xfff4e6, sunI: 1.35, sky: 0xf2eee4, gnd: 0x3d4a33, hemiI: 0.7, fill: 0.4, exp: 0.95, zen: '#3a3d44', hor: '#4b4f57', hor2: '#4b4f57', gndC: '#2a2d31', fog: '#2f3238', fogN: 150, fogF: 560, lights: 1, clouds: 0, sunS: 0, cLit: '#ffffff', cDark: '#ffffff', sh: 0 },
 };
-function atmoOf(T, v) {
-  const lg = typeof L !== 'undefined' && L ? L : null, wk = lg ? (lg.phase === 'playoffs' ? 18 + ((lg.playoff && lg.playoff.round) | 0) : lg.week | 0) : 0;
-  const r = rngOf(hashS('atmo|' + T.id + '|' + wk + '|' + (lg ? lg.year : 0))), x = r(), w = r(), ov = Object.assign({}, T.venue || {}, R3D.venueOverride || {});
-  let tod = x < 0.34 ? 'day' : x < 0.47 ? 'overcast' : x < 0.69 ? 'dusk' : 'night';
-  if (wk >= 18 && tod === 'overcast') tod = 'night';                   // playoff football: more of it under the lights
-  if (ov.tod && ov.tod !== 'auto') tod = ov.tod; if (v.stadium === 'dome') tod = 'dome';
-  let weather = 'clear'; if (tod !== 'dome') { if (wk >= 12 && w < 0.2 && tod !== 'dusk') weather = 'snow'; else if (w > 0.92 && tod !== 'day') weather = 'rain'; }
-  if (ov.weather && ov.weather !== 'auto' && tod !== 'dome') weather = ov.weather;
-  return { tod, weather, wk, late: Math.min(1, wk / 17), az: r(), el: r(), tgt: r() };
-}
+function atmoOf(T, v) { return VENUE.atmo(T, v, typeof L !== 'undefined' ? L : null, R3D.venueOverride); }
 // ---------------- stand shadows ----------------
 // The stands, as four walls round the field (x-/x+/z-/z+ positions and rim heights), shade the sun for every lit surface: the grass,
 // the crowd, the players, the ball. It is worked out per pixel in the light loop, so a late-afternoon shadow line lies across the
@@ -1169,10 +1132,15 @@ function setWeather(kind) {
     : new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.9, depthWrite: false, sizeAttenuation: true }));
   obj.frustumCulled = false; scene.add(obj); wxo = { obj, pos, seed, n, rain, t: 0 };
 }
+// ---------------- penalty flags: a yellow flag tossed onto the spot of the foul (play coordinates) ----------------
+const flagsOn = []; let flagGeo = null, flagMat = null;
+function stepFlags(dt) { for (const F of flagsOn) { F.t += dt; const u = Math.min(1, F.t / 0.62), x = F.fx + (F.x - F.fx) * u, z = F.fz + (F.z - F.fz) * u, y = 0.035 + (1 - u) * 1.85 + 2.3 * u * (1 - u);
+  F.mesh.position.set(x, y, z); if (u < 1) F.mesh.rotation.set(F.t * 7 + F.spin, F.t * 4.2, F.t * 5.3); else F.mesh.rotation.set(-Math.PI / 2 + 0.06, 0.04, F.spin); } }
 function stepWeather(dt) {
   if (!wxo) return; const w = wxo, P0 = w.pos, S0 = w.seed, cx = camLook.x, cz = camLook.z, fall = w.rain ? 15 : 1.3; w.t += dt;
+  const WV = R3D.windV, wvx = WV ? WV.x * (w.rain ? 0.6 : 0.8) : 0, wvz = WV ? WV.z * (w.rain ? 0.6 : 0.8) : 0;     // the match sets the wind for this play (m/s, play frame): rain and snow drift with it
   for (let i = 0; i < w.n; i++) { let y = S0[i * 3 + 1] - fall * dt; if (y < 0) y += 34; S0[i * 3 + 1] = y;
-    let x = S0[i * 3] + (w.rain ? -1.2 : Math.sin(w.t * 0.9 + i) * 0.5) * dt, z = S0[i * 3 + 2] + (w.rain ? 0.5 : Math.cos(w.t * 0.7 + i * 1.3) * 0.4) * dt; S0[i * 3] = x; S0[i * 3 + 2] = z;
+    let x = S0[i * 3] + ((w.rain ? -1.2 : Math.sin(w.t * 0.9 + i) * 0.5) + wvx) * dt, z = S0[i * 3 + 2] + ((w.rain ? 0.5 : Math.cos(w.t * 0.7 + i * 1.3) * 0.4) + wvz) * dt; S0[i * 3] = x; S0[i * 3 + 2] = z;
     const wx = cx + ((((x - cx) % 70) + 105) % 70) - 35, wz = cz + ((((z - cz) % 70) + 105) % 70) - 35;
     if (w.rain) { P0.set([wx, y, wz, wx + 0.06, y + 0.55, wz - 0.025], i * 6); } else P0.set([wx, y, wz], i * 3); }
   w.obj.geometry.attributes.position.needsUpdate = true;
@@ -1353,7 +1321,7 @@ const R = {
       this.follow(play, dt, opts);
     }
     else { estT += dt; const a = estT * 0.05; camPos.set(-38 * Math.cos(a), 17, 46 + 38 * Math.sin(a) * 0.6); camLook.set(0, 0, 46); camera.position.copy(camPos); camera.lookAt(camLook); camera.fov = H > W ? 62 : 48; camera.updateProjectionMatrix(); }
-    stepParticles(dt); stepWeather(dt);
+    stepParticles(dt); stepWeather(dt); if (flagsOn.length) stepFlags(dt);
     sun.target.position.copy(camLook); sun.position.copy(camLook).addScaledVector(sunDir, 80); sun.target.updateMatrixWorld();   // the shadow box follows the play
     if (board && (boardT += dt) > 0.5) { boardT = 0; paintBoard(false); }
     if (skyMesh) skyMesh.position.copy(camera.position); updateCut();
@@ -1418,13 +1386,22 @@ const R = {
     if (R3D.camOverride) { const d = R3D.camOverride; camera.position.set(...d.pos); camera.lookAt(...d.look); camera.fov = d.fov || 40; camera.updateProjectionMatrix(); return; }   // QA close-ups
     if (shake > 0.002) { camera.position.x += (Math.random() - 0.5) * shake * 0.35; camera.position.y += (Math.random() - 0.5) * shake * 0.25; shake *= Math.exp(-dt * 7); }
   },
+  // penalty flag at {x, z} (thrown in from an official a few yards off); null picks them all up
+  flag(f) {
+    if (!scene) return;
+    if (!f) { for (const F of flagsOn) scene.remove(F.mesh); flagsOn.length = 0; return; }
+    if (!flagGeo) { flagGeo = new THREE.PlaneGeometry(0.8, 0.8, 4, 4); const P = flagGeo.attributes.position; for (let i = 0; i < P.count; i++) P.setZ(i, (Math.sin(i * 12.9898) * 43758.5453 % 1) * 0.05); flagGeo.computeVertexNormals();
+      flagMat = new THREE.MeshStandardMaterial({ color: col('#ffd21a'), emissive: col("#5a4700"), roughness: 0.9, side: THREE.DoubleSide }); }
+    const mesh = new THREE.Mesh(flagGeo, flagMat); mesh.castShadow = true; mesh.renderOrder = 2; scene.add(mesh);
+    const sx = f.x > 0 ? -1 : 1; flagsOn.push({ mesh, x: f.x, z: f.z, fx: f.x + sx * (3 + Math.random() * 2), fz: f.z - 3 - Math.random() * 3, t: 0, spin: Math.random() * 6.28 }); stepFlags(0);
+  },
   // the passing aim line: a dotted arc along the real flight, and a ring where it comes down (green if a receiver can get there)
   aim(a) {
     aimNow = a || null;
     if (!aimDots) return;
     if (!a) { aimDots.visible = false; aimRing.visible = false; if (aimRange) aimRange.visible = false; return; }
     const P = aimDots.geometry.attributes.position.array, n = AIMN, ph = (performance.now() / 600) % 1;
-    for (let i = 0; i < n; i++) { const t = a.T * Math.min(1, (i + ph) / n); P[i * 3] = a.hand.x + a.v.x * t; P[i * 3 + 1] = Math.max(0.05, a.hand.y + a.v.y * t - 4.905 * t * t); P[i * 3 + 2] = a.hand.z + a.v.z * t; }
+    for (let i = 0; i < n; i++) { const t = a.T * Math.min(1, (i + ph) / n); const wk = a.wa ? 0.5 * t * t : 0; P[i * 3] = a.hand.x + a.v.x * t + (wk && a.wa.x * wk); P[i * 3 + 1] = Math.max(0.05, a.hand.y + a.v.y * t - 4.905 * t * t); P[i * 3 + 2] = a.hand.z + a.v.z * t + (wk && a.wa.z * wk); }     // wa: the wind bends the arc
     aimDots.geometry.attributes.position.needsUpdate = true; aimDots.visible = true;
     aimDots.material.color.set(a.capped ? 0xff9a3c : a.hit ? 0xffe066 : 0xffffff);
     // the landing ring is the QB's accuracy: an accurate passer's ring is tight, a scattershot arm's is wide (and it grows under pressure, on the move, at the end of his range)

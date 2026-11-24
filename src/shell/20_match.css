@@ -207,3 +207,60 @@ body.phonemode #gui .joy{display:none!important}
 
 /* the sim speed bar sits at the bottom: lift the coordinator tip above it */
 #game.spdon #hud .csay{bottom:calc(84px + var(--sab))}
+
+/* ---------- game day: the weather chip and crowd meter (top right), the referee's call, take the penalty or the play ---------- */
+#hud .gday,#hud .refc{z-index:3}
+.gday{position:absolute;right:calc(10px + var(--sar));top:calc(60px + var(--sat));display:flex;align-items:stretch;gap:5px}
+.wxc,.crowd{display:none;align-items:center;height:30px;background:var(--h-bga);color:var(--ink);border-radius:var(--r);font:var(--cond-w) 13px/1 var(--cond);letter-spacing:.04em}
+.wxc{gap:6px;padding:0 9px 0 8px;box-shadow:inset 0 -3px 0 var(--tca)}.wxc.show,.crowd.show{display:flex}
+.wxc svg{flex:none;color:var(--gold)}
+.wxc b{font:var(--num-w) 16px/1 var(--num);padding-top:var(--disp-pt)}
+.wxc .wd{display:flex;align-items:center;gap:3px;color:var(--ink2)}
+.wxc .wd i{display:inline-flex;width:14px;height:14px;align-items:center;justify-content:center;color:var(--ink);transition:transform .3s}
+.wxc .wd small{font-size:9px;letter-spacing:.06em;margin-left:1px}
+.crowd{gap:2px;padding:0 8px 0 9px}
+.crowd b{font:var(--cond-w) 10px/1 var(--cond);letter-spacing:.08em;color:var(--ink2);margin-right:4px;padding-top:2px}
+.crowd i{width:4px;align-self:flex-end;margin-bottom:6px;background:var(--ink);opacity:.22;border-radius:1px}
+.crowd i:nth-of-type(1){height:5px}.crowd i:nth-of-type(2){height:8px}.crowd i:nth-of-type(3){height:11px}.crowd i:nth-of-type(4){height:14px}.crowd i:nth-of-type(5){height:17px}
+.crowd i.on{opacity:1;background:var(--gold)}.crowd.loud i.on{background:#ff6a3d}.crowd.loud b{color:#ff6a3d}
+.crowd.loud{animation:crowdp 1s ease-in-out infinite alternate}@keyframes crowdp{to{box-shadow:0 0 0 2px rgba(255,106,61,.45)}}
+@media (max-width:420px){.wxc{padding:0 7px 0 6px;gap:4px}.wxc .wd small{display:none}.crowd b{display:none}}
+/* the yellow flag in the scorebug while it is down */
+.sbM .dd.flag{background:#ffd21a;color:#14110a;padding:2px 7px 1px;border-radius:var(--r);letter-spacing:.1em;animation:flagp .5s ease-out}
+@keyframes flagp{from{transform:scale(1.35)}to{transform:none}}
+/* the referee's call */
+.refc{position:absolute;left:50%;top:calc(124px + var(--sat));transform:translate(-50%,-8px);opacity:0;transition:opacity .2s,transform .25s;width:max-content;min-width:min(320px,86vw);max-width:92vw;background:var(--h-bga);color:var(--ink);border-radius:var(--r);box-shadow:inset 6px 0 0 #ffd21a,0 8px 22px rgba(0,0,0,.35);padding:8px 14px 9px 18px}
+.refc.show{opacity:1;transform:translate(-50%,0)}
+.refc .rt{display:flex;align-items:center;gap:9px}
+.refc .fl,.penc .fl{font:var(--cond-w) 11px/1 var(--cond);letter-spacing:.1em;background:#ffd21a;color:#14110a;padding:4px 6px 3px;border-radius:var(--r);flex:none}
+.refc .rt b{font:var(--disp-w) 24px/1 var(--disp);text-transform:var(--disp-tt);letter-spacing:.02em;padding-top:var(--disp-pt)}
+.refc .rs{font:var(--cond-w) 13px/1.3 var(--cond);color:var(--ink2);letter-spacing:.04em;text-transform:uppercase;margin-top:5px;box-shadow:inset 3px 0 0 var(--rc,#888);padding-left:7px}
+.refc .rl{font:600 14px/1.3 var(--body);margin-top:4px}.refc .rl em{font-style:normal;color:var(--good);font-weight:700}.refc .rl.declined{color:var(--ink2)}
+@media (max-height:500px){.refc{top:calc(60px + var(--sat))}}
+/* accept / decline */
+.penc .ph{display:flex;gap:12px;align-items:center}.penc .ph h2{margin:0}.penc .ph .fl{font-size:14px;padding:8px 9px 7px}
+.penc .pcs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:520px){.penc .pcs{grid-template-columns:1fr}}
+.penc .pc2{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:12px 12px 11px;min-height:88px;text-transform:none;letter-spacing:0}
+.penc .pc2 em{font:var(--cond-w) 12px var(--cond);font-style:normal;letter-spacing:.1em;opacity:.8}
+.penc .pc2 b{font:var(--disp-w) 21px/1.05 var(--disp);text-transform:var(--disp-tt)}
+.penc .pc2 span{font:500 12.5px/1.3 var(--body);opacity:.85}
+.penc .pc2 .star{position:absolute;top:9px;right:9px;font:var(--cond-w) 10px var(--cond);background:#ffcf3f;color:#0b0c0e;padding:2px 5px 1px;letter-spacing:.06em;border-radius:var(--r);opacity:1}
+.penc .kk{margin-top:9px;text-align:center}@media (hover:none),(pointer:coarse){.penc .kk{display:none}}
+/* drive chart + play-by-play under the box score */
+.fin .dlog{margin-top:10px;background:var(--fill);border-radius:var(--r);padding:0 10px}
+.fin .dlog summary{cursor:pointer;font:var(--cond-w) 13px var(--cond);letter-spacing:.07em;text-transform:uppercase;padding:10px 0;color:var(--ink)}
+.fin .dch{margin-bottom:8px;font:500 12.5px var(--cond)}.fin .dch td{padding:4px 3px;text-align:left!important}.fin .dch tr:first-child td{color:var(--ink2);font-size:11px;letter-spacing:.06em}.fin .dch i{font-style:normal;color:var(--bad);margin-left:3px}
+.fin .pbp{margin:0 0 10px;padding-left:22px;max-height:260px;overflow:auto;font:500 12.5px/1.35 var(--body)}.fin .pbp li{padding:2px 0}.fin .pbp li.pn{color:var(--amber);font-weight:600}.fin .pbp li.sc{font-weight:700}
+/* kickoff type on the power bar */
+.kbar .kk3{display:flex;gap:3px}.kbar .kk3 button{padding:9px 10px 8px;font-size:12.5px;min-height:40px;background:var(--fill);color:var(--ink);border:0}
+.kbar .kk3 button.sel{background:var(--on);color:var(--onink)}.kbar .kk3 small{font-size:9px;opacity:.55;margin-left:4px}
+@media (hover:none),(pointer:coarse){.kbar .kk3 small{display:none}}
+@media (max-width:520px){.kbar .kk3{width:100%;justify-content:center}.kbar .kk3 button{flex:1}}
+/* hot routes: the route on each pre-snap tag (tap to change it) */
+.rb.pre.hr{cursor:pointer;flex-direction:column;height:auto;min-height:26px;padding:3px 7px 2px;line-height:1.05}
+.rb.pre u{display:block;text-decoration:none;font:var(--cond-w) 9px/1.1 var(--cond);letter-spacing:.08em;color:var(--gold)}
+.rb.pre.blk u{color:var(--ink2)}
+.rb.pre.hr:active{transform:translate(-50%,-100%) scale(.94)}
+/* phones held upright: the weather chip and crowd meter sit bottom right, clear of the event ticker under the scorebug */
+@media (max-width:520px){#hud .gday{z-index:2;top:auto;bottom:calc(14px + var(--sab))}}
