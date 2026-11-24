@@ -200,6 +200,7 @@ class Play {
     if (this.motion && this.motion.then === 'block') { const m = this.motion.p; m.role = 'block'; m.asg = { t: 'stalk', d: 0 }; }
     if (this.motion && this.motion.then === 'route' && this.motion.p.role === 'route') this.buildRoute(this.motion.p);
     this.fx.push({ kind: 'snap' });
+    if (PHYS.onEvent) PHYS.onEvent('snap', this);
   }
   controlled() {
     if (this.userSide === 'O') { const c = this.carrier; if (c && c.unit === 'O' && (c === this.qb ? (this.ball.state === 'held' && (this.op.type === 'pass' || this.qbRun)) : true)) return c; return null; }
@@ -288,6 +289,7 @@ class Play {
     if (R.wait) { ret.p = v2(cl(land.x + this.gauss() * 1.2, -FIELD.halfW + 1, FIELD.halfW - 1), Math.min(land.z - 3 - this.r() * 2, ret.p.z)); this.resetFeet(ret); }
     this.ball = { state: 'air', p: V3(x0, y0, z0), v: V3((land.x - x0) / T, (yL - y0 + 0.5 * G * T * T) / T, (land.z - z0) / T), t: 0, T, land, target: ret, ret: true, rot: V3(0, 0, 0), spin: V3(0, 0, 0), from: v2(x0, z0), fromZ: z0 }; this.windUp(this.ball, 1);
     this.fx.push({ kind: 'snap' });
+    if (PHYS.onEvent) PHYS.onEvent('kick', this, { kind: R.kind });
   }
   // onside (o.expect: the hands team is ready for it) or squib: kicked from the tee, then a live ball on the ground
   kickSpecial(kind, landX, landZ, hang, expect) { if (!this.ret || this.phase !== 'pre') return false; if (kind === 'onside') this.ret.onside = { expect: !!expect }; else this.ret.squib = true; return this.kickNow(landX, landZ, hang); }
@@ -1099,6 +1101,7 @@ class Play {
       this.add(this.passer, 'pc'); this.add(who, 'rec'); this.note(who, true, 'Catch');
       for (const d of this.D) d.runRead = this.t + 0.06 + d.react * 0.3;
       this.emit(`Caught by ${who.name}`, 'good'); this.fx.push({ kind: 'grab', j: 200 });
+      if (PHYS.onEvent) PHYS.onEvent('catch', this, { who });
       if (who.p.z >= FIELD.goalZ) this.endPlay('td', 'Touchdown catch', who, who.p.z);
       return;
     }
@@ -1107,6 +1110,7 @@ class Play {
       this.add(this.passer, 'pint'); this.add(who, 'int'); this.add(who, 'pd'); this.note(who, true, 'Interception'); this.note(this.passer, false, 'Threw an interception');
       this.carrier = who; who.role = 'carrier'; this.ball = { state: 'held', p: B.p, v: V3(0, 0, 0), rot: V3(0, 0, 0), spin: V3(0, 0, 0) }; this.turnover = 'int'; this.catchT = this.t; this.contactZ = null;
       for (const o of this.O) { o.bond = null; o.role = o === this.qb ? 'qb' : o.role; } for (const d of this.D) { d.bondBy = null; d.wrapped = false; d.engaged = false; }
+      if (PHYS.onEvent) PHYS.onEvent('catch', this, { who, int: true });
       this.emit(`INTERCEPTED by ${who.name}!`, 'bad'); this.fx.push({ kind: 'hit', j: 300, at: V3(at.x, 1.2, at.z) }); return;
     }
     if (result === 'pbu') { this.add(who, 'pd'); this.note(who, true, 'Pass breakup'); }
@@ -1121,6 +1125,7 @@ class Play {
     this.fumbler = c; this.stripSack = c === this.qb && this.pass && !this.thrown && !this.scramble; this.add(c, 'fum'); const by = c.lastHitBy; if (by) { this.add(by, 'ff'); this.note(by, true, 'Forced a fumble'); } this.note(c, false, 'Fumbled');
     this.carrier = null; for (const d of this.players) { d.wrapped = false; d.engaged = false; d.bond = null; d.bondBy = null; }
     this.emit(`FUMBLE! ${c.name} loses it`, 'bad'); this.fx.push({ kind: 'hit', j: J, at: V3(c.p.x, 1, c.p.z) });
+    if (PHYS.onEvent) PHYS.onEvent('fumble', this, { j: J });
   }
   recoverFumble(p) {
     if (this.ret && this.ret.squib && p && p.unit === 'O' && !this.squibHeld) return this.squibField(p);
@@ -1281,6 +1286,7 @@ class Play {
       const c = this.carrier; if (c && ((a === c) || (b === c))) { c.lastHitBy = a === c ? b : a; c.lastHitT = this.t; }
       if (this.flagEv && !this.ret && this.thrown && this.phase === 'live') this.hitEv(a, b, j);
       if (this.phase === 'live' && j > 200) { if (c && (a === c || b === c) && this.contactZ === null) { this.contactZ = c.p.z; this.contactT = this.t; } this.bigHit = Math.max(this.bigHit, j); this.fx.push({ kind: 'hit', at: ov.at, j }); }
+      if (PHYS.onEvent && this.phase === 'live') PHYS.onEvent('hit', this, { j, at: ov.at, block: blockHit });
     }
   }
   // steer a teammate around the ball carrier instead of through him (the back setting up in protection, a lineman pulling past the QB)
@@ -1333,6 +1339,7 @@ class Play {
     if (this.fpZ === null) this.fpZ = c.p.z;
     if (this.flagEv && !this.ret && this.phase === 'live') { this.flagEv.push({ k: 'tk', t: this.liveT, d: d.pid, c: c.pid, h: d.contactH, J, qb: c === this.qb && this.pass && !this.thrown && !this.scramble, x: c.p.x, z: c.p.z, awr: d.A.awr }); if (J > 450) this.flagEv.push({ k: 'ur', t: this.liveT, d: d.pid, c: c.pid, J, side: Math.abs(c.p.x) > FIELD.halfW - 1.5, x: c.p.x, z: c.p.z, awr: d.A.awr }); }
     this.bigHit = Math.max(this.bigHit, J); this.fx.push({ kind: shoulder ? 'hit' : 'grab', at: V3((c.p.x + d.p.x) / 2, h, (c.p.z + d.p.z) / 2), j: J });
+    if (PHYS.onEvent) PHYS.onEvent('tackle', this, { j: J, shoulder, at: d.p });
     this.contacts = (this.contacts || 0) + 1; this.sumJ = (this.sumJ || 0) + J;
     { const t = v2(-n.z, n.x), vt = (c.vel.x - d.vel.x) * t.x + (c.vel.z - d.vel.z) * t.z, Ft = -Math.sign(vt) * 0.45 * J * Math.min(1, Math.abs(vt) / 2.5);
       const yc = ((-n.z * 0.3) * (t.x * Ft) - (-n.x * 0.3) * (t.z * Ft)) / 3.2, yd = ((n.z * 0.3) * (-t.x * Ft) - (n.x * 0.3) * (-t.z * Ft)) / 3.4;
@@ -1429,6 +1436,7 @@ class Play {
     for (const p of this.players) p.canRise = true;
     res.stats = this.stats; res.perf = this.perf; res.events = this.events;
     this.result = res; this.fx.push({ kind: type === 'td' || type === 'deftd' ? 'td' : 'whistle' });
+    if (PHYS.onEvent) PHYS.onEvent('end', this, res);
   }
   creditYards(c, yards, td) {
     if (!c) return; if (this.ret) { if (td) this.note(c, true, "Return touchdown"); else if (yards >= 25) this.note(c, true, "Long return"); return; } const y = Math.round(yards);
@@ -1458,6 +1466,7 @@ class Play {
   }
 }
 PHYS.Play = Play; PHYS.DIFF = DIFF;
+PHYS.onEvent = null;        // (kind, play, info): the browser's sound engine (SND, src/render/30_audio.js) listens; node never sets it, so headless runs stay silent
 // scouting a running QB over a game. The match keeps the state (note after every offensive snap) and passes read() in as dp.scout:
 // each scramble goes on film, older ones fade (8% a snap). Two or three in a short spell and they spy him and rush to contain.
 PHYS.qbScout = {
