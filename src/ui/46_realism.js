@@ -48,7 +48,7 @@ function rlWorkoutBtn(p) {
 }
 // ---------- combine results (Scouting and Draft screens) ----------
 function rlBoardToggle(key) { const v = SUB[key] || 'board'; return `<div class="seg rl-tog">${[['board', 'Board'], ['comb', 'Combine']].map(([k, n]) => `<button class="${v === k ? 'on' : ''}" onclick="SUB.${key}='${k}';render()">${n}</button>`).join('')}</div>`; }
-const RL_CMB_COLS = [['name', 'Prospect'], ['pos', 'Pos'], ['ht', 'Ht'], ['wt', 'Wt'], ['arm', 'Arm'], ['hand', 'Hand'], ['forty', '40'], ['ten', '10'], ['vert', 'Vert'], ['broad', 'Broad'], ['bench', 'Bench'], ['cone', '3C'], ['shuttle', 'Sh'], ['stock', 'Stock']];
+const RL_CMB_COLS = [['name', 'Prospect'], ['pos', 'Pos'], ['forty', '40'], ['ten', '10'], ['vert', 'Vert'], ['broad', 'Broad'], ['bench', 'Bench'], ['cone', '3C'], ['shuttle', 'Sh'], ['stock', 'Stock'], ['ht', 'Ht'], ['wt', 'Wt'], ['arm', 'Arm'], ['hand', 'Hand']];
 function rlCmbSort(k) { if (SUB.cmbSort === k) SUB.cmbDir = -(SUB.cmbDir || 1); else { SUB.cmbSort = k; SUB.cmbDir = MS_LOWER_BETTER[k] || k === 'name' || k === 'pos' ? 1 : -1; } render(); }
 function rlCombineView(view, posKey, toggleKey) {
   const pos = SUB[posKey] || 'All', rows = cmbRows(pos), k = SUB.cmbSort || 'forty', dir = SUB.cmbDir || 1, st = cmbClassStats();
@@ -63,6 +63,6 @@ function rlCombineView(view, posKey, toggleKey) {
   <div class="rl-tops">${top}</div>
   <div class="chips" style="margin-top:8px">${['All', ...POS_LIST].map(x => `<button class="chip ${pos === x ? 'on' : ''}" onclick="SUB.${posKey}='${x}';render()">${x}</button>`).join('')}</div>
   <div class="panel tbl rl-cmb"><table><tr>${RL_CMB_COLS.map(([c, n]) => `<th><button class="rl-th ${k === c ? 'on' : ''}" onclick="rlCmbSort('${c}')">${n}${k === c ? (dir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('')}</tr>
-   ${rows.slice(0, 200).map(p => { const c = p.comb; return `<tr class="click" onclick="showPlayer(${p.id})"><td class="nm">${esc(p.fn[0])}. ${esc(p.ln)}${c.inv ? '' : ' <span class="rk">PD</span>'}</td><td>${p.pos}</td><td class="n">${msrHt(c.ht, c.h8)}</td><td class="n">${c.wt}</td><td class="n">${msrFrac(c.arm)}</td><td class="n">${msrFrac(c.hand)}</td>${['forty', 'ten', 'vert', 'broad', 'bench', 'cone', 'shuttle'].map(d => cell(p, d)).join('')}<td class="n ${p.combBump > 0.4 ? 'up' : p.combBump < -0.4 ? 'dn' : ''}">${p.combBump > 0.4 ? '▲' : p.combBump < -0.4 ? '▼' : '·'}</td></tr>`; }).join('')}</table></div>
+   ${rows.slice(0, 200).map(p => { const c = p.comb; return `<tr class="click" onclick="showPlayer(${p.id})"><td class="nm">${esc(p.fn[0])}. ${esc(p.ln)}${c.inv ? '' : ' <span class="rk">PD</span>'}</td><td>${p.pos}</td>${['forty', 'ten', 'vert', 'broad', 'bench', 'cone', 'shuttle'].map(d => cell(p, d)).join('')}<td class="n ${p.combBump > 0.4 ? 'up' : p.combBump < -0.4 ? 'dn' : ''}">${p.combBump > 0.4 ? '▲' : p.combBump < -0.4 ? '▼' : '·'}</td><td class="n">${msrHt(c.ht, c.h8)}</td><td class="n">${c.wt}</td><td class="n">${msrFrac(c.arm)}</td><td class="n">${msrFrac(c.hand)}</td></tr>`; }).join('')}</table></div>
   <p class="small mute">Tap a column to sort. Bold green = top 10% at his position in this class, red = bottom 10%. * = pro day. — = did not run it (hover for why). Stock = how his workout moved him on the other teams' boards.</p>`}`;
 }

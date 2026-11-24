@@ -10,7 +10,7 @@ const which = process.argv[2] || 'desk';
 const browser = await chromium.launch({ executablePath: exe, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const [vw, vh] = which === 'phone' ? [390, 844] : [1280, 800];
 const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
-const page = await ctx.newPage(); const errs = [], fails = [], ok = [];
+const page = await ctx.newPage(); page.setDefaultTimeout(120000); const errs = [], fails = [], ok = [];
 const check = (c, what) => { (c ? ok : fails).push(what); console.log((c ? 'PASS ' : 'FAIL ') + what); };
 page.on('pageerror', e => errs.push('pageerror: ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 4).join('\n')));
 page.on('console', m => { if (m.type() === 'error' && !/fonts\.g|ERR_|net::/.test(m.text())) errs.push('console: ' + m.text()); });

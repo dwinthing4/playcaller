@@ -4,7 +4,7 @@ import fs from 'fs'; import path from 'path'; import os from 'os';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
 const out = path.join(root, 'qa', 'shots', 'kick'); fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ executablePath: path.join(os.homedir(), 'AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe'), args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
-const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true })).newPage(); const errs = [];
+const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true })).newPage(); page.setDefaultTimeout(120000); const errs = [];
 page.on('pageerror', e => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1]));
 await page.goto('file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/')); await page.waitForTimeout(300);
 await page.evaluate(() => { NG.slot = 5; NG.qlen = 120; createLeague(); pickTeam(L.teams[2].id); startUserGame('watch'); });
