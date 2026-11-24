@@ -10,7 +10,9 @@ const [vw, vh, dpr] = which === 'phone' ? [390, 844, 2] : [1280, 800, 1];
 const browser = await chromium.launch({ executablePath: exe, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const cases = [['dome', 'DET', null], ['snow', 'GB', 'snow'], ['retract_open', 'ARI', 'open'], ['altitude', 'DEN', null]];
 const errs = [];
+const only = process.argv[3] ? process.argv[3].split(',') : null;
 for (const [tag, abbr, want] of cases) {
+  if (only && !only.includes(tag)) continue;
   const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: dpr }); const page = await ctx.newPage();
   page.on('pageerror', e => errs.push(tag + ' pageerror: ' + e.message)); page.on('dialog', d => d.accept());
   await page.goto('file:///' + root + '/dist/playcaller.html', { waitUntil: 'domcontentloaded', timeout: 120000 }); await page.waitForTimeout(1500);
@@ -33,6 +35,9 @@ for (const [tag, abbr, want] of cases) {
   await page.evaluate(() => { const pl = MATCH._G.play; R3D.camOverride = { pos: [pl.ballX - 34, 22, pl.losZ - 30], look: [pl.ballX, 0, pl.losZ + 18], fov: 55 }; MATCH._G.paused = false; });
   await page.waitForTimeout(200); await page.evaluate(() => { MATCH._G.paused = true; }); await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(out, `${which}_${tag}_wide.png`), timeout: 90000 });
+  await page.evaluate(() => { const pl = MATCH._G.play; R3D.camOverride = { pos: [pl.ballX + 6, 14, pl.losZ - 6], look: [pl.ballX, 64, pl.losZ + 30], fov: 70 }; MATCH._G.paused = false; });
+  await page.waitForTimeout(200); await page.evaluate(() => { MATCH._G.paused = true; }); await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(out, `${which}_${tag}_roof.png`), timeout: 90000 });
   const v = await page.evaluate(() => ({ venue: R3D.venueInfo(), wx: MATCH._G.wx }));
   console.log(tag, JSON.stringify(info), JSON.stringify({ stadium: v.venue.stadium, roof: v.venue.roof, roofOpen: v.venue.roofOpen, surface: v.venue.surface, alt: v.venue.alt, tod: v.venue.tod, weather: v.venue.weather, wxTemp: v.wx.temp, dome: v.wx.dome }));
   await ctx.close();

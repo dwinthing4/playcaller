@@ -67,7 +67,7 @@ function atmo(T, v, lg, ovIn, gIn) {
   const r2 = rngOf(hashS('wx|' + T.id + '|' + wk + '|' + (lg ? lg.year : 0))), clim = rngOf(hashS('clim|' + T.id + '|' + (T.city || '')))();
   const u = r2(); let mph = u < 0.35 ? u / 0.35 * 5 : u < 0.8 ? 5 + (u - 0.35) / 0.45 * 7 : 12 + (u - 0.8) / 0.2 * 12;
   if (weather !== 'clear') mph += 3 + r2() * 6;
-  mph *= (v.stadium === 'horseshoe' || v.stadium === 'college' ? 1.15 : v.stadium === 'bowl' ? 0.85 : 1) * (place ? 0.6 + 0.9 * place.wind : 1);
+  mph *= (v.stadium === 'horseshoe' || v.stadium === 'college' ? 1.15 : v.stadium === 'bowl' ? 0.85 : 1) * (place ? 0.7 + 0.6 * place.wind : 1);
   if (ov.wind != null) mph = +ov.wind;
   const dir = ov.windDir != null ? +ov.windDir : r2() * Math.PI * 2, late = Math.min(1, wk / 17);
   let temp = cl ? cl.t + (r2() - 0.5) * 10 : 82 - 46 * Math.pow(late, 1.15) - (wk >= 18 ? 4 : 0) + (clim - 0.5) * 28 + (r2() - 0.5) * 10 + (tod === 'night' ? -6 : tod === 'dusk' ? -3 : tod === 'day' ? 3 : 0);
