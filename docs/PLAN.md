@@ -89,7 +89,7 @@ result = { hs, as, st:{pid:{gp,pa,pc,py,ptd,pint,ra,ry,rtd,rec,recy,rectd,tgt,tk
            snaps:{pid:n}, perf:{pid:{good,bad,notes:[]}}, injuries:[{pid,weeks,type}], pbp:[...], drives:[...], pog:pid, quit:false }
 ```
 The league applies `result` exactly like Playcaller's `finishUserGame` (stats, standings, week advance, morale, film notes, XP).
-Non-user games keep using the league's fast ratings-based `simGame`.
+Games not played live (CPU vs CPU, Instant, Sim week) run through the league's play-by-play `simGame` (src/league/22_fastsim.js) on the same clock as a live match at `L.qlen`; `qa/sim_compare.mjs` prints it next to full engine games. Every game writes a game-log line per player (24_gamelog.js) and a box score on its `L.results` row; the schedule (26_schedule.js) is 17 games over 18 weeks with byes and time slots (`g.slot`, `g.neutral`, `g.site`); the history book and record books per quarter length live in 95_history.js.
 
 ### UI helpers the match HUD reuses (league/UI agent provides as globals)
 `drawBust(ctx2d, person, team)` (portrait from `lk`), `drawLogo(ctx2d, team, size)`, `toast(text)`.

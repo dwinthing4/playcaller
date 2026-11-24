@@ -23,4 +23,17 @@ for (const real of [false, true]) for (let season = 0; season < 6; season++) {
   ok(S.every((wk, w) => wk.filter(g => g.slot === 'snf').length === 1), 'one Sunday night game a week');
   if (season < 2) console.log(`${real ? 'real' : 'gen'} ${L.year}: ${ms} ms, home games ${JSON.stringify(hd)}, slots ${JSON.stringify(slots)}, abroad: ${intl.map(g => `${g.site} wk${S.findIndex(w => w.includes(g)) + 1} ${L.teams[g.a].abbr}-${L.teams[g.h].abbr}`).join(', ')}, byes/wk ${S.map(w => (32 - w.length * 2) / 1).slice(4, 14).join(',')}`);
 }
+// an old save: 17-week schedule without slots, old-style records, no game logs / box scores / record books
+{
+  LG.newLeague({ diff: 'pro', qlen: 120 }); LG.chooseTeam(2, 'Old'); let L = LG.state(); LG.instantUserGame();
+  const d = JSON.parse(LG.serialize()); d.sched = d.sched.slice(0, 17).map(w => w.map(g => { delete g.slot; delete g.neutral; delete g.site; return g; }));
+  delete d.recQ; delete d.rcar; delete d.qlS; d.rec = { mine: { passYdsG: { v: 410, pid: 1, name: 'Old Timer', pos: 'QB', team: 'XX', y: 2025 } }, lg: {} };
+  for (const id in d.P) { delete d.P[id].gl; for (const h of d.P[id].hist || []) delete h.gl; } for (const r of d.results) delete r.bx;
+  LG.deserialize(JSON.stringify(d)); L = LG.state();
+  ok(L.recOld && L.recOld.mine.passYdsG && L.recQ && L.rcar, 'old records kept as the old-sim book');
+  ok(Object.values(L.P).every(p => Array.isArray(p.gl)), 'game logs added');
+  let err = null; try { let g = 0; while (L.phase === 'regular' && g++ < 25) LG.instantUserGame(); } catch (e) { err = e; }
+  ok(!err && L.phase === 'playoffs', 'old 17-week season plays to the playoffs ' + (err ? err.stack : L.phase));
+  ok(L.results.filter(r => r.y === L.year && r.bx).length >= 200, 'box scores on the new games');
+}
 console.log(fails ? `${fails} FAILURES` : 'ALL PASS'); process.exit(fails ? 1 : 0);
