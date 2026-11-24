@@ -526,7 +526,7 @@ class Play {
     // receivers are thrown to in rhythm: at the top of the last break, not while they are still stemming; vertical routes need time to clear
     const ready = r => { const n = r.route ? r.route.length : 0; if (r.routeName === 'screen' || r.routeName === 'flat') return true; if (r.deepR && this.liveT < 2.05) return false; if (n <= 1) return this.liveT > (r.deepR ? 2.1 : 1.3); return r.ri >= n - 1; };
     // a longer ball hangs in the air, so it needs a bigger window; a QB under duress sees less
-    const tryR = (r, th, any) => { if (!r || !r.upright() || (!any && !ready(r))) return false; const o = this.openness(q, r); if (o.d > this.maxThrow(q)) return false; const deepK = Math.max(0, o.d - 15) * 0.16; if (o.open >= th + deepK) { q.windup = wt; q.windTarget = r; q.throwAnim = 0.45; return true; } return false; };
+    const tryR = (r, th, any) => { if (!r || !r.upright() || (!any && !ready(r))) return false; const o = this.openness(q, r); if (o.d > this.maxThrow(q)) return false; const deepK = Math.max(0, o.d - 15) * 0.2; if (o.open >= th + deepK) { q.windup = wt; q.windTarget = r; q.throwAnim = 0.45; return true; } return false; };
     if (op.name && /Screen/.test(op.name)) { const s = this.receivers.find(r => r.routeName === 'screen'); if (s && this.liveT > t0 + 0.25 && tryR(s, 0.6)) return; }
     if (idx < this.reads.main.length && !pressured) { if (tryR(this.reads.main[idx], need)) return; }
     if (pressured || idx >= this.reads.main.length) {
@@ -1346,7 +1346,7 @@ class Play {
   // a receiver on his route and a teammate (a lineman, a crossing receiver), or two defenders in coverage, before the throw:
   // they slide off each other, nobody goes down
   wrMate(a, b, ov) {
-    if (a.unit === 'O' && a.role !== 'route' && b.role !== 'route') return false; if (a.unit === 'D' && (a.dl || b.dl || a.bondBy || b.bondBy)) return false; if (a === this.carrier || b === this.carrier || !a.upright() || !b.upright()) return false;
+    if (a.unit === 'O' && a.role !== 'route' && b.role !== 'route') return false; if (a.unit === 'D' && (!this.pass || a.dl || b.dl || a.bondBy || b.bondBy)) return false; if (a === this.carrier || b === this.carrier || !a.upright() || !b.upright()) return false;
     const n = ov.n, hm = Math.hypot(n.x, n.z); if (hm < 0.3) return true; const nx = n.x / hm, nz = n.z / hm, wa = a.unit === 'D' ? 0.5 : a.role === 'route' ? 0.35 : 0.65, push = Math.max(0, ov.depth * hm - 0.01) * 0.6;
     a.p.x += nx * push * wa; a.p.z += nz * push * wa; b.p.x -= nx * push * (1 - wa); b.p.z -= nz * push * (1 - wa);
     const vn = (a.vel.x - b.vel.x) * nx + (a.vel.z - b.vel.z) * nz; if (vn >= 0) return true;
@@ -1445,7 +1445,7 @@ class Play {
         if (!b.ol) adv *= b.posName === 'TE' ? 0.9 : 0.8;
         if (d.helper) adv *= 1.6;
         // an even matchup holds past 2.5 s about nine times in ten (NFL pass-block win rate); a great rusher on a weak tackle wins a third of the time
-        d.shedNeed = (1.6 + 3.5 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9);
+        d.shedNeed = (1.8 + 3.5 * Math.pow(adv, 3)) * (0.55 + this.r() * 0.9);
       } else {
         adv = (Ab.rbk * 0.7 + Ab.str * 0.3 + (b.tr.includes('mauler') ? 6 : 0)) / (Ad.bsh * 0.7 + Ad.str * 0.3) * massK;
         if (!d.dl) adv *= 1.1; if (!b.ol) adv *= (b.posName === 'TE' || b.posName === 'FB') ? 0.95 : 0.85;

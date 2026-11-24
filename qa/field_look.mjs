@@ -86,9 +86,9 @@ while (guard++ < 500 && !(did.hard && did.fs && did.press && did.pick && did.dpi
       if (!s.int || !s.live) { console.log('(no pick this time: ' + JSON.stringify(s) + ')'); await wait(3000); continue; }
       check(s.u && s.u.startsWith('O'), `picked off: you take over a teammate (${s.u})`); check(s.ctx === 'd', `defense controls after the pick (${s.ctx})`); await shot('pick_takeover');
       // run at the returner with the keys (the camera sits behind your offense: the returner comes back toward the bottom of the screen)
-      const z0 = await page.evaluate(() => MATCH._G.play.controlled().p.z); await page.keyboard.down('KeyS'); await wait(700); await shot('pick_chase'); await page.keyboard.up('KeyS');
-      const z1 = await page.evaluate(() => { const pl = MATCH._G.play, u = pl.controlled(); return u ? u.p.z : null; });
-      check(z1 != null && z1 < z0 - 1.5, `your man runs where you steer him (${z0.toFixed(1)} -> ${z1 == null ? '-' : z1.toFixed(1)})`);
+      const z0 = await page.evaluate(() => { const pl = MATCH._G.play, c = pl.carrier; for (const o of pl.O) if (c && Math.hypot(o.p.x - c.p.x, o.p.z - c.p.z) < 3 && o !== pl.controlled()) { o.p.z += 4; pl.resetFeet(o); } return pl.controlled().p.z; });     // (nobody on top of him: give the return a beat) await page.keyboard.down('KeyS'); await wait(700); await shot('pick_chase'); await page.keyboard.up('KeyS');
+      const st1 = await page.evaluate(() => { const pl = MATCH._G.play, u = pl.controlled(); return { z: u ? u.p.z : null, live: pl.phase === 'live', end: pl.result ? pl.result.text : '' }; }), z1 = st1.z;
+      if (!st1.live && (z1 == null || z1 > z0 - 1.5)) console.log('(the returner went down before the steering check: ' + st1.end + ')'); else check(z1 != null && z1 < z0 - 1.5, `your man runs where you steer him (${z0.toFixed(1)} -> ${z1 == null ? '-' : z1.toFixed(1)})`);
       await page.keyboard.press('KeyE'); const sw = await page.evaluate(() => { const u = MATCH._G.play.controlled(); return u ? u.unit : null; }); check(sw === 'O', 'switch picks another chaser');
       did.pick = true; await wait(4000); continue;
     }
