@@ -111,6 +111,7 @@
 .bcv-hd b{font:var(--disp-w) 24px/1 var(--disp);text-transform:var(--disp-tt);padding-top:var(--disp-pt)}
 .bcv-hd span{font-size:17px;color:var(--ink2);gap:5px}.bcv-hd span i{height:14px;width:4px}
 .bcv-x{margin-left:auto;width:36px;height:36px;padding:0;flex:none}
+.bcv-tabs{flex-wrap:wrap}
 .bcv-tabs,.bcv-team,.bcchips{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}
 .bcv-tabs button,.bcv-team button,.bcchips button{flex:none;background:var(--fill);color:var(--ink);font:var(--cond-w) 13px/1 var(--cond);letter-spacing:.05em;text-transform:uppercase;padding:9px 11px 8px;border:0;border-radius:var(--r)}
 .bcv-tabs button.sel,.bcchips button.sel{background:var(--on);color:var(--onink)}

@@ -416,27 +416,31 @@ function field(y0, y1, inner, cls) {
 const passes = (G, tid) => B.plays.filter(r => r.off === tid && !r.two && !r.flag && r.res && r.air && r.land);
 function passChart(G, tid) {
   const L = passes(G, tid), c = { c: 0, i: 0, x: 0, t: 0 };
-  const svg = field(-8, 42, ({ X, Y }) => L.map(r => { const s = r.res, k = s.to === 'int' ? 'x' : s.type === 'inc' ? 'i' : s.td ? 't' : 'c'; c[k === 't' ? 'c' : k]++; if (k === 't') c.t++;
-    const x = X(Math.max(-1, Math.min(1, r.land[0]))), y = Y(Math.max(-8, Math.min(42, r.land[1]))), tip = e(`${qT(r.q)} ${ord(r.down)} & ${r.togo} · ${short(s.passer)} → ${r.tgt != null ? short(r.tgt) : 'nobody'}: ${k === 'x' ? 'intercepted' : k === 'i' ? 'incomplete' : s.y + ' yds' + (s.td ? ', TD' : '')}`);
+  const pmax = L.reduce((m, r) => Math.max(m, r.land[1]), 10), py1 = Math.min(55, Math.max(20, Math.ceil((pmax + 5) / 5) * 5));
+  const svg = field(-8, py1, ({ X, Y }) => L.map(r => { const s = r.res, k = s.to === 'int' ? 'x' : s.type === 'inc' ? 'i' : s.td ? 't' : 'c'; c[k === 't' ? 'c' : k]++; if (k === 't') c.t++;
+    const x = X(Math.max(-1, Math.min(1, r.land[0]))), y = Y(Math.max(-8, Math.min(py1, r.land[1]))), tip = e(`${qT(r.q)} ${ord(r.down)} & ${r.togo} · ${short(s.passer)} → ${r.tgt != null ? short(r.tgt) : 'nobody'}: ${k === 'x' ? 'intercepted' : k === 'i' ? 'incomplete' : s.y + ' yds' + (s.td ? ', TD' : '')}`);
     return k === 'x' ? `<g data-tip="${tip}" class="m-x"><path d="M${x - 4},${y - 4}L${x + 4},${y + 4}M${x + 4},${y - 4}L${x - 4},${y + 4}"/></g>` : `<circle data-tip="${tip}" class="m-${k}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.2"/>`; }).join(''));
   return `<div class="bcleg"><span><i class="k-c"></i>${c.c} caught${c.t ? ` (${c.t} TD)` : ''}</span><span><i class="k-i"></i>${c.i} incomplete</span><span><i class="k-x">✕</i>${c.x} INT</span></div>${L.length ? svg : empty('No passes yet')}<p class="bcnote">Where each pass was thrown, from the line of scrimmage. Tap a mark for the play.</p>`;
 }
 function runMap(G, tid) {
-  const L = B.plays.filter(r => r.off === tid && !r.two && !r.flag && r.res && (r.res.kind === 'run' || r.res.kind === 'scramble') && !r.res.sack && r.cp.length), cols = 9, y0 = -4, y1 = 26, rows = 10, cell = {}, dir = { L: [0, 0], M: [0, 0], R: [0, 0] };
+  const L = B.plays.filter(r => r.off === tid && !r.two && !r.flag && r.res && (r.res.kind === 'run' || r.res.kind === 'scramble') && !r.res.sack && r.cp.length), cols = 13, y0 = -4, cell = {}, dir = { L: [0, 0], M: [0, 0], R: [0, 0] };
+  let md = 8; for (const r of L) for (const p of r.cp) md = Math.max(md, p[1]);
+  const y1 = Math.min(30, Math.max(12, Math.ceil((md + 3) / 5) * 5)), rows = Math.round((y1 - y0) / 2);
   let mx = 1; for (const r of L) { const seen = new Set(); for (const [u, d] of r.cp) { if (d < y0 || d > y1) continue; const k = Math.min(cols - 1, Math.floor((u + 1) / 2 * cols)) + ',' + Math.min(rows - 1, Math.floor((d - y0) / (y1 - y0) * rows)); if (seen.has(k)) continue; seen.add(k); cell[k] = (cell[k] || 0) + 1; mx = Math.max(mx, cell[k]); }
     const cross = r.cp.find(p => p[1] >= 0) || r.cp[r.cp.length - 1], st0 = r.cp[0], du = cross[0] - st0[0], g = du < -0.08 ? 'L' : du > 0.08 ? 'R' : 'M'; dir[g][0]++; dir[g][1] += r.res.y; }
   const svg = field(y0, y1, ({ X, Y }) => { let o = ''; for (const k in cell) { const [c, rw] = k.split(',').map(Number), x0 = X(c / cols * 2 - 1), x1 = X((c + 1) / cols * 2 - 1), ya = Y(y0 + (rw + 1) * (y1 - y0) / rows), yb = Y(y0 + rw * (y1 - y0) / rows); o += `<rect class="m-heat" x="${x0.toFixed(1)}" y="${ya.toFixed(1)}" width="${(x1 - x0 - 1).toFixed(1)}" height="${(yb - ya - 1).toFixed(1)}" style="opacity:${(0.18 + 0.82 * cell[k] / mx).toFixed(2)}" data-tip="${cell[k]} run${cell[k] > 1 ? 's' : ''} went through here"/>`; }
     for (const r of L) o += `<polyline class="m-run" points="${r.cp.map(([u, d]) => `${X(u).toFixed(1)},${Y(Math.max(y0, Math.min(y1, d))).toFixed(1)}`).join(' ')}" data-tip="${e(`${qT(r.q)} ${short(r.res.carrier)}: ${r.res.y} yds`)}"/>`; return o; }, 'heat');
-  const dv = k => `<div><b>${dir[k][0] ? (dir[k][1] / dir[k][0]).toFixed(1) : '—'}</b><span>${{ L: 'Left', M: 'Middle', R: 'Right' }[k]} · ${dir[k][0]} for ${dir[k][1]}</span></div>`;
-  return `<div class="bcdir">${dv('L')}${dv('M')}${dv('R')}</div>${L.length ? svg : empty('No runs yet')}<p class="bcnote">Where the ball carriers ran (darker = more runs), yards per carry by direction.</p>`;
+  const dv = k => `<div><b>${dir[k][0] ? (dir[k][1] / dir[k][0]).toFixed(1) : '—'}</b><span>${{ L: 'Left', M: 'Middle', R: 'Right' }[k]} · ${dir[k][0]} car · ${dir[k][1]} yds</span></div>`;
+  return `<div class="bcdir">${dv('L')}${dv('M')}${dv('R')}</div>${L.length ? svg : empty('No runs yet')}<p class="bcnote">Where the ball carriers ran (brighter = more runs). Yards per carry by direction.</p>`;
 }
 function receivers(G, tid) { const m = {}; for (const r of B.plays) if (r.off === tid && !r.two && r.res) for (const pid in r.rt) { const x = m[pid] || (m[pid] = { pid: +pid, routes: 0, tg: 0, c: 0 }); x.routes++; if (r.tgt === +pid && r.air && !r.flag) { x.tg++; if (r.res.catcher === +pid && r.res.type !== 'inc' && r.res.to !== 'int') x.c++; } } return Object.values(m).filter(x => x.routes >= 1).sort((a, b) => b.tg - a.tg || b.routes - a.routes); }
 function routeChart(G, tid, pid) {
   const R0 = receivers(G, tid); if (!R0.length) return empty('No routes yet');
   pid = pid != null && R0.some(x => x.pid === pid) ? pid : R0[0].pid; const L = B.plays.filter(r => r.off === tid && !r.two && r.res && r.rt[pid] && r.rt[pid].length >= 2);
-  const svg = field(-6, 34, ({ X, Y }) => L.map(r => { const tg = r.tgt === pid && r.air && !r.flag, s = r.res, k = !tg ? 'n' : s.to === 'int' ? 'x' : s.catcher === pid && s.type !== 'inc' ? (s.td ? 't' : 'c') : 'i';
-    const pts = r.rt[pid].map(([u, d]) => `${X(u).toFixed(1)},${Y(Math.max(-6, Math.min(34, d))).toFixed(1)}`), last = r.rt[pid][r.rt[pid].length - 1];
-    return `<polyline class="m-rt r-${k}" points="${pts.join(' ')}" data-tip="${e(`${qT(r.q)} ${ord(r.down)} & ${r.togo} · ${r.play || 'route'}${tg ? ` · target: ${k === 'x' ? 'INT' : k === 'i' ? 'incomplete' : s.y + ' yds'}` : ''}`)}"/>${tg ? `<circle class="m-${k === 't' ? 'c' : k} r-end" cx="${X(last[0]).toFixed(1)}" cy="${Y(Math.max(-6, Math.min(34, last[1]))).toFixed(1)}" r="3"/>` : ''}`; }).join(''));
+  let rlo = -6, rhi = 15; for (const r of L) for (const p of r.rt[pid]) { rlo = Math.min(rlo, p[1]); rhi = Math.max(rhi, p[1]); } const ry0 = Math.max(-12, Math.floor((rlo - 1) / 5) * 5), ry1 = Math.min(45, Math.ceil((rhi + 4) / 5) * 5);
+  const svg = field(ry0, ry1, ({ X, Y }) => L.map(r => { const tg = r.tgt === pid && r.air && !r.flag, s = r.res, k = !tg ? 'n' : s.to === 'int' ? 'x' : s.catcher === pid && s.type !== 'inc' ? (s.td ? 't' : 'c') : 'i';
+    const pts = r.rt[pid].map(([u, d]) => `${X(u).toFixed(1)},${Y(Math.max(ry0, Math.min(ry1, d))).toFixed(1)}`), last = r.rt[pid][r.rt[pid].length - 1];
+    return `<polyline class="m-rt r-${k}" points="${pts.join(' ')}" data-tip="${e(`${qT(r.q)} ${ord(r.down)} & ${r.togo} · ${r.play || 'route'}${tg ? ` · target: ${k === 'x' ? 'INT' : k === 'i' ? 'incomplete' : s.y + ' yds'}` : ''}`)}"/>${tg ? `<circle class="m-${k === 't' ? 'c' : k} r-end" cx="${X(last[0]).toFixed(1)}" cy="${Y(Math.max(ry0, Math.min(ry1, last[1]))).toFixed(1)}" r="3"/>` : ''}`; }).join(''));
   const me = R0.find(x => x.pid === pid);
   return `<div class="bcchips">${R0.slice(0, 6).map(x => `<button class="on${x.pid === pid ? ' sel' : ''}" data-bcr="${x.pid}">${e(short(x.pid))} <em>${x.tg}</em></button>`).join('')}</div>
    <div class="bcleg"><span><i class="k-c"></i>caught</span><span><i class="k-i"></i>incomplete</span><span><i class="k-x">✕</i>INT</span><span><i class="k-n"></i>not targeted</span><span class="r">${me.routes} routes · ${me.c}/${me.tg}</span></div>${svg}<p class="bcnote">Every route he ran today, from the line of scrimmage.</p>`;
