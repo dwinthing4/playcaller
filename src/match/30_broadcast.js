@@ -134,6 +134,7 @@ function next(G, cont) {
   if (G.drive && G.drive !== b.open) b.open = G.drive;
   // scores
   for (const tid of [G.hid, G.aid]) { const dlt = G.score[tid] - b.sc[tid]; if (dlt <= 0) continue; b.sc[tid] = G.score[tid]; const lr = b.plays[b.plays.length - 1], tryPts = dlt === 1 || (dlt === 2 && lr && lr.two && lr.off === tid);
+    if (!tryPts && !quiet && dlt >= 6) tdLine(G, tid, lr);
     if (!tryPts && !quiet && S.gfx) { queueLT(G, scoreHtml(G, tid, dlt, newL.join(' | ')), 'score', 5.6); hold = Math.max(hold, 2.4); } }
   if (b.lt && b.lt.kind === 'score' && (G.score[G.hid] !== wasSc.h || G.score[G.aid] !== wasSc.a)) refreshScore(G);
   // quarters
@@ -146,6 +147,14 @@ function next(G, cont) {
   if (!quiet && !b.intro) intro(G);
   if (hold && !G.sim && cont && G.mode === 'watch' && !b.hold) { const sp = spd(G); if (sp < 4) { b.hold = { until: b.t + hold / sp, cont }; return true; } }
   return false;
+}
+// touchdown milestones: a rookie's first, a big season
+function tdLine(G, tid, r) {
+  if (!r || !r.res || !r.res.td || r.off !== tid || r.two) return; const pid = r.res.kind === 'pass' && r.res.catcher != null ? r.res.catcher : r.res.carrier, p = P(pid); if (!p) return;
+  const s0 = p.st || {}, g = st(G, pid), season = (s0.rtd || 0) + (s0.rectd || 0) + (g.rtd || 0) + (g.rectd || 0), career = season + (p.car ? (p.car.rtd || 0) + (p.car.rectd || 0) : 0), vet = !!(p.hist && p.hist.length);
+  if (career === 1 && !vet && (p.age || 30) <= 23) return talk(G, 'col', [`That's the first touchdown of his career! What a moment for the rookie.`, `First career touchdown for ${nm(pid)}. He'll remember that one forever.`], 3, 'td1' + pid);
+  if (career === 1 && vet) return talk(G, 'col', [`Believe it or not, that's the first touchdown of his career.`], 3, 'td1' + pid);
+  if (season >= 6) return talk(G, 'col', [`That's touchdown number ${season} on the season for ${nm(pid)}.`, `${cap(nw(season))} touchdowns this year for ${nm(pid)}. He's a problem.`], 2, 'tdn' + pid + season);
 }
 function scoreLine(G) {
   const a = G.score[G.aid], h = G.score[G.hid];
@@ -499,7 +508,7 @@ function frame(G) {
   const showWp = S.wp && G.stage !== 'load' && !G.daily; el.wp.classList.toggle('on', showWp); if (game) game.classList.toggle('bcwpon', showWp);
   if (showWp) wpBar(G);
   // what may be on screen now: nothing over a live play or a kick
-  const calm = !G.paused && G.stage !== 'live' && G.stage !== 'final' && G.stage !== 'load' && !G.kickAnim && !G.kaim && !G.kpow && !(G.play && G.play.ret && G.stage === 'pre') && !quietNow(G) && !b.big;
+  const calm = !G.paused && G.stage !== 'live' && G.stage !== 'final' && G.stage !== 'load' && !G.kickAnim && !G.kaim && !G.kpow && !(G.play && G.play.ret && G.stage === 'pre') && !quietNow(G) && !b.big && !(G.mode === 'play' && G.stage === 'pre' && G.userSide);
   const capOk = calm && !(G.mode === 'play' && G.stage === 'pre' && G.userSide) && !document.querySelector('#hud .csay.show');
   // captions
   b.q2 = b.q2.filter(x => x.exp > b.t && !(G.stage === 'live' && x.pri < 3));

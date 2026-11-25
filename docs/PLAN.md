@@ -117,3 +117,14 @@ Playbook dy (+ = right) maps to x = -dy * YD. Engine always runs plays toward +z
   of college games, showcases, all-star games + travel budget in L.strav), `scoutSend`, `scoutRecall`, `scoutMove` (next week).
 - Map screen: own nav group 'mapg' (registered from 65_map.js), layers League / Scouting / Pipelines. `geoPipeline(players, 'home'|'col')`
   and `geoHome(p)` work on any player list, for a future college mode's recruits.
+
+## Broadcast package (src/core/50_wp.js, src/match/30_broadcast.js, src/shell/30_bcast.css)
+- Win probability: `WP.of(state)` / `wpNow(G)` (home win %, ties count half) from score, share of the game left, ball, field position, down and distance (RULES.ep),
+  timeouts, a pending kickoff or try, the pregame edge (`LG.wpPower`: teamPower off+def, home minus away; the hub uses the same), the leader kneeling it out,
+  sudden-death overtime. Constants in `WP.K` per quarter length, fitted on fast-sim games: `node qa/wp_calib.cjs [games] [--fit]` prints the calibration table
+  (fastGame takes `opt.onSnap(S, hid, aid)` for this).
+- BCAST (one-line hooks in 10_match.js): `step(G, pl)` after each physics step collects routes (5 Hz), the target, landing spot and separation at arrival, run paths;
+  `next(G, nextSnap)` at the top of nextSnap samples WP (`G.bc.wph`), time of possession, 3rd downs, closes drives into lower thirds, scores into scoring cards,
+  halftime into a held card (returns true to hold; it calls nextSnap itself); `frame(G)` shows the WP bar, booth captions (queued, never over a live play)
+  and lower thirds; `pause(el.ovl)` adds Game stats to the pause menu; `finalHtml(G)` adds the WP graph and chart buttons to the final card.
+  `BCAST.busy()` / `BCAST.mute(sec)` for other overlays (replays). Settings: L.settings.comm (on/big/off), wpbar, bcgfx.
