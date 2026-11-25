@@ -165,3 +165,5 @@
 .bcfin-b{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
 .bcfin-b button{flex:1 1 auto;font-size:13px;padding:.55em .8em .5em}
 .bcwpg-p{position:relative}
+.bcwpg-z{position:absolute;left:6px;z-index:1;display:flex;align-items:center;gap:4px;font:var(--cond-w) 10.5px/1 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);pointer-events:none}
+.bcwpg-z i{width:7px;height:7px;display:inline-block;border-radius:1px}.bcwpg-z.t{top:5px}.bcwpg-z.b{bottom:5px}

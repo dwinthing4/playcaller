@@ -68,12 +68,12 @@ function newRec(G, pl) {
   const c = G.cur, op = c.op || {}, dp = c.dp || {};
   return { pl, n: B.plays.length, off: c.off, def: c.def, q: G.q, clock: c.clock0, down: c.down0, togo: Math.max(1, Math.round(c.togo0)), yl: Math.round(c.yl0), los: pl.losZ, ns: 0,
     play: op.name || '', ptype: op.type || '', dname: dp.name || '', blitz: !!(dp.blitz && dp.blitz.length), cov: dp.cov || '', two: !!(G.pat && G.pat.two),
-    rt: {}, cpp: {}, cp: [], tgt: null, land: null, sep: null, sepT: 99, air: false, done: false };
+    pbp0: G.pbp.length, rt: {}, cpp: {}, cp: [], tgt: null, land: null, sep: null, sepT: 99, air: false, done: false };
 }
 const ux = (p, b) => Math.round(-p.x / (b.hw * YDm) * 1000) / 1000;
 const dy = (z, r) => Math.round((z - r.los) / YDm * 10) / 10;
 function samplePaths(pl, r) {
-  if (pl.liveT < 4.6 && !(pl.ball && pl.ball.state === 'dead')) for (const q of pl.receivers || []) { if (q.unit !== 'O') continue; const a = r.rt[q.pid] || (r.rt[q.pid] = []); if (a.length < 26 && !(pl.catcher && pl.catcher === q && a.length && pl.liveT - (pl.catchT || 0) > 0.6)) a.push([ux(q.p, B), dy(q.p.z, r)]); }
+  if (pl.liveT < 4.6 && !(pl.ball && pl.ball.state === 'dead') && !(pl.thrown && pl.ball && pl.ball.state !== 'air')) for (const q of pl.receivers || []) { if (q.unit !== 'O') continue; const a = r.rt[q.pid] || (r.rt[q.pid] = []); if (a.length < 26 ) a.push([ux(q.p, B), dy(q.p.z, r)]); }
   const c = pl.carrier; if (c && c.unit === 'O' && !pl.thrown && !(pl.pass && !pl.scramble && c === pl.qb)) { const a = r.cpp[c.pid] || (r.cpp[c.pid] = []); if (a.length < 40) a.push([ux(c.p, B), dy(c.p.z, r)]); }
 }
 function airWatch(pl, r) {
@@ -90,15 +90,17 @@ function finishRec(G, pl, r) {
   const y = Math.round(s.yards || 0);
   r.res = { type: s.type, y, td: !!s.td, to: s.turnover || null, sack: !!s.sack, kind: s.kind, passer: s.passer, catcher: s.catcher, carrier: s.carrier, tk: (s.tacklers || [])[0], air: s.airYds, pr: !!s.pressured, br: s.broken || 0, text: s.text || '', safety: !!s.safety, rec: s.recPid };
   r.cp = r.cpp[s.carrier] || []; delete r.cpp;
-  r.flag = !!((pl.flagEv && pl.flagEv.length) || (G.fouls && G.fouls.length) || G.flagUp);
   if (r.tgt == null && s.catcher != null && s.kind === 'pass') r.tgt = s.catcher;
-  const off = r.off;
-  if (!r.two && !r.flag) {
-    if (r.down === 3) { B.third[off][0]++; if (r.res.td || (!r.res.to && r.res.type !== 'inc' && y >= r.togo)) B.third[off][1]++; }
-    if (r.down === 4) { B.fourth[off][0]++; if (r.res.td || (!r.res.to && r.res.type !== 'inc' && y >= r.togo)) B.fourth[off][1]++; }
-  }
+  if (s.kind === 'run' && !pl.thrown) r.rt = {};       // route charts: dropbacks only
   B.plays.push(r); B.nPlay++; delete r.pl;
   if (!G.sim) B.pending = r;      // the call is made once the play has been processed (frame)
+}
+// once the match has judged the play: an accepted flag wipes it from the charts; third and fourth downs are counted
+function settle(G, r) {
+  if (!r || r.settled) return; r.settled = true;
+  const L = G.pbp.slice(r.pbp0 || 0); r.flag = L.some(l => /PENALTY/.test(l) && !/declined/.test(l)) || !!G.penWait; r.flagAny = r.flag || L.some(l => /PENALTY/.test(l));
+  const s = r.res, off = r.off, conv = s.td || (!s.to && s.type !== 'inc' && !s.sack && s.y >= r.togo);
+  if (!r.two && !r.flag && s) { if (r.down === 3) { B.third[off][0]++; if (conv) B.third[off][1]++; } if (r.down === 4) { B.fourth[off][0]++; if (conv) B.fourth[off][1]++; } }
 }
 
 // ------------------------------------------------------------ win probability history
@@ -122,7 +124,7 @@ function next(G, cont) {
   const before = b.wph.length ? b.wph[b.wph.length - 1].wp : 50;
   sample(G, r ? descRec(G, r) : lastLine.replace(/^[A-Z]{2,4} \d\w\w&\d+ at [^:]+: /, ''));
   const wpN = b.wph[b.wph.length - 1].wp, swing = wpN - before;
-  if (r) { r.wp = wpN; r.dwp = swing; }
+  if (r) { settle(G, r); r.wp = wpN; r.dwp = swing; }
   const quiet = quietNow(G), S = setts();
   if (!quiet) for (const l of newL) lineFromPbp(G, l);
   // drives that ended
@@ -132,7 +134,7 @@ function next(G, cont) {
   if (G.drive && G.drive !== b.open) b.open = G.drive;
   // scores
   for (const tid of [G.hid, G.aid]) { const dlt = G.score[tid] - b.sc[tid]; if (dlt <= 0) continue; b.sc[tid] = G.score[tid]; const lr = b.plays[b.plays.length - 1], tryPts = dlt === 1 || (dlt === 2 && lr && lr.two && lr.off === tid);
-    if (!tryPts && !quiet && S.gfx) { queueLT(G, scoreHtml(G, tid, dlt, lastLine), 'score', 5.6); hold = Math.max(hold, 2.4); } }
+    if (!tryPts && !quiet && S.gfx) { queueLT(G, scoreHtml(G, tid, dlt, newL.join(' | ')), 'score', 5.6); hold = Math.max(hold, 2.4); } }
   if (b.lt && b.lt.kind === 'score' && (G.score[G.hid] !== wasSc.h || G.score[G.aid] !== wasSc.a)) refreshScore(G);
   // quarters
   if (G.q !== q0) { b.q = G.q;
@@ -176,7 +178,7 @@ function talk(G, who, list, pri, onceKey) {
 function callPlay(G, r) {
   const s = r.res, off = r.off, def = r.def, T = tn(G, off), D = tn(G, def), y = s.y, ay = Math.abs(y);
   const first = !s.td && !s.to && s.type !== 'inc' && !s.sack && y >= r.togo, toGoal = 100 - r.yl, late = (G.q === 2 || G.q >= 4) && G.clock <= Math.max(30, G.qlen * 0.3);
-  const lead = G.score[off] - G.score[def], fresh = n => nm(n), Q = s.passer != null ? fresh(s.passer) : null;
+  const lead = G.score[off] - G.score[def], fresh = n => nm(n), qid = s.passer != null ? s.passer : s.sack || s.kind === 'scramble' ? s.carrier : depth(TM(G, off), 'QB'), Q = qid != null ? fresh(qid) : 'the quarterback';
   const yds = n => `${n} yard${Math.abs(n) === 1 ? '' : 's'}`;
   let L = [], pri = 2, tail = '';
   if (r.flag) tail = pickR([' But there is a flag down.', ' And we have a flag on the field.', ' Wait, there is laundry on the field.']);
@@ -222,7 +224,7 @@ function callPlay(G, r) {
 // the analyst, right after the call: what the play showed
 function colorAfter(G, r) {
   const s = r.res; if (!s || r.two || r.flag) return;
-  const off = r.off, Qn = s.passer != null ? ln(s.passer) : null;
+  const off = r.off, Qn = ln(s.passer != null ? s.passer : s.sack ? s.carrier : depth(TM(G, off), 'QB'));
   if (s.to === 'int' && s.passer != null) return talk(G, 'col', [`He stared that one down, and the defense read it the whole way.`, `You can't throw late over the middle like that. ${Qn} will want it back.`, `Great break on the ball. That's film-room work.`, `That's a costly mistake for ${Qn}.`], 2);
   if (s.sack && r.blitz) return talk(G, 'col', [`They brought one more than the ${tn(G, off)} could block.`, `The blitz got there clean. Nobody picked it up.`], 2);
   if (s.sack) return talk(G, 'col', [`Four-man rush, and they still got home. That's winning up front.`, `${Qn} held it too long there.`, `Look at the edge. The tackle just got beat.`], 1);
@@ -386,8 +388,9 @@ function wpGraph(G, o) {
   const qx = []; for (let i = 1; i < pts.length; i++) if (pts[i].q !== pts[i - 1].q) qx.push([X(i), qT(pts[i].q)]);
   const sw = pts.map((p, i) => ({ i, d: Math.abs(p.dl) })).filter(x => x.d >= 8).sort((x, y) => y.d - x.d).slice(0, o.sw || 3);
   const id = 'bw' + Math.random().toString(36).slice(2, 7), ch = lite(Hm.c1), ca = lite(A.c1);
-  return `<div class="bcwpg" data-bcg="1"><div class="bcwpg-l"><span><i style="background:${ch}"></i>${e(Hm.abbr)} ${Math.round(pts[n].wp)}%</span><em>Win probability</em><span><i style="background:${ca}"></i>${e(A.abbr)} ${Math.round(100 - pts[n].wp)}%</span></div>
-  <div class="bcwpg-p"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs><clipPath id="${id}t"><rect x="0" y="0" width="${W}" height="${Y(50)}"/></clipPath><clipPath id="${id}b"><rect x="0" y="${Y(50)}" width="${W}" height="${H}"/></clipPath></defs>
+  const hw = Math.round(pts[n].wp), lead = hw >= 50 ? [Hm, hw, ch] : [A, 100 - hw, ca];
+  return `<div class="bcwpg" data-bcg="1"><div class="bcwpg-l"><em>Win probability</em><span><i style="background:${lead[2]}"></i>${e(lead[0].abbr)} ${lead[1]}%</span></div>
+  <div class="bcwpg-p"><b class="bcwpg-z t"><i style="background:${ch}"></i>${e(Hm.abbr)}</b><b class="bcwpg-z b"><i style="background:${ca}"></i>${e(A.abbr)}</b><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px"><defs><clipPath id="${id}t"><rect x="0" y="0" width="${W}" height="${Y(50)}"/></clipPath><clipPath id="${id}b"><rect x="0" y="${Y(50)}" width="${W}" height="${H}"/></clipPath></defs>
   <rect class="g-bg" x="0" y="0" width="${W}" height="${H}"/>${[25, 75].map(v => `<line class="g-grid" x1="0" x2="${W}" y1="${Y(v)}" y2="${Y(v)}"/>`).join('')}${qx.map(([x]) => `<line class="g-q" x1="${x}" x2="${x}" y1="0" y2="${H}"/>`).join('')}
   <path d="${area}" clip-path="url(#${id}t)" style="fill:${ch}" class="g-a"/><path d="${area}" clip-path="url(#${id}b)" style="fill:${ca}" class="g-a"/><line class="g-mid" x1="0" x2="${W}" y1="${Y(50)}" y2="${Y(50)}"/>
   <path d="${line}" class="g-ln" vector-effect="non-scaling-stroke"/>
@@ -490,14 +493,14 @@ function frame(G) {
   if (b.big && (b.t >= b.big.until || G.sim)) closeBig(true);
   if (b.hold && (b.t >= b.hold.until || G.sim || G.mode === 'play')) { const c = b.hold.cont; b.hold = null; c(); if (!G.bc) return; }
   // the call of the last play, once the match has processed it
-  if (b.pending && G.stage !== 'live') { const r = b.pending; b.pending = null; if (r.res && !quietNow(G)) { const s = setts(); if (s.comm !== 'off') { if (spd(G) < 4 || bigPlay(r)) { callPlay(G, r); if (spd(G) < 4 && Math.random() < 0.55) colorAfter(G, r); } } } }
+  if (b.pending && G.stage !== 'live') { const r = b.pending; b.pending = null; settle(G, r); if (r.res && !quietNow(G)) { const s = setts(); if (s.comm !== 'off') { if (spd(G) < 4 || bigPlay(r)) { callPlay(G, r); if (spd(G) < 4 && Math.random() < 0.55) colorAfter(G, r); } } } }
   if (G.over && G.stage === 'final' && !b.fin) { b.fin = true; sample(G, 'Final'); }
   // the bar
   const showWp = S.wp && G.stage !== 'load' && !G.daily; el.wp.classList.toggle('on', showWp); if (game) game.classList.toggle('bcwpon', showWp);
   if (showWp) wpBar(G);
   // what may be on screen now: nothing over a live play or a kick
   const calm = !G.paused && G.stage !== 'live' && G.stage !== 'final' && G.stage !== 'load' && !G.kickAnim && !G.kaim && !G.kpow && !(G.play && G.play.ret && G.stage === 'pre') && !quietNow(G) && !b.big;
-  const capOk = calm && !(G.mode === 'play' && G.stage === 'pre' && G.userSide) && !(el.say && el.say.classList.contains('show'));
+  const capOk = calm && !(G.mode === 'play' && G.stage === 'pre' && G.userSide) && !document.querySelector('#hud .csay.show');
   // captions
   b.q2 = b.q2.filter(x => x.exp > b.t && !(G.stage === 'live' && x.pri < 3));
   if (b.cap && (b.t >= b.cap.until || !capOk)) { b.cap = null; el.cap.classList.remove('show'); }
@@ -514,11 +517,12 @@ function frame(G) {
 function bigPlay(r) { const s = r.res; return !!s && (s.td || s.to || Math.abs(s.y) >= 20 || r.down === 4 || r.two || (s.sack && r.down >= 3)); }
 function wpBar(G) {
   const wp = wpNow(G), b = B, A = TM(G, G.aid), H = TM(G, G.hid), sb = document.querySelector('#hud .sb');
-  const key = [Math.round(wp), A.c1, H.c1, sb ? sb.offsetWidth : 0, sb ? sb.offsetTop + sb.offsetHeight : 0].join('|');
+  if (!b.geo || b.t - b.geoT > 0.5) { b.geoT = b.t; b.geo = sb ? [sb.offsetWidth, sb.offsetTop + sb.offsetHeight] : [0, 0]; }
+  const key = [Math.round(wp), A.c1, H.c1, b.geo[0], b.geo[1]].join('|');
   const live = G.stage === 'live';
   el.wp.classList.toggle('tagoff', live || !!b.lt);
   if (key === b.wpKey) return; b.wpKey = key;
-  if (sb) { el.wp.style.width = sb.offsetWidth + 'px'; el.wp.style.top = (sb.offsetTop + sb.offsetHeight) + 'px'; }
+  if (b.geo[0]) { el.wp.style.width = b.geo[0] + 'px'; el.wp.style.top = b.geo[1] + 'px'; }
   const a = el.wp.querySelector('.a'), h = el.wp.querySelector('.h'), tg = el.wp.querySelector('.bcwp-t'), aw = 100 - wp;
   a.style.width = `calc(${aw}% - 1px)`; h.style.width = `calc(${wp}% - 1px)`; a.style.background = lite(A.c1); h.style.background = lite(H.c1);
   const lead = wp >= 50 ? H : A, v = Math.round(Math.max(wp, aw));
@@ -528,10 +532,12 @@ function wpBar(G) {
 }
 // the bottom stack: captions sit just above whatever owns the bottom of the screen (the play-call sheet, the sim-speed bar)
 function layout(G) {
+  if (!B.cap && !B.lt) { B.layKey = ''; return; }
   const vh = innerHeight, sh = document.querySelector('#gui .sheet'), spb = document.querySelector('#gui .spdbar'), kb = document.querySelector('#gui .kbar'), acts = document.querySelector('#gui .acts');
   let bot = 22;
   if (sh && sh.classList.contains('show')) { const r = sh.getBoundingClientRect(); if (r.height > 0 && r.top < vh) bot = Math.max(bot, vh - r.top + 10); }
   for (const x of [spb, kb]) if (x && x.offsetParent && getComputedStyle(x).display !== 'none') { const r = x.getBoundingClientRect(); if (r.height) bot = Math.max(bot, vh - r.top + 10); }
+  const cs = document.querySelector('#hud .csay.show'); if (cs) { const r = cs.getBoundingClientRect(); if (r.height) bot = Math.max(bot, vh - r.top + 8); }
   if (acts && acts.children.length && acts.offsetParent) { const r = acts.getBoundingClientRect(); if (r.height && r.top > vh * 0.55) bot = Math.max(bot, vh - r.top + 10); }
   const ch = el.cap.classList.contains('show') ? el.cap.offsetHeight + 8 : 0, key = bot + '|' + ch;
   if (key === B.layKey) return; B.layKey = key;

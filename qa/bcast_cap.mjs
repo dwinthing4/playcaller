@@ -27,10 +27,10 @@ await page.evaluate(s => { const G = MATCH._G; G.speed = s; const i = document.q
 const seen = {}, want = ['wp', 'cap', 'drive', 'score', 'plate', 'half'], t0 = Date.now(); let capN = 0;
 while (Date.now() - t0 < 270000) {
   const s = await page.evaluate(() => { const G = MATCH._G; if (!G) return null; const q = c => document.querySelector(c);
-    return { stage: G.stage, q: G.q, over: G.over, wp: !!q('.bcwp.on') && G.stage === 'call', cap: !!q('.bccap.show'), drive: !!q('.bclt.show.k-drive'), score: !!q('.bclt.show.k-score'), plate: !!q('.bclt.show.k-plate'), half: !!q('.bcbig.show'), fin: !!document.getElementById('mDone') }; });
+    return { stage: G.stage, q: G.q, over: G.over, wp: !!q('.bcwp.on') && G.stage !== 'live' && G.stage !== 'kick', cap: !!q('.bccap.show'), drive: !!q('.bclt.show.k-drive'), score: !!q('.bclt.show.k-score'), plate: !!q('.bclt.show.k-plate'), half: !!q('.bcbig.show'), fin: !!document.getElementById('mDone') }; });
   if (!s) break; if (s.fin) break;
-  if (s.cap && capN < 4) { capN++; await shot('caption' + capN); }
-  for (const k of want) if (s[k] && !seen[k]) { seen[k] = 1; await shot(k); }
+  if (s.cap && capN < 4) { capN++; await wait(400); await shot('caption' + capN); }
+  for (const k of want) if (s[k] && !seen[k]) { seen[k] = 1; await wait(650); await shot(k); }
   await wait(220);
 }
 for (const k of want) check(seen[k], `showed: ${k}`);
