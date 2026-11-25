@@ -405,7 +405,7 @@ function wpGraph(G, o) {
   <path d="${line}" class="g-ln" vector-effect="non-scaling-stroke"/>
   <line class="g-x" x1="-9" x2="-9" y1="0" y2="${H}" vector-effect="non-scaling-stroke"/></svg>${sw.map((x, k) => `<span class="bcwpg-d" style="left:${(X(x.i) / W * 100).toFixed(1)}%;top:${Y(pts[x.i].wp).toFixed(1)}px">${k + 1}</span>`).join('')}</div>
   <div class="bcwpg-q">${qx.map(([x, l]) => `<span style="left:${(x / W * 100).toFixed(1)}%">${l}</span>`).join('')}</div><div class="bcwpg-tip"></div>
-  ${sw.length ? `<div class="bcwpg-k">${sw.map((x, k) => { const p = pts[x.i]; return `<span><b>${k + 1}</b>${qT(p.q)} ${clk(p.c)} · ${e(p.d || 'Play')} <em>${p.dl > 0 ? '+' : '−'}${Math.round(Math.abs(p.dl))} ${e(p.dl > 0 ? Hm.abbr : A.abbr)}</em></span>`; }).join('')}</div>` : ''}</div>`;
+  ${sw.length ? `<div class="bcwpg-k">${sw.map((x, k) => { const p = pts[x.i]; return `<span><b>${k + 1}</b>${qT(p.q)} ${clk(p.c)} · ${e(p.d || 'Play')} <em>+${Math.round(Math.abs(p.dl))} ${e(p.dl > 0 ? Hm.abbr : A.abbr)}</em></span>`; }).join('')}</div>` : ''}</div>`;
 }
 // field frame: sideline to sideline (offense's right on the right), LOS at depth 0, offense going up
 function field(y0, y1, inner, cls) {
