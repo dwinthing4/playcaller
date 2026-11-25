@@ -558,7 +558,7 @@ function layout(G) {
 }
 
 // ------------------------------------------------------------ pause menu + final card
-function pause(ovl) { const G = typeof MATCH !== 'undefined' ? MATCH._G : null; if (!G || !ovl) return; ensureEl(); const row = ovl.querySelector('.card .row'); if (!row) return; const b = document.createElement('button'); b.className = 'on'; b.dataset.bcopen = ''; b.textContent = 'Game stats and charts'; row.insertBefore(b, row.children[1] || null); }
+function pause(ovl) { const G = typeof MATCH !== 'undefined' ? MATCH._G : null; if (!G || !ovl) return; ensureEl(); const row = ovl.querySelector('.card .row'); if (!row) return; const b = document.createElement('button'); b.className = 'on'; b.dataset.bcopen = ''; b.textContent = 'Game stats'; row.insertBefore(b, row.children[1] || null); }
 function finalHtml(G) {
   if (!G || G.daily) return ''; const b = bc(G); if (!b.fin) { b.fin = true; sample(G, 'Final'); }
   const a = teamTot(G, G.aid), h = teamTot(G, G.hid), A = TM(G, G.aid), H = TM(G, G.hid);
