@@ -30,7 +30,7 @@ const PEN = {
 };
 // how many flags: the per-snap odds run about twice the pro rate (only the common fouls are modelled, and a default game
 // with 2-minute quarters has ~33 snaps a side), so a game ends with about 5 accepted penalties a team. Longer quarters: more.
-const RATE = 2.8;
+const RATE = 2.4;
 const clamp01 = v => Math.max(0, Math.min(1, v));
 // discipline: awareness keeps a player from jumping the count, grabbing, or hitting late (50 -> 1.3x, 70 -> 1x, 90 -> 0.7x)
 const disc = awr => Math.max(0.55, Math.min(1.45, 1 + (70 - (awr || 60)) * 0.015));
@@ -77,9 +77,9 @@ const yardsTxt = (o, P) => (P.spot ? 'spot foul' : o.half ? 'half the distance t
 // src/engine/20_play.js), each try at these odds (per chance to do it, times disc(awareness)). The officials then flag what they
 // see plainly: an event's sev (0..1) is how clear it was. Tuned against qa/penalty_rates.mjs (full CPU games).
 const TRY = {
-  hold: 0.05, rhold: 0.03,       // a beaten blocker hangs on (per beaten block; pass pro x1.25)
+  hold: 0.032, rhold: 0.022,     // a beaten blocker hangs on (per beaten block; pass pro x1.25). Away from the ball it is rarely called
   grab: 0.1,                     // a man DB being beaten downfield before the throw grabs him (one look a play)
-  pi: 0.8, opi: 0.08,           // ball in the air: a beaten DB grabs an arm; a receiver shoves off a man who has position
+  pi: 0.3, opi: 0.07,           // ball in the air: a clearly beaten DB grabs an arm; a receiver shoves off a man who has position
   push: 0.02,                   // a receiver pushes off at the top of his break
   fm: 0.004, helm: 0.05,        // a hand in the face mask (high tackles); a shot to the passer's head
   ibb: 0.3,                     // a return blocker who meets a man from behind goes ahead and blocks him in the back

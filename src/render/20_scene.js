@@ -1151,7 +1151,7 @@ function stepWeather(dt) {
 }
 // ---------------- applying a venue: light, sky, ground ----------------
 function useVenue(home) {   // the look of this home team's ground today (cheap; the stands themselves are built in prepare)
-  const v = venueOf(home), at = atmoOf(home, v), sig = v.sig + '|' + at.tod + '|' + at.weather + '|' + at.wk;
+  const v = venueOf(home), at = atmoOf(home, v), sig = v.sig + '|' + at.tod + '|' + at.weather + '|' + at.wk + (R3D.phone ? '|ph' : '');
   if (VEN && VEN.sig === sig && VEN.tid === home.id) return VEN;
   const prevAway = VEN ? VEN.away : null; VEN = { tid: home.id, v, at, sig, P: TOD[at.tod] || TOD.night, away: prevAway, box: venueBox(v, at) };
   const bx = VEN.box; Object.assign(VSH.a, { x: bx[0], y: bx[1], z: bx[2], w: bx[3] }); Object.assign(VSH.d, { x: bx[8], y: bx[9], z: bx[10] }); Object.assign(VSH.b, { x: bx[4], y: bx[5], z: bx[6], w: bx[7] });
@@ -1165,7 +1165,9 @@ function applyAtmo() {
   fillL.intensity = P.fill; fillL.position.set(-sunDir.x * 40, 30, -sunDir.z * 40 + 40);
   renderer.toneMappingExposure = P.exp * (wet && sunny ? 1.08 : 1);
   scene.fog.color.copy(col(wet ? hexMix(P.fog, '#9aa0a6', at.tod === 'night' ? 0.15 : 0.45) : P.fog)); scene.fog.near = P.fogN * (wet ? 0.55 : 1); scene.fog.far = P.fogF * (wet ? 0.45 : 1);
-  Object.assign(VSH.c, { x: sunDir.x, y: sunDir.y, z: sunDir.z, w: P.sh * (wet ? 0.35 : 1) });
+  // phone games: no stand shadow. The stands stay where they are while the field narrows, so the shadow lands on the empty grass beside
+  // the field and shows as a hard dark wedge in the corner of the screen
+  Object.assign(VSH.c, { x: sunDir.x, y: sunDir.y, z: sunDir.z, w: R3D.phone ? 0 : P.sh * (wet ? 0.35 : 1) });
   const grey = (h, k) => (wet ? hexMix(h, at.tod === 'night' ? '#1c2129' : '#8f969d', k) : h);
   skyU.zen.value.copy(col(grey(P.zen, 0.6))); skyU.hor.value.copy(col(grey(P.hor, 0.5))); skyU.hor2.value.copy(col(grey(P.hor2, 0.5))); skyU.gnd.value.copy(col(P.gndC)); skyU.sunC.value.set(P.sun);
   skyU.sunD.value.copy(sunDir); skyU.sunS.value = P.sunS * (wet ? 0.15 : 1); skyU.cLit.value.copy(col(grey(P.cLit, 0.4))); skyU.cDark.value.copy(col(grey(P.cDark, 0.4))); skyU.cloudA.value = wet ? 1 : P.clouds > 0 ? 1 : 0;
@@ -1226,7 +1228,7 @@ function drawOverlay(play, side) {
 }
 // ---------------- public API ----------------
 const camPos = new THREE.Vector3(0, 6, 10), camLook = new THREE.Vector3(0, 1, 20), _ax = new THREE.Vector3(), _z1 = new THREE.Vector3(0, 0, 1), _q = new THREE.Quaternion(); let shake = 0, lastField = '', estT = 0;
-const CAM0 = { view: 'behind', height: 0.32, zoom: 0.6, flipD: false }, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), AIMN = 26, AIMR = 49; let fitK = 1, panX = 0, panZ = 0, aimNow = null, fitCam = null, fitV = null, aimDots = null, aimRing = null, aimRingMat = null, aimRange = null, kaTri = null, kaE1 = null, kaE2 = null, kaNeedle = null;
+const CAM0 = { view: 'behind', height: 0.32, zoom: 0.6, flipD: false }, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), AIMN = 26, AIMR = 49; let fitK = 1, panX = 0, panZ = 0, dynP = 0, dynD = 1, dynY = 0, aimNow = null, fitCam = null, fitV = null, aimDots = null, aimRing = null, aimRingMat = null, aimRange = null, kaTri = null, kaE1 = null, kaE2 = null, kaNeedle = null;
 const R = {
   init(canvas) {
     coarse = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 700;
@@ -1293,7 +1295,7 @@ const R = {
   // venues: what a team's ground looks like (T.venue overrides any key of VENUE_OPTS), and what is on screen now
   venueOf(T) { return venueOf(T); }, VENUE_OPTS,
   venueInfo() { return VEN ? Object.assign({}, VEN.v, { tod: VEN.at.tod, weather: VEN.at.weather, week: VEN.at.wk, roofOpen: !!VEN.at.roofOpen, temp: VEN.at.temp, sun: sunDir.toArray().map(v => +v.toFixed(2)) }) : null; },
-  _dbg() { return { fitK, sides: FW.sides.map(m => +m.position.x.toFixed(2)), bands: FW.bands.map(m => +m.position.x.toFixed(2)), fieldScale: fieldMesh && fieldMesh.scale.x, cam: camera.position.toArray().map(v => +v.toFixed(1)), fov: camera.fov }; },
+  _dbg() { return { fitK, dynP: +dynP.toFixed(2), dynD: +dynD.toFixed(2), sides: FW.sides.map(m => +m.position.x.toFixed(2)), bands: FW.bands.map(m => +m.position.x.toFixed(2)), fieldScale: fieldMesh && fieldMesh.scale.x, cam: camera.position.toArray().map(v => +v.toFixed(1)), fov: camera.fov }; },
   // sync the rigs to the players in a play (creates rigs for new pids, hides pids that left the field)
   setPlayers(play, teamOf, kitOf) {
     const live = new Set();
@@ -1341,15 +1343,30 @@ const R = {
     const onD = opts.camMode === 'D', dirZ = onD && S.flipD && !side ? -1 : 1;
     const pocket = play.pass && !play.thrown && c === play.qb && play.ball.state !== 'loose' && (!J || J.pelvis.z < play.losZ + 1);
     // where the camera looks: the ball / carrier, with room ahead of him
+    // dynamic camera (setting): the camera rides along with a pass, closes in on the catch, then drops low and tight behind the man
+    // with the ball (a run, a scramble, a catch and run, a return). It only slides and tilts, never turns, so the stick keeps its feel.
+    const passAir = b.state === 'air' && b.land && !b.ret && !b.away && b.T > 0, airU = passAir ? clamp01(b.t / b.T) : 0;
+    const runner = c && b.state === 'held' && play.phase === 'live' && !pocket && !(c === play.qb && !play.pass && !play.handed && !play.qbRun);
     let lx, lz;
-    if (b.state === 'air' && b.land) { lx = lerp3(b.p.x, b.land.x, 0.65); lz = lerp3(b.p.z, b.land.z, 0.65); }
+    if (b.state === 'air' && b.land) { const w = S.dyn && passAir ? 0.3 + 0.7 * airU : 0.65; lx = lerp3(b.p.x, b.land.x, w); lz = lerp3(b.p.z, b.land.z, w); }
     else if (b.state === 'loose' || !J) { lx = b.p.x; lz = b.p.z; }
     else { lx = J.pelvis.x; lz = J.pelvis.z; }
     const wide = pocket || b.state === 'air' || play.phase === 'pre';
-    const pitch = (10 + 72 * clamp01(S.height)) * Math.PI / 180;
+    const pitch0 = (10 + 72 * clamp01(S.height)) * Math.PI / 180;
     // frame by anchoring a player at a fixed spot on screen, whatever the height and zoom: fy = how far down the screen (behind view), fx = how far across (sideline view)
     const fov = portrait ? 64 : 50, tv = Math.tan(fov * Math.PI / 360), th = tv * (W / H);
     const ph = !!R3D.phone, baseD = 62 * Math.pow(7 / 62, clamp01(S.zoom)) * (wide ? 1.12 : 0.88) * (portrait ? 1.12 : 1) * (ph ? 0.92 : 1) * (opts.zoom || 1);
+    { // where the dynamic camera wants to be: how far it has come down (dm 0..1) and in (dd, a share of your zoom; never further out than it)
+      const snap0 = opts.snapCam || R3D.snapNext, near = (portrait ? 1.15 : 1) * (ph ? 0.95 : 1);
+      let dm = 0, dd = 1, dy = 0;
+      if (S.dyn && play.phase !== 'pre') {
+        if (passAir) { dm = 0.4 + 0.45 * airU; dd = Math.min(1, lerp3(1, 13.5 * near / baseD, Math.min(1, airU * 1.25))); dy = Math.max(0, b.p.y - 1.8) * 0.45; }
+        else if (runner) { dm = 1; dd = Math.min(1, 9.5 * near / baseD); }
+        else if (play.phase === 'dead') { dm = dynP; dd = dynD; }        // hold the shot on the tackle
+      }
+      const ke = snap0 ? 1 : 1 - Math.exp(-dt * (dm > dynP ? 3 : 1.6)); dynP += (dm - dynP) * ke; dynD += (dd - dynD) * ke; dynY += (dy - dynY) * (snap0 ? 1 : 1 - Math.exp(-dt * 5));
+    }
+    const lowP = (side ? 13 : 15) * Math.PI / 180, pitch = lerp3(pitch0, Math.min(pitch0, lowP), dynP);
     const f = opts.focus, lx0 = lx, lz0 = lz;
     // aim pan (camera setting): while you aim a pass, the camera slides toward where you're aiming so you see more of that side.
     // It slides and never turns, so the aim (worked out from the camera's facing) stays put under your finger.
@@ -1358,7 +1375,7 @@ const R = {
     if (A) { if (side) tpz = cl((A.L.z - play.qb.p.z) * 0.4, -reach * 0.15, reach * 0.42); else tpx = cl((A.L.x - play.qb.p.x) * 0.62, -reach * 0.5, reach * 0.5); }
     // the camera for a given zoom-out factor fk (auto-fit raises fk until everyone who matters is on screen)
     const place = (fk, wp) => {
-      const dist = baseD * fk, hd = dist * Math.cos(pitch), up = dist * Math.sin(pitch); let lx = lx0, lz = lz0;
+      const dist = baseD * fk * dynD, hd = dist * Math.cos(pitch), up = dist * Math.sin(pitch); let lx = lx0, lz = lz0;
       const atY = (z, fy) => z + dirZ * (hd - up / Math.tan(Math.max(0.035, Math.min(1.55, pitch + Math.atan((fy - 0.5) * 2 * tv))))), atX = (z, fx) => z + (0.5 - fx) * 2 * dist * th;
       const anchor = (z, fy, fx) => (side ? atX(z, fx) : atY(z, fy));
       if (play.ret && play.phase === 'pre') { lx = play.ret.kickX * 0.5; lz = anchor(play.ret.kickZ, 0.3, 0.7); }
@@ -1370,11 +1387,13 @@ const R = {
       if (f && f.p) { const w = play.phase === 'pre' ? 0.2 : 0.35; lx = lerp3(lx, f.p.x, w); lz = lerp3(lz, f.p.z, w); }
       lx = Math.max(-FIELD.halfW - 2, Math.min(FIELD.halfW + 2, lx));
       const ox = wp ? panX : 0, oz = wp ? panZ : 0;
-      return { want: side ? new THREE.Vector3(lx * 0.55 - hd + ox, 0.6 + up, lz + oz) : new THREE.Vector3(lx * 0.85 + ox, 0.6 + up, lz - hd * dirZ + oz), look: new THREE.Vector3(lx + ox, 0.6, lz + oz) };
+      const cx = lerp3(side ? 0.55 : 0.85, 1, dynP);      // dynamic: right behind (or alongside) the play, not pulled toward the middle
+      return { want: side ? new THREE.Vector3(lx * cx - hd + ox, 0.6 + up, lz + oz) : new THREE.Vector3(lx * cx + ox, 0.6 + up, lz - hd * dirZ + oz), look: new THREE.Vector3(lx + ox, 0.6 + dynY, lz + oz) };
     };
     // auto-fit: before the snap and while the QB holds it, every receiver stays on screen (even the one split out wide); on defense, the man you control does too
     const pts = []; if (S.fit !== false && !play.ret && (play.phase === 'pre' || pocket) && play.O) for (const p of play.O) if (!p.ol && p.p && !(Math.abs(panX) > 1 && play.qb && (p.p.x - play.qb.p.x) * Math.sign(panX) < -3)) pts.push(ph ? [p.p.x, 1, p.p.z, -0.04, 1.04, 0.1, 0.92] : [p.p.x, 1, p.p.z, 0.03, 0.97, 0.1, 0.92]);     // phone: a wide man may sit on the edge (his tag is pinned there), players stay big
     if (f && f.p) pts.push([f.p.x, 1, f.p.z, 0.08, 0.8, 0.14, 0.8]);
+    { const u = opts.ctl; if (S.dyn && runner && u && u !== c && u.p && !(f && f.p)) pts.push([u.p.x, 1, u.p.z, 0.08, 0.92, 0.12, 0.88]); }     // dynamic, after a pick: the man you now control stays in the shot
     let need = 1;
     if (pts.length) {
       fitCam = fitCam || new THREE.PerspectiveCamera(); fitV = fitV || new THREE.Vector3();
@@ -1384,11 +1403,11 @@ const R = {
     }
     const snap = opts.snapCam || R3D.snapNext || !isFinite(camPos.x + camPos.y + camPos.z + camLook.x + camLook.z); R3D.snapNext = false;
     { const kp = snap ? 1 : 1 - Math.exp(-dt * 3); panX += (tpx - panX) * kp; panZ += (tpz - panZ) * kp; }
-    fitK = snap ? need : need > fitK ? fitK + (need - fitK) * (1 - Math.exp(-dt * 3.5)) : Math.max(need, fitK - dt * 0.35);
+    fitK = snap ? need : need > fitK ? fitK + (need - fitK) * (1 - Math.exp(-dt * 3.5)) : Math.max(need, fitK - dt * (0.35 + 1.6 * dynP));      // dynamic: the pre-snap zoom-out lets go quickly
     const { want, look } = place(fitK);
     if (!isFinite(want.x + want.y + want.z + look.x + look.z)) return;          // never let a bad frame poison the camera
-    const k = snap ? 1 : 1 - Math.exp(-dt * 4.5);
-    camPos.lerp(want, k); camLook.lerp(look, snap ? 1 : 1 - Math.exp(-dt * 6));
+    const k = snap ? 1 : 1 - Math.exp(-dt * (4.5 + 3 * dynP));
+    camPos.lerp(want, k); camLook.lerp(look, snap ? 1 : 1 - Math.exp(-dt * (6 + 4 * dynP)));
     camera.position.set(camPos.x + panX, camPos.y, camPos.z + panZ); camera.lookAt(camLook.x + panX, camLook.y, camLook.z + panZ);
     camera.fov = fov; camera.updateProjectionMatrix();
     if (R3D.camOverride) { const d = R3D.camOverride; camera.position.set(...d.pos); camera.lookAt(...d.look); camera.fov = d.fov || 40; camera.updateProjectionMatrix(); return; }   // QA close-ups

@@ -998,7 +998,7 @@ function buzz(ms) { try { const L0 = Lst(); if ((!L0 || !L0.settings || L0.setti
 // ------------------------------------------------------------ camera (your settings, saved on this device)
 const CAMP = { behind: { view: 'behind', height: 0.32, zoom: 0.6 }, side: { view: 'side', height: 0.3, zoom: 0.5 }, sky: { view: 'behind', height: 0.84, zoom: 0.4 } }, CAMORD = ['behind', 'side', 'sky'];
 let cam = loadCam();
-function loadCam() { let c = null; try { c = JSON.parse(localStorage.getItem('pc_cam_v1') || 'null'); } catch (e) { } return Object.assign({ preset: 'behind', view: 'behind', height: 0.32, zoom: 0.6, flipD: false, fit: true, pan: true }, c && typeof c === 'object' ? c : {}); }
+function loadCam() { let c = null; try { c = JSON.parse(localStorage.getItem('pc_cam_v1') || 'null'); } catch (e) { } return Object.assign({ preset: 'behind', view: 'behind', height: 0.32, zoom: 0.6, flipD: false, fit: true, pan: true, dyn: false }, c && typeof c === 'object' ? c : {}); }
 function saveCam() { try { localStorage.setItem('pc_cam_v1', JSON.stringify(cam)); } catch (e) { } if (typeof R3D !== 'undefined') R3D.cam = cam; }
 function camView() { return G && G.userSide === 'D' && cam.flipD && cam.view !== 'side' ? -1 : 1; }      // field art faces the camera
 // phone mode: on a phone-sized touch screen (or when turned on in Settings). PC, laptop and tablet keep the full field.
@@ -1026,17 +1026,18 @@ function camPanel() {
   const chip = (k, t) => `<button class="on" data-cv="${k}">${t}</button>`;
   el.cam.innerHTML = `<div class="ch"><b>Camera</b><button class="on x" data-cx="1" aria-label="Close">✕</button></div>
     <div class="cv">${chip('behind', 'Behind QB')}${chip('side', 'Sideline')}${chip('sky', 'All-22')}</div>
+    <label class="tg on"><input class="on" type="checkbox" data-cs="dyn"${cam.dyn ? ' checked' : ''}><span><b>Dynamic camera</b>: follows a pass in the air, closes in on the catch, then drops low and tight behind the runner (runs, scrambles, returns)</span></label>
     <label>Height<input class="on" type="range" min="0" max="100" data-cs="height"></label>
     <label>Zoom<input class="on" type="range" min="0" max="100" data-cs="zoom"></label>
     <label class="tg on"><input class="on" type="checkbox" data-cs="flipD"${cam.flipD ? ' checked' : ''}><span>On defense, turn the camera around to sit behind my defense</span></label>
     <label class="tg on"><input class="on" type="checkbox" data-cs="fit"${cam.fit !== false ? " checked" : ""}><span>Zoom out by itself to keep every receiver on screen</span></label>
     <label class="tg on"><input class="on" type="checkbox" data-cs="pan"${cam.pan !== false ? " checked" : ""}><span>Pan toward where I'm aiming a pass (see more of that side)</span></label>
-    <div class="kk">Mouse wheel or − / = zoom · PgUp / PgDn height · C changes the view</div>
+    <div class="kk">Mouse wheel or − / = zoom · PgUp / PgDn height · C changes the view · V dynamic camera</div>
     <button class="pri on" data-cx="1">Done</button>`;
   el.cam.classList.add('show', 'on'); camSync();
 }
 function closeCam() { if (!el.cam.classList.contains('show')) return; el.cam.classList.remove('show', 'on'); el.cam.innerHTML = ''; if (G && !G.camWasPaused) { G.paused = false; lastT = performance.now(); } }
-function onCamInput(e) { const t = e.target, k = t && t.dataset && t.dataset.cs; if (!k) return; if (k === 'flipD' || k === 'fit' || k === 'pan') { cam[k] = !!t.checked; saveCam(); camRefresh(); return; } cam[k] = clamp(+t.value / 100, 0, 1); cam.preset = 'custom'; saveCam(); camSync(); }
+function onCamInput(e) { const t = e.target, k = t && t.dataset && t.dataset.cs; if (!k) return; if (k === 'flipD' || k === 'fit' || k === 'pan' || k === 'dyn') { cam[k] = !!t.checked; saveCam(); camRefresh(); return; } cam[k] = clamp(+t.value / 100, 0, 1); cam.preset = 'custom'; saveCam(); camSync(); }
 function onCamClick(e) { const b = e.target.closest('[data-cv],[data-cx]'); if (!b) return; if (b.dataset.cx) return closeCam(); setPreset(b.dataset.cv); }
 function onWheel(e) { if (!G || el.game.hidden || e.target.closest('.sheet,.ovl,.campnl')) return; e.preventDefault(); nudgeCam('zoom', -Math.sign(e.deltaY) * Math.min(0.08, Math.abs(e.deltaY) * 0.0007)); }
 
@@ -1101,6 +1102,7 @@ function onKey(e) {
   if (c === 'PageUp') return nudgeCam('height', 0.06);
   if (c === 'PageDown') return nudgeCam('height', -0.06);
   if (c === 'KeyC' && !e.repeat) { const i = CAMORD.indexOf(cam.preset); setPreset(CAMORD[(i + 1) % CAMORD.length]); tick(`Camera: ${{ behind: 'Behind QB', side: 'Sideline', sky: 'All-22' }[cam.preset]}`); return; }
+  if (c === 'KeyV' && !e.repeat) { cam.dyn = !cam.dyn; saveCam(); tick(`Dynamic camera ${cam.dyn ? 'on' : 'off'}`); const i = el.cam && el.cam.querySelector('[data-cs=dyn]'); if (i) i.checked = cam.dyn; return; }
   keys.add(c); if (e.repeat) return;
   const k = ctxKey(), pl = G.play;
   if (c === 'Space') { if (k === 'preO') doAct('snap'); else if (k === 'd' || k === 'dAir') doAct(k === 'dAir' ? 'swat' : 'tackle'); }

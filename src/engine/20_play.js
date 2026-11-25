@@ -1336,7 +1336,7 @@ class Play {
     const lx = B.land.x - r.p.x, lz = B.land.z - r.p.z, ld = Math.hypot(lx, lz) || 1, ahead = ((d.p.x - r.p.x) * lx + (d.p.z - r.p.z) * lz) / ld, catchable = ld < 2.6;
     // who ran into whom: the one moving into the other made the contact
     const nx = d.p.x - r.p.x, nz = d.p.z - r.p.z, nm = Math.hypot(nx, nz) || 1, dIn = -(d.vel.x * nx + d.vel.z * nz) / nm, rIn = (r.vel.x * nx + r.vel.z * nz) / nm;
-    if (dIn >= rIn - 0.3) { if (this.seen('p' + d.pid)) return; this.fev({ k: 'pi', d: d.pid, r: r.pid, x: r.p.x, z: r.p.z, hit: true, catchable, sev: cl((j - 40) / 200, 0, 1) * (catchable ? 1 : 0.3) * (ahead > 0.3 ? 0.4 : 1) * (tl > 0.15 ? 1 : 0.75), awr: d.A.awr }); }
+    if (dIn >= rIn - 0.3) { if (this.seen('p' + d.pid)) return; this.fev({ k: 'pi', d: d.pid, r: r.pid, x: r.p.x, z: r.p.z, hit: true, catchable, sev: cl((j - 110) / 240, 0, 1) * (catchable ? 1 : 0.3) * (ahead > 0.3 ? 0.35 : 1) * (tl > 0.25 ? 1 : 0.5), awr: d.A.awr }); }
     else if (ahead > 0.3) { if (this.seen('o' + r.pid)) return; this.fev({ k: 'opi', r: r.pid, d: d.pid, x: r.p.x, z: r.p.z, catchable, sev: cl((j - 60) / 300, 0, 1) * (catchable ? 0.95 : 0.45), awr: r.A.awr }); }
   }
   relEv(q) {          // a rusher who drives through the passer as he lets it go (most pull up: only a full-speed shot is a flag)
@@ -1473,9 +1473,9 @@ class Play {
     const lx = B.land.x - r.p.x, lz = B.land.z - r.p.z, ld = Math.hypot(lx, lz) || 1e-6; if (ld > 3.2) return;
     for (const d of this.D) { if (!d.upright() || d.dl) continue; const dx = d.p.x - r.p.x, dz = d.p.z - r.p.z, m = Math.hypot(dx, dz); if (m > 1.05) continue;
       const ahead = (dx * lx + dz * lz) / ld, dLand = Math.hypot(B.land.x - d.p.x, B.land.z - d.p.z);
-      if (ahead < 0.2 && dLand > ld + 0.25 && !d.piChk) { d.piChk = true;      // beaten: the receiver is closer to the ball
+      if (ahead < 0.2 && dLand > ld + 0.5 && !d.piChk) { d.piChk = true;      // beaten: the receiver is closer to the ball
         if (this.r() < this.tryP('pi', d)) { d.grabOn = r; d.grabT = 0.3; r.grabbedBy = d; this.note(d, false, 'Pass interference');
-          this.fev({ k: 'pi', d: d.pid, r: r.pid, x: r.p.x, z: r.p.z, grab: true, catchable: ld < 2.6, sev: ld < 2.6 ? 0.92 : 0.5, awr: d.A.awr }); } }
+          this.fev({ k: 'pi', d: d.pid, r: r.pid, x: r.p.x, z: r.p.z, grab: true, catchable: ld < 2.6, sev: ld < 2.2 ? 0.9 : 0.45, awr: d.A.awr }); } }
       else if (ahead > 0.35 && !r.opiChk && m < 0.95) { r.opiChk = true;      // he has position on the ball: the receiver may push him off it
         if (this.r() < this.tryP('opi', r)) { this.shove(r, d, 2.4); this.fev({ k: 'opi', r: r.pid, d: d.pid, x: r.p.x, z: r.p.z, shove: true, catchable: ld < 2.6, sev: 0.88, awr: r.A.awr }); } }
     }
@@ -1493,7 +1493,11 @@ class Play {
     if (this.r() >= this.tryP(this.ret ? 'rhold' : 'hold', b) * (pp ? 1.25 : 0.85) * (b.ol ? 1 : 0.8)) return false;
     const pull = (b.A.str - d.A.str) / 35 + (b.mass - d.mass) / 60 + this.gauss() * 0.35;
     b.holdOn = d; b.holdT = 0.4 + this.r() * 0.3; b.holdPull = pull; d.heldBy = b; this.note(b, false, 'Held his man');
-    this.fev({ k: this.ret ? 'rhold' : 'hold', b: b.pid, d: d.pid, pp: !!pp, x: b.p.x, z: b.p.z, down: pull > 0.45, sev: pull > 0.45 ? 1 : 0.85, awr: b.A.awr });
+    // how plain it is: the officials watch the point of attack. A man held as he was getting to the ball (or pulled to the ground) is a flag;
+    // a tug on the back side, away from the ball, they let go
+    const bc = this.carrier || this.qb, dc = bc ? Math.hypot(d.p.x - bc.p.x, d.p.z - bc.p.z) : 9, dn = pull > 0.45;
+    const sev = dn ? (dc < 8 ? 1 : 0.78) : dc < 3.5 ? 0.9 : dc < 6 ? 0.68 : 0.48;
+    this.fev({ k: this.ret ? 'rhold' : 'hold', b: b.pid, d: d.pid, pp: !!pp, x: b.p.x, z: b.p.z, down: dn, dc, sev, awr: b.A.awr });
     return true;
   }
   holdStep(b, dt) {
