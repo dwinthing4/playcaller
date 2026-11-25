@@ -22,7 +22,7 @@ let lastHeap = 0; const heapLog = async () => { try { const h = await page.evalu
 let n = 0; const shot = async name => { for (let i = 0; i < 2; i++) { try { await page.screenshot({ path: path.join(out, `${which}_${String(n).padStart(2, '0')}_${name}.png`) }); n++; return; } catch (e) { await page.waitForTimeout(400); } } console.log('(screenshot failed: ' + name + ')'); n++; };
 const wait = ms => page.waitForTimeout(ms);
 const S = () => page.evaluate(() => { const g = MATCH._G; if (!g) return null; const pl = g.play, st = RPLY._.state();
-  return { stage: g.stage, mode: g.mode, side: g.userSide, sheet: g.sheet ? g.sheet.side : null, poss: g.poss, user: g.user, q: g.q, clock: g.clock, yl: g.yl, down: g.down, togo: g.togo, phase: pl ? pl.phase : null, ret: !!(pl && pl.ret), td: !!(pl && pl.result && pl.result.td), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : 0,
+  return { pn: g.playN, stage: g.stage, mode: g.mode, side: g.userSide, sheet: g.sheet ? g.sheet.side : null, poss: g.poss, user: g.user, q: g.q, clock: g.clock, yl: g.yl, down: g.down, togo: g.togo, phase: pl ? pl.phase : null, ret: !!(pl && pl.ret), td: !!(pl && pl.result && pl.result.td), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : 0,
     kick: !!(g.kaim || g.kpow || g.kickCb), pen: !!g.penWait, over: g.over, to: g.to[g.user], score: [g.score[g.aid], g.score[g.hid]], rp: st.rp, seg: st.seg, bug: st.bug, win: st.win, card: st.card, ovl: document.querySelector('#gui .ovl').classList.contains('show') }; });
 // one bot step: whatever the user has to do (kicks, the play call: a run, the snap, the penalty choice); the challenge window and the review card are left to the caller
 async function step(opts = {}) {
@@ -60,7 +60,7 @@ async function segShots(tag, maxSec = 30) {
 await page.goto('file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/')); await wait(700);
 await page.evaluate(() => { try { localStorage.removeItem('pc_cam_v1'); localStorage.setItem('pc_gmode', 'full'); localStorage.setItem('pc_replay', 'auto'); localStorage.setItem('pc_pclock', 'off'); } catch (e) { } });
 
-if (part === 'play' || part === 'all') {
+if (part === 'play' || part === 'all' || part === 'td') {
   await page.evaluate(() => { L = null; NG.slot = 6; NG.qlen = 120; createLeague(); pickTeam(L.teams[3].id); startUserGame('play'); });
   for (let i = 0; i < 300; i++) { const g = await S(); if (g && (await page.evaluate(() => MATCH._G.ready))) break; await wait(300); }
   await page.evaluate(() => { MATCH._G.noFlags = true; RPLY._.force({ kind: 'none' }); }); await wait(300);
@@ -69,14 +69,16 @@ if (part === 'play' || part === 'all') {
   // ---- 1. a touchdown and its replay (three angles: sideline, end zone, tight slow motion)
   let td = false;
   for (let tries = 0; tries < 6 && !td; tries++) {
-    if (!await nextO(() => { const G = MATCH._G; G.yl = 99; G.down = 1; G.togo = 1; })) break;
-    const sc0 = (await S()).score;
-    const g = await until(x => x.rp || (x.stage === 'call' && x.sheet === 'O' && x.yl < 98) || x.sheet === 'D' || x.sheet === 'PAT' || x.ret, 40);
+    if (!await nextO(() => { const G = MATCH._G; G.yl = 99; G.down = 1; G.togo = 1; }, 240)) { console.log('  no offensive call', JSON.stringify(await S())); break; }
+    const pn0 = (await S()).pn;
+    const g = await until(x => x.rp || (x.pn > pn0 && x.stage === 'call'), 45);
+    console.log('  try', tries, await page.evaluate(() => { const G = MATCH._G, r = G.play && G.play.result; return JSON.stringify({ op: G.cur && G.cur.op && G.cur.op.name, type: r && r.type, td: r && r.td, y: r && Math.round(r.yards || 0), text: r && r.text, yl: G.yl, rp: RPLY._.state().rp, last: RPLY._.last() && RPLY._.last().meta }); }));
     if (g && g.rp && g.td) { td = true; console.log('  heap', g.heap, 'MB'); const segs = await segShots('td'); check(segs.length >= 2, `TD replay: ${segs.length} angles (${segs.join(', ')})`); check(segs.includes('tight'), 'TD replay: a tight slow-motion angle on the scorer'); }
   }
   check(td, 'a touchdown got an automatic replay');
   check(await until(x => !x.rp && (x.sheet === 'PAT' || x.stage === 'kick' || x.ret || x.sheet === 'D'), 40) != null, 'after the TD replay the game moves on (extra point / kickoff)');
 
+  if (part === 'td') { console.log(errs.length ? 'ERRORS ' + errs.join(' | ') : 'no console errors'); await browser.close(); process.exit(0); }
   // ---- 2. the Replay button after a play, and a flag replay with the offender ringed
   if (await nextO(() => { const G = MATCH._G; G.yl = 35; G.down = 1; G.togo = 10; })) {
     await until(x => x.stage === 'live', 20);
@@ -143,7 +145,7 @@ if (part === 'play' || part === 'all') {
   if (ht) { await wait(1200); await shot('half_reel'); await page.evaluate(() => RPLY._.skip()); }
   check(await until(x => x.q === 3 && (x.stage === 'kick' || x.ret || x.stage === 'call' || x.stage === 'live' || x.stage === 'pre'), 60) != null, 'the second half kicks off after the reel');
   // ---- 7. the final whistle: the game reel, then the final card with a Highlights button
-  await page.evaluate(() => { const G = MATCH._G; G.q = 4; G.clock = 6; G.warned[4] = true; });
+  await page.evaluate(() => { const G = MATCH._G; G.q = 4; G.clock = 6; G.warned[4] = true; if (G.score[G.hid] === G.score[G.aid]) G.score[G.hid] += 3; });
   const fr = await until(x => x.rp && x.bug === 'HIGHLIGHTS' && x.stage === 'final', 120);
   check(!!fr, 'final: the game reel plays on its own');
   if (fr) { await wait(1500); await shot('final_reel'); const m = await page.evaluate(() => RPLY._.clips()); console.log('  highlights:', m.hi.map(h => `${h.imp} ${h.desc}`).join(' | ')); await page.evaluate(() => RPLY._.next()); await wait(1600); await shot('final_reel_next'); await page.evaluate(() => RPLY._.skip()); await wait(600); }
