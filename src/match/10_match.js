@@ -1401,11 +1401,11 @@ function finalCard(pog) {
   overlay(`<div class="card fin"><div class="small mute" style="text-align:center;letter-spacing:.08em">FINAL${G.q >= 5 ? ' / OT' : ''}</div>
     <div class="mu"><div class="t">${typeof logoC === 'function' ? logoC(A, 56) : ''}<b>${esc(A.name)}</b><span class="big${G.score[G.aid] >= G.score[G.hid] ? '' : ' lo'}">${G.score[G.aid]}</span></div><div class="at">@</div><div class="t">${typeof logoC === 'function' ? logoC(H, 56) : ''}<b>${esc(H.name)}</b><span class="big${G.score[G.hid] >= G.score[G.aid] ? '' : ' lo'}">${G.score[G.hid]}</span></div></div>
     ${G.mode === 'play' ? `<div style="text-align:center;font:600 26px var(--disp);color:${tie ? 'var(--mute)' : won ? 'var(--good)' : 'var(--bad)'}">${tie ? 'TIE GAME' : won ? 'VICTORY' : 'DEFEAT'}</div>` : ''}
+    ${typeof BCAST !== 'undefined' ? BCAST.finalHtml(G) : ''}
     <table>${row('', esc(A.abbr), esc(H.abbr))}${row('Total yards', a.ty, h.ty)}${row('Passing', a.py, h.py)}${row('Rushing', a.ry, h.ry)}${row('Comp / Att', `${a.pc}/${a.pa}`, `${h.pc}/${h.pa}`)}${row('First downs', a.fd, h.fd)}${row('Turnovers', a.to, h.to)}${row('Sacks', a.sk, h.sk)}${row('Penalties', a.pen, h.pen)}</table>
     <div class="ld">${L1('py', s => `${s.py} yds`, 'PASSING')}${L1('ry', s => `${s.ry} yds`, 'RUSHING')}${L1('recy', s => `${s.recy} yds`, 'RECEIVING')}${L1('tk', s => `${s.tk} tk`, 'TACKLES')}</div>
     ${pg ? `<div class="pog">${typeof bustC === 'function' ? bustC(pg, 48) : ''}<div><div class="small" style="color:var(--gold);font-weight:700;letter-spacing:.06em">PLAYER OF THE GAME</div><b>${esc(pg.pos)} ${esc(pg.fn)} ${esc(pg.ln)}</b><div class="small mute">${esc(line(ps))}</div></div></div>` : ''}
     ${G.injuries.length ? `<div class="small" style="margin-top:8px;color:var(--bad)">Injuries: ${G.injuries.map(i => `${esc(pnm(i.pid))} (${esc(i.type)}, ${i.weeks} wk)`).join(', ')}</div>` : ''}
-    ${typeof BCAST !== 'undefined' ? BCAST.finalHtml(G) : ''}
     ${gameLogs()}
     <div class="row" style="margin-top:14px"><button class="pri big on" id="mDone">Continue</button></div></div>`);
   if (typeof paintArt === 'function') { try { paintArt(el.ovl); } catch (e) { } }

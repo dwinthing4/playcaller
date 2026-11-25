@@ -139,7 +139,7 @@ function next(G, cont) {
   if (b.lt && b.lt.kind === 'score' && (G.score[G.hid] !== wasSc.h || G.score[G.aid] !== wasSc.a)) refreshScore(G);
   // quarters
   if (G.q !== q0) { b.q = G.q;
-    if (q0 === 2 && G.q === 3 && !G.sim && spd(G) < 10) { halftime(G, cont); return true; }
+    if (q0 === 2 && G.q === 3 && !G.sim && spd(G) < 10 && S.gfx && now() >= mutedTo) { halftime(G, cont); return true; }
     if (!quiet && G.q <= 4) talk(G, 'pbp', [`That'll do it for the ${['first', 'second', 'third'][q0 - 1] || 'quarter'} quarter. ${cap(scoreLine(G))}.`, `End of the ${['first', 'second', 'third'][q0 - 1]}: ${scoreLine(G)}.`, `${cap(['first', 'second', 'third'][q0 - 1] || 'that')} quarter in the books. ${cap(scoreLine(G))}.`], 2, 'q' + q0);
     if (!quiet && G.q === 5) talk(G, 'pbp', ['We are headed to overtime! Next score wins it.', 'Free football! The next score ends it.'], 3, 'ot');
   }
@@ -362,7 +362,7 @@ function plate(G, pid, kind) {
 
 // ------------------------------------------------------------ the halftime card (holds the flow; tap or wait)
 function halftime(G, cont) {
-  ensureEl(); const b = B, sp = spd(G), dur = G.mode === 'play' ? 12 : Math.max(2.5, 7 / sp);
+  ensureEl(); const b = B, sp = spd(G), dur = G.mode === 'play' ? 9 : Math.max(2.5, 7 / sp);
   b.big = { kind: 'half', until: b.t + dur, cont };
   el.big.innerHTML = `<div class="bcc cx-sheet"><div class="bcc-hd"><span>Halftime</span><b>${scoreBig(G)}</b></div>${wpGraph(G, { h: 108 })}${teamStatsHtml(G, true)}${scoringList(G)}
     <div class="bcc-ft"><button class="on" data-bc="view">All charts</button><button class="pri on" data-bc="go">Second half</button></div></div>`;
@@ -574,6 +574,6 @@ function bcSettingsPanel(S) {
   const c = S.comm || 'on';
   return `<div class="panel" style="margin-top:12px"><h2>Broadcast</h2>
    <label>Commentary (captions from the booth, between plays) <select onchange="L.settings.comm=this.value;saveGame()">${[['on', 'On'], ['big', 'Big plays only'], ['off', 'Off']].map(([k, n]) => `<option value="${k}" ${c === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-   <div class="row" style="margin-top:8px"><label class="small"><input type="checkbox" ${S.wpbar !== false ? 'checked' : ''} onchange="L.settings.wpbar=this.checked;saveGame()"> Win probability on the scorebug</label><label class="small"><input type="checkbox" ${S.bcgfx !== false ? 'checked' : ''} onchange="L.settings.bcgfx=this.checked;saveGame()"> Drive and scoring graphics</label></div>
+   <div class="row" style="margin-top:8px"><label class="small"><input type="checkbox" ${S.wpbar !== false ? 'checked' : ''} onchange="L.settings.wpbar=this.checked;saveGame()"> Win probability on the scorebug</label><label class="small"><input type="checkbox" ${S.bcgfx !== false ? 'checked' : ''} onchange="L.settings.bcgfx=this.checked;saveGame()"> Drive, scoring and halftime graphics</label></div>
    <p class="small mute">Game stats and charts (win probability, pass chart, run map, routes, separation) are in the pause menu, at halftime and on the final screen.</p></div>`;
 }
