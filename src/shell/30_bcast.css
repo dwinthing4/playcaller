@@ -108,7 +108,7 @@
 .bcview.show{display:flex}
 .bcv-c{max-width:620px;padding:12px 14px 14px}
 .bcv-hd{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.bcv-hd b{font:var(--disp-w) 24px/1 var(--disp);text-transform:var(--disp-tt);padding-top:var(--disp-pt)}
+.bcv-hd b{white-space:nowrap;font:var(--disp-w) 24px/1 var(--disp);text-transform:var(--disp-tt);padding-top:var(--disp-pt)}
 .bcv-hd span{font-size:17px;color:var(--ink2);gap:5px}.bcv-hd span i{height:14px;width:4px}
 .bcv-x{margin-left:auto;width:36px;height:36px;padding:0;flex:none}
 .bcv-tabs{flex-wrap:wrap}
@@ -168,3 +168,6 @@
 .bcwpg-p{position:relative}
 .bcwpg-z{position:absolute;left:6px;z-index:1;display:flex;align-items:center;gap:4px;font:var(--cond-w) 10.5px/1 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);pointer-events:none}
 .bcwpg-z i{width:7px;height:7px;display:inline-block;border-radius:1px}.bcwpg-z.t{top:5px}.bcwpg-z.b{bottom:5px}
+.bcv-hd span{white-space:nowrap;min-width:0;overflow:hidden}
+@media (max-width:480px){.bcv-hd span{display:none}}
+.bclt-d .bclt-n{grid-template-columns:minmax(0,.8fr) minmax(0,.8fr) minmax(0,.9fr) minmax(0,1.45fr)}

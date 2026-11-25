@@ -17,7 +17,7 @@ await page.click('#mKick').catch(() => { });
 for (let i = 0; i < 120; i++) { if (await page.evaluate(() => { const G = MATCH._G; return G && G.bc && G.bc.plays.length >= 3 && G.stage === 'dead'; })) break; await wait(250); }
 await page.evaluate(() => { MATCH._G.paused = true; });
 for (const st of ['broadcast', 'program', 'varsity', 'night']) {
-  await page.evaluate(st => { document.documentElement.dataset.style = st; const G = MATCH._G, B = BCAST._(); G.paused = false; G.speed = 0.0001;
+  await page.evaluate(st => { document.documentElement.dataset.style = st; const G = MATCH._G, B = BCAST._(); G.paused = false; G.speed = 0.0001; G.stage = 'dead'; G.flagUp = false; G.penWait = null;
     B.cap = null; B.lt = null; B.q2 = [{ who: 0, text: 'Bell finds Murphy over the middle for 14. And that is a first down.', pri: 2, at: B.t, exp: B.t + 60 }];
     B.ltq = [{ html: BCAST._drive(G, { tid: G.hid, start: 25, plays: 8, yds: 61, q: 1, result: 'Punt', top: 151 }), kind: 'drive', dur: 60, at: B.t, exp: B.t + 60 }]; }, st);
   await wait(900); await page.screenshot({ path: path.join(out, st + '_field.png') });
