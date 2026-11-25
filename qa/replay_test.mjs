@@ -68,7 +68,7 @@ if (part === 'play' || part === 'all' || part === 'td' || part === 'end') {
 
   // ---- 1. a touchdown and its replay (three angles: sideline, end zone, tight slow motion)
   let td = false;
-  for (let tries = 0; tries < 6 && !td; tries++) {
+  for (let tries = 0; tries < 12 && !td; tries++) {
     if (!await nextO(() => { const G = MATCH._G; G.yl = 99; G.down = 1; G.togo = 1; }, 240)) { console.log('  no offensive call', JSON.stringify(await S())); break; }
     const pn0 = (await S()).pn;
     const g = await until(x => x.rp || (x.pn > pn0 && x.stage === 'call'), 45);
@@ -110,7 +110,11 @@ if (part === 'play' || part === 'all' || part === 'td' || part === 'end') {
   const chal = async (force, tag) => {
     if (!await nextO(f => { const G = MATCH._G; G.yl = 40; G.down = 3; G.togo = 4; RPLY._.force(f); }, 120)) return null;
     await page.evaluate(f => RPLY._.force(f), force);
-    const g = await until(x => x.win, 40); if (!g) return null;
+    let g = await until(x => x.win, 40);
+    for (let a = 0; !g && a < 2; a++) {      // that play was not one the call applies to (a fumble, a touchdown): the next one
+      console.log('  (no window: ' + await page.evaluate(() => { const r = MATCH._G.play && MATCH._G.play.result; return r ? r.type + ' ' + r.text : 'no result'; }) + ')');
+      if (!await nextO(() => { const G = MATCH._G; G.yl = 40; G.down = 3; G.togo = 4; }, 120)) break; await page.evaluate(f => RPLY._.force(f), force); g = await until(x => x.win, 40); }
+    if (!g) return null;
     await wait(500); await shot(`${tag}_ruling`);
     const to0 = g.to, c0 = await page.evaluate(() => RPLY._.chal()), tip = await page.evaluate(() => (document.querySelector('.rpcall .rpa') || {}).textContent || '');
     await page.evaluate(() => document.querySelector('.rpcall [data-rp="chal"]').click()); await wait(700); await shot(`${tag}_redflag`); await until(x => x.rp, 10);
