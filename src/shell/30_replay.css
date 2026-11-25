@@ -29,7 +29,7 @@
 .rpwipe i{position:absolute;top:-25%;bottom:-25%;left:-145%;width:130%;background:var(--h-bg);box-shadow:-14px 0 0 var(--h-hi),-26px 0 0 var(--tc,#1d4f91);transform:skewX(-14deg);animation:rpWipe .58s cubic-bezier(.65,0,.35,1) forwards;display:flex;align-items:center;justify-content:center}
 .rpwipe b{transform:skewX(14deg);font:900 clamp(40px,10vw,84px)/1 var(--disp);letter-spacing:.08em;text-transform:uppercase;color:var(--h-ink)}
 .rpwipe.out b{display:none}
-@keyframes rpWipe{from{transform:translateX(0) skewX(-14deg)}to{transform:translateX(200%) skewX(-14deg)}}
+@keyframes rpWipe{from{transform:translateX(0) skewX(-14deg)}to{transform:translateX(235%) skewX(-14deg)}}
 @keyframes rpIn{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
 /* the Replay button after a play (bottom left; it rides above the play-call sheet when the sheet would cover it) */
 #gui .rpbtns{position:absolute;left:calc(12px + var(--sal));bottom:calc(16px + var(--sab));z-index:7;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}

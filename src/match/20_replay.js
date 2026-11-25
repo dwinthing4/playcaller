@@ -51,6 +51,7 @@ function init(api) {
   const w = document.createElement('div'); w.className = 'rpcall'; M.el.gui.appendChild(w);
   const k = document.createElement('div'); k.className = 'rpcard'; M.el.gui.appendChild(k);
   const f = document.createElement('div'); f.className = 'rpflag'; f.innerHTML = '<i class="rf"></i><div><small>CHALLENGE</small><b></b></div>'; M.el.gui.appendChild(f);
+  d.querySelector('.rpwipe i').addEventListener('animationend', () => d.querySelector('.rpwipe').classList.remove('go'));
   ui = { root: d, tap: d.querySelector('.rptap'), bug: d.querySelector('.rpbug b'), tag: d.querySelector('.rptag'), lt: d.querySelector('.rplt'), bar: d.querySelector('.rpbar'), rng: d.querySelector('.rpbar input'),
     pz: d.querySelector('[data-rp="pause"]'), nx: d.querySelector('[data-rp="next"]'), wipe: d.querySelector('.rpwipe'), btns: b, call: w, card: k, flag: f };
   d.addEventListener('click', e => { const t = e.target.closest('[data-rp]'); if (!t || !rp) return; e.stopPropagation(); const a = t.dataset.rp; if (a === 'pause') rp.paused = !rp.paused; else if (a === 'next') nextSeg(true); else if (a === 'skip') stop(true); });
@@ -269,21 +270,22 @@ function draw(dt, g) {
 function camera(r, s, dt) {
   const c = r.c, t = r.t, F = FD(), gw = M.el.game.clientWidth || innerWidth, gh = M.el.game.clientHeight || innerHeight, asp = Math.max(0.3, gw / Math.max(1, gh)), port = asp < 1;
   const b = r.fake.ball.p.y > -10 ? r.fake.ball.p : { x: 0, y: 0, z: c.los }, foc = s.pid != null ? pelAt(c, s.pid, t) : null;
-  let pos, look, hf;
-  if (s.cam === 'rev') { pos = s.pos; look = s.look; hf = port ? s.hf * 1.3 : s.hf; }
-  else if (s.cam === 'end') { const dir = s.dir || 1, ze = dir > 0 ? F.goalZ + 22 : -22, d = Math.max(14, Math.abs(ze - b.z)); pos = [b.x * 0.2, 20 + d * 0.12, dir > 0 ? ze + 4 : ze - 4]; look = [b.x * 0.85, 0.9, b.z]; hf = cl(2 * Math.atan(15 / (d + 4)) * 57.3, 12, 55) * (port ? 1.45 : 1); }
+  let pos, look, hf, vf = null;      // hf: horizontal field of view (landscape); vf: vertical (portrait, where a wide hf would show mostly sky)
+  if (s.cam === 'rev') { pos = s.pos; look = s.look; hf = s.hf; }
+  else if (s.cam === 'end') { const dir = s.dir || 1, ze = dir > 0 ? F.goalZ + 22 : -22, d = Math.max(14, Math.abs(ze - b.z)); pos = [b.x * 0.2, 20 + d * 0.12, dir > 0 ? ze + 4 : ze - 4]; look = [b.x * 0.85, 0.9, b.z]; hf = cl(2 * Math.atan(15 / (d + 4)) * 57.3, 12, 55); vf = cl(2 * Math.atan(24 / (d + 4)) * 57.3, 22, 62); }
   else if (s.cam === 'tight' || s.cam === 'flag') {
     const p = foc || b, v = s.pid != null ? velAt(c, s.pid, t) : { x: 0, z: 0 }, sp = Math.hypot(v.x, v.z); let dx = r.dirX, dz = r.dirZ;
     if (sp > 1.2 || dx == null) { dx = sp > 0.3 ? v.x / sp : 0; dz = sp > 0.3 ? v.z / sp : 1; } r.dirX = dx; r.dirZ = dz;
     let px = -dz, pz = dx; if (px > 0.01 || (Math.abs(px) <= 0.01 && pz > 0)) { px = -px; pz = -pz; }
-    if (s.cam === 'flag') { const D = port ? 11 : 9; pos = [p.x + px * D - dx * 4, 4.4, p.z + pz * D - dz * 4]; look = [p.x, 0.9, p.z]; hf = port ? 50 : 40; }
-    else { const D = port ? 10.5 : 9, ld = Math.min(2.6, sp * 0.35); pos = [p.x + px * D + dx * ld, 3.1, p.z + pz * D + dz * ld]; look = [p.x + dx * 1.1, 1.0, p.z + dz * 1.1]; hf = port ? 38 : 28; }
+    if (s.cam === 'flag') { const D = port ? 11 : 9; pos = [p.x + px * D - dx * 4, 4.4, p.z + pz * D - dz * 4]; look = [p.x, 0.9, p.z]; hf = 40; vf = 58; }
+    else { const D = port ? 10.5 : 9, ld = Math.min(2.6, sp * 0.35); pos = [p.x + px * D + dx * ld, 3.1, p.z + pz * D + dz * ld]; look = [p.x + dx * 1.1, 1.0, p.z + dz * 1.1]; hf = 28; vf = 52; }
   }
-  else if (s.cam === 'sky') { pos = [b.x * 0.6, 34, b.z - 20]; look = [b.x * 0.8, 0, b.z + 4]; hf = port ? 70 : 58; }
-  else if (s.cam === 'kick') { const k = c.kick; pos = [k.start.x * 0.7, 3.4, k.start.z - 8]; look = [k.end.x * 0.3, 3.5, F.goalZ + 10 * YD]; hf = port ? 62 : 50; }
-  else if (s.cam === 'posts') { pos = [0, 6.5, F.goalZ + 10 * YD + 24]; look = [b.x, Math.max(1, b.y), b.z]; hf = port ? 42 : 30; }
-  else { pos = [-(F.halfW + 32), 17, b.z - 5]; look = [b.x * 0.45, 0.6, b.z + 1]; hf = port ? 48 : 34; }      // side
-  const fov = cl(2 * Math.atan(Math.tan(hf * Math.PI / 360) / asp) * 180 / Math.PI, 8, 82);
+  else if (s.cam === 'sky') { pos = [b.x * 0.6, 34, b.z - 20]; look = [b.x * 0.8, 0, b.z + 4]; hf = 58; vf = 66; }
+  else if (s.cam === 'kick') { const k = c.kick; pos = [k.start.x * 0.7, 3.4, k.start.z - 8]; look = [k.end.x * 0.3, 3.5, F.goalZ + 10 * YD]; hf = 50; vf = 60; }
+  else if (s.cam === 'posts') { pos = [0, 6.5, F.goalZ + 10 * YD + 24]; look = [b.x, Math.max(1, b.y), b.z]; hf = 30; vf = 50; }
+  else if (port) { pos = [b.x * 0.4, 19, b.z - 25]; look = [b.x * 0.7, 0.5, b.z + 5]; vf = 56; }      // side, on a phone held upright: high behind the play
+  else { pos = [-(F.halfW + 32), 17, b.z - 5]; look = [b.x * 0.45, 0.6, b.z + 1]; hf = 34; }      // side
+  const fov = port && vf != null ? vf : cl(2 * Math.atan(Math.tan(hf * Math.PI / 360) / asp) * 180 / Math.PI, 8, port ? 66 : 82);
   if (!r.cam || r.snapCam) { r.cam = { pos: pos.slice(), look: look.slice() }; r.snapCam = false; }
   else { const k1 = 1 - Math.exp(-dt * (s.cam === 'rev' ? 30 : 5)), k2 = 1 - Math.exp(-dt * (s.cam === 'rev' ? 30 : 7)); for (let i = 0; i < 3; i++) { r.cam.pos[i] += (pos[i] - r.cam.pos[i]) * k1; r.cam.look[i] += (look[i] - r.cam.look[i]) * k2; } }
   R3D.camOverride = { pos: r.cam.pos.slice(), look: r.cam.look.slice(), fov };
@@ -415,7 +417,7 @@ function perk() { try { return !!(typeof LG !== 'undefined' && LG.coachPerk && L
 function offer(g, c, C, done) {
   const ch = chal(g, g.user), tm = g.T[g.user];
   let tip = `Close one. ${ch.left} challenge${ch.left === 1 ? '' : 's'} left; a lost one costs a timeout.`;
-  if (perk()) { const read = R() < 0.85 ? C.wrong : !C.wrong; tip = read ? `Replay assistant: "Throw it, coach. I have it as ${C.tB.toLowerCase()}."` : `Replay assistant: "They got it right. Save the challenge."`; }
+  if (perk()) { const read = R() < 0.85 ? C.wrong : !C.wrong; tip = read ? `Replay assistant: "Throw it, coach. I have it as ${(C.wrong ? C.tA : C.tB).split(':')[0].toLowerCase()}."` : `Replay assistant: "They got it right. Save the challenge."`; }
   win = { g, c, C, done };
   ui.call.innerHTML = `<div class="rpk">RULING ON THE FIELD</div><b>${esc(C.rTxt)}</b><div class="rpq">${esc(C.q)}</div><div class="rpa">${esc(tip)}</div>
     <div class="rpr"><button class="rpp chal on" data-rp="chal">${ICO.flag}<span>Challenge</span></button><button class="rpp on" data-rp="replay">Replay</button><button class="rpp on" data-rp="playon">Play on</button></div>`;

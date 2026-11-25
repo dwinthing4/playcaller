@@ -1437,7 +1437,7 @@ const R = {
   basis() { const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, 1); f.normalize(); return { fx: f.x, fz: f.z, rx: -f.z, rz: f.x }; },
   snapCamera(play, opts) { this.follow(play, 1, Object.assign({}, opts, { snapCam: true })); },
   project(x, y, z) { const v = new THREE.Vector3(x, y, z).project(camera); return { x: (v.x * 0.5 + 0.5) * W, y: (-v.y * 0.5 + 0.5) * H, behind: v.z > 1 }; },
-  stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, rigs: rigs.size, bodies: Object.keys(cache.body).length }; },
+  stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, rigs: rigs.size, bodies: Object.keys(cache.body).length, geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }; },
   get coarse() { return coarse; },
 };
 Object.assign(R3D, R); Object.defineProperty(R3D, 'coarse', { get: () => coarse, configurable: true });

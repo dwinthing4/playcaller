@@ -3,7 +3,7 @@
 // a touchdown replay, a flag replay (the offender ringed and named), a challenge that is overturned and one that stands,
 // a booth review inside two minutes, the halftime reel, the final whistle with the game reel and the Highlights button.
 // 'mem' watches a whole game at 4x and checks the recorder stays bounded.
-// run: node tools/build.mjs && node qa/replay_test.mjs [desk|phone] [play|mem|all]   (screenshots in qa/shots/replay)
+// run: node tools/build.mjs && node qa/replay_test.mjs [desk|phone] [play|end|mem|all]   (play: cases 1-6; end: a TD, then the final whistle and the reel)   (screenshots in qa/shots/replay)
 import { chromium } from 'playwright-core';
 import fs from 'fs'; import path from 'path'; import os from 'os';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
@@ -60,7 +60,7 @@ async function segShots(tag, maxSec = 30) {
 await page.goto('file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/')); await wait(700);
 await page.evaluate(() => { try { localStorage.removeItem('pc_cam_v1'); localStorage.setItem('pc_gmode', 'full'); localStorage.setItem('pc_replay', 'auto'); localStorage.setItem('pc_pclock', 'off'); } catch (e) { } });
 
-if (part === 'play' || part === 'all' || part === 'td') {
+if (part === 'play' || part === 'all' || part === 'td' || part === 'end') {
   await page.evaluate(() => { L = null; NG.slot = 6; NG.qlen = 120; createLeague(); pickTeam(L.teams[3].id); startUserGame('play'); });
   for (let i = 0; i < 300; i++) { const g = await S(); if (g && (await page.evaluate(() => MATCH._G.ready))) break; await wait(300); }
   await page.evaluate(() => { MATCH._G.noFlags = true; RPLY._.force({ kind: 'none' }); }); await wait(300);
@@ -79,6 +79,8 @@ if (part === 'play' || part === 'all' || part === 'td') {
   check(await until(x => !x.rp && (x.sheet === 'PAT' || x.stage === 'kick' || x.ret || x.sheet === 'D'), 40) != null, 'after the TD replay the game moves on (extra point / kickoff)');
 
   if (part === 'td') { console.log(errs.length ? 'ERRORS ' + errs.join(' | ') : 'no console errors'); await browser.close(); process.exit(0); }
+  if (part === 'end') { await page.evaluate(() => { const G = MATCH._G; G.q = 4; G.clock = 6; G.warned[4] = true; if (G.score[G.hid] === G.score[G.aid]) G.score[G.hid] += 3; }); }
+  if (part !== 'end') {
   // ---- 2. the Replay button after a play, and a flag replay with the offender ringed
   if (await nextO(() => { const G = MATCH._G; G.yl = 35; G.down = 1; G.togo = 10; })) {
     await until(x => x.stage === 'live', 20);
@@ -110,12 +112,12 @@ if (part === 'play' || part === 'all' || part === 'td') {
     await page.evaluate(f => RPLY._.force(f), force);
     const g = await until(x => x.win, 40); if (!g) return null;
     await wait(500); await shot(`${tag}_ruling`);
-    const to0 = g.to, c0 = await page.evaluate(() => RPLY._.chal());
+    const to0 = g.to, c0 = await page.evaluate(() => RPLY._.chal()), tip = await page.evaluate(() => (document.querySelector('.rpcall .rpa') || {}).textContent || '');
     await page.evaluate(() => document.querySelector('.rpcall [data-rp="chal"]').click()); await wait(700); await shot(`${tag}_redflag`); await until(x => x.rp, 10);
     const segs = await segShots(tag, 30);
     const g2 = await until(x => x.card, 15, { keepCard: true }); await wait(500); if (g2) await shot(`${tag}_decision`);
     const card = g2 ? g2.card : ''; await page.evaluate(() => { const c = document.querySelector('.rpcard'); if (c) c.click(); }); await wait(500);
-    return { segs, card, to0, to1: (await S()).to, c0, c1: await page.evaluate(() => RPLY._.chal()), g: await S() };
+    return { tip, segs, card, to0, to1: (await S()).to, c0, c1: await page.evaluate(() => RPLY._.chal()), g: await S() };
   };
   await page.evaluate(() => RPLY._.force(null));
   const won = await chal({ kind: 'spot', made: true, wrong: true }, 'chal_win');
@@ -124,10 +126,10 @@ if (part === 'play' || part === 'all' || part === 'td') {
     check(won.g.down === 1, `overturned: first down (now ${won.g.down} & ${Math.round(won.g.togo)})`); }
   await page.evaluate(() => RPLY._.force({ kind: 'none' }));
   // ---- 4. a challenge that loses (the spot was right)
-  await page.evaluate(() => RPLY._.force(null));
+  await page.evaluate(() => { RPLY._.force(null); const cp = LG.coachPerk; LG.coachPerk = k => k === 'str4' || (cp ? cp(k) : false); });
   const lost = await chal({ kind: 'spot', made: false, wrong: false }, 'chal_lose');
   check(lost && /STANDS|CONFIRMED/.test(lost.card), `challenge (right call): ${lost ? lost.card.slice(0, 80) : 'no window'}`);
-  if (lost) { check(lost.to1 === lost.to0 - 1, `lost challenge costs a timeout (${lost.to0} -> ${lost.to1})`); check(lost.g.down === 4, `stands: 4th down (now ${lost.g.down})`); }
+  if (lost) { check(/Replay assistant/.test(lost.tip), `Sideline genius perk: the replay assistant gives a read (${lost.tip.slice(0, 70)})`); check(lost.to1 === lost.to0 - 1, `lost challenge costs a timeout (${lost.to0} -> ${lost.to1})`); check(lost.g.down === 4, `stands: 4th down (now ${lost.g.down})`); }
   await page.evaluate(() => RPLY._.force({ kind: 'none' }));
 
   // ---- 5. inside two minutes: no challenge, the booth reviews it
@@ -144,12 +146,15 @@ if (part === 'play' || part === 'all' || part === 'td') {
   if (nh >= 2) check(!!ht, 'halftime: the highlight reel plays'); else console.log('  (halftime reel skipped: only ' + nh + ' first-half highlight)');
   if (ht) { await wait(1200); await shot('half_reel'); await page.evaluate(() => RPLY._.skip()); }
   check(await until(x => x.q === 3 && (x.stage === 'kick' || x.ret || x.stage === 'call' || x.stage === 'live' || x.stage === 'pre'), 60) != null, 'the second half kicks off after the reel');
+  }
+  if (part !== 'play') {
   // ---- 7. the final whistle: the game reel, then the final card with a Highlights button
-  await page.evaluate(() => { const G = MATCH._G; G.q = 4; G.clock = 6; G.warned[4] = true; if (G.score[G.hid] === G.score[G.aid]) G.score[G.hid] += 3; });
+  if (part !== 'end') await page.evaluate(() => { const G = MATCH._G; G.q = 4; G.clock = 6; G.warned[4] = true; if (G.score[G.hid] === G.score[G.aid]) G.score[G.hid] += 3; });
   const fr = await until(x => x.rp && x.bug === 'HIGHLIGHTS' && x.stage === 'final', 120);
   check(!!fr, 'final: the game reel plays on its own');
   if (fr) { await wait(1500); await shot('final_reel'); const m = await page.evaluate(() => RPLY._.clips()); console.log('  highlights:', m.hi.map(h => `${h.imp} ${h.desc}`).join(' | ')); await page.evaluate(() => RPLY._.next()); await wait(1600); await shot('final_reel_next'); await page.evaluate(() => RPLY._.skip()); await wait(600); }
   const hb = await page.$('#mHl'); check(!!hb, 'final card: a Highlights button'); await shot('final_card');
+  }
   const mm = await page.evaluate(() => RPLY._.mem()); console.log('  recorder:', JSON.stringify(mm)); check(mm.clips <= 17 && mm.bytes < 24e6, `recorder bounded: ${mm.clips} clips, ${(mm.bytes / 1e6).toFixed(1)} MB`);
 }
 
