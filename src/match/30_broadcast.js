@@ -221,11 +221,12 @@ function callPlay(G, r) {
     else if (r.down === 4) { add = pickR([' Short! Turnover on downs.', ' Stopped short on fourth down.']); pri = 3; }
     else if (r.down === 3) add = y <= 0 ? pickR([' That brings up fourth down.', '']) : pickR([` Short of the sticks. Fourth and ${Math.max(1, r.togo - y)}.`, ' Not enough. That brings up fourth down.', '']);
     if (!first && r.yl + y >= 80 && r.yl < 80) add += pickR([` ${T} knocking on the door.`, ' Inside the 20 now.', ' Into the red zone.']);
-    else if (first && r.yl + y >= 90) add += ' First and goal.';
+    else if (first && r.yl + y >= 90 && r.down < 3) add = ' First and goal.';
     if (late && oob) add += pickR([' And he gets out of bounds to stop the clock.', ' Out of bounds, clock stops.', ' Smart, he gets out of bounds.']);
     else if (late && lead < 0 && !oob && !first && r.down < 3) add += pickR([' Stays in bounds, and the clock is running.', ' The clock keeps running.']);
   }
   // a call is never made twice in a game: pick a base line not used yet, then add what it means
+  if (tail) add = '';      // a flag: the call stops there
   const unused = L.filter(x => !B.said.has(x)); if (!unused.length) return false;
   const base = pickR(unused), ok = talk(G, 'pbp', [base + add + tail], big ? 3 : pri); if (ok) B.said.add(base); return ok;
 }
