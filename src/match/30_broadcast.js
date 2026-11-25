@@ -140,7 +140,7 @@ function next(G, cont) {
   // quarters
   if (G.q !== q0) { b.q = G.q;
     if (q0 === 2 && G.q === 3 && !G.sim && spd(G) < 10) { halftime(G, cont); return true; }
-    if (!quiet && G.q <= 4) talk(G, 'pbp', [`That'll do it for the ${['first', 'second', 'third'][q0 - 1] || 'quarter'} quarter. ${scoreLine(G)}.`, `End of the ${['first', 'second', 'third'][q0 - 1]}: ${scoreLine(G)}.`, `${cap(['first', 'second', 'third'][q0 - 1] || 'that')} quarter in the books. ${scoreLine(G)}.`], 2, 'q' + q0);
+    if (!quiet && G.q <= 4) talk(G, 'pbp', [`That'll do it for the ${['first', 'second', 'third'][q0 - 1] || 'quarter'} quarter. ${cap(scoreLine(G))}.`, `End of the ${['first', 'second', 'third'][q0 - 1]}: ${scoreLine(G)}.`, `${cap(['first', 'second', 'third'][q0 - 1] || 'that')} quarter in the books. ${cap(scoreLine(G))}.`], 2, 'q' + q0);
     if (!quiet && G.q === 5) talk(G, 'pbp', ['We are headed to overtime! Next score wins it.', 'Free football! The next score ends it.'], 3, 'ot');
   }
   if (!quiet) colorBetween(G, r, swing);
@@ -190,13 +190,13 @@ function callPlay(G, r) {
   const first = !s.td && !s.to && s.type !== 'inc' && !s.sack && y >= r.togo, toGoal = 100 - r.yl, late = (G.q === 2 || G.q >= 4) && G.clock <= Math.max(30, G.qlen * 0.3);
   const lead = G.score[off] - G.score[def], fresh = n => nm(n), qid = s.passer != null ? s.passer : s.sack || s.kind === 'scramble' ? s.carrier : depth(TM(G, off), 'QB'), Q = qid != null ? fresh(qid) : 'the quarterback';
   const yds = n => `${n} yard${Math.abs(n) === 1 ? '' : 's'}`;
-  let L = [], pri = 2, tail = '';
+  let L = [], pri = 2, tail = '', add = '';
   if (r.flag) tail = pickR([' But there is a flag down.', ' And we have a flag on the field.', ' Wait, there is laundry on the field.']);
   if (r.two) { L = s.td && !s.to ? [`The two-point try... good! ${T} convert.`, `They go for two and get it!`, `Two-point conversion is good.`] : [`The two-point try fails.`, `No good on the two-point try.`, `Stopped short on the conversion.`]; return talk(G, 'pbp', L.map(x => x + tail), 3); }
   const big = s.td || s.to || ay >= 20 || r.down === 4 || (s.sack && r.down >= 3);
   if (s.to === 'int') { const d = fresh(s.carrier); L = [`Picked off! ${d} jumps the route.`, `${Q} throws... and it's intercepted by ${d}!`, `Intercepted! ${d} reads it all the way.`, `That's a pick. ${d} comes down with it for the ${D}.`]; pri = 3; }
   else if (s.type === 'fumbleLost') { const d = s.rec != null ? fresh(s.rec) : `the ${D}`; L = [`Fumble! And ${d} recovers for the ${D}!`, `The ball is out! ${d} has it, ${D} ball.`, `He coughs it up, and the ${D} take over.`]; pri = 3; }
-  else if (s.sack) { const d = s.tk != null ? fresh(s.tk) : `the ${D} front`; L = [`${d} gets home! ${Q} goes down for a loss of ${ay}.`, `Sacked! ${d} brings him down.`, `${Q} has nowhere to go. ${d} with the sack.`, `Pressure, and ${Q} is taken down by ${d}.`]; if (r.down === 3) L = L.map(x => x + ' That will bring out the punt team.'); }
+  else if (s.sack) { const d = s.tk != null ? fresh(s.tk) : `the ${D} front`; L = [`${d} gets home! ${Q} goes down for a loss of ${ay}.`, `Sacked! ${d} brings him down.`, `${Q} has nowhere to go. ${d} with the sack.`, `Pressure, and ${Q} is taken down by ${d}.`]; if (r.down === 3) add = pickR([' That will bring out the punt team.', ' Drive over.']); }
   else if (s.td) { const c = s.carrier != null ? fresh(s.carrier) : 'he';
     L = s.kind === 'pass' && s.catcher != null ? [`${Q} to ${c}... touchdown, ${T}!`, `${Q} finds ${c} in the end zone! Touchdown!`, `${c} hauls it in for six!`, `Pitch and catch, ${Q} to ${c}. Touchdown ${T}!`, `${Q} lofts it... ${c} has it! Touchdown!`]
       : [`${c} punches it in! Touchdown ${T}!`, `${c} walks in from ${ay === 1 ? 'a yard out' : `${ay} out`}. Touchdown!`, `${c} breaks free... he's gone! Touchdown!`, `${c} into the end zone! Six for the ${T}.`];
@@ -205,7 +205,7 @@ function callPlay(G, r) {
     L = /away/i.test(why) ? [`${Q} throws it away.`, `Nothing there, and ${Q} sails it out of bounds.`, `${Q} lives to see another down. Thrown away.`]
       : /drop/i.test(why) && c ? [`${c} drops it! That one was right in his hands.`, `Dropped by ${c}. He'll want that one back.`, `Off the hands of ${c}.`]
       : c ? [`${Q} looking for ${c}... incomplete.`, `Incomplete, intended for ${c}.`, `${Q} to ${c}, and it falls incomplete.`, `Broken up! That one was meant for ${c}.`, `${Q} tries ${c}, no connection.`] : [`Incomplete.`, `${Q}'s pass falls incomplete.`];
-    if (r.down === 3) L = L.map(x => x + pickR([' That brings up fourth down.', ' Fourth down coming up.', ''])); if (r.down === 4) { L = L.map(x => x + ' Turnover on downs.'); pri = 3; } }
+    if (r.down === 3) add = pickR([' That brings up fourth down.', ' Fourth down coming up.', '']); if (r.down === 4) { add = ' Turnover on downs.'; pri = 3; } }
   else { const c = fresh(s.carrier), oob = s.type === 'oob';
     if (s.kind === 'pass' && s.catcher != null) {
       L = ay >= 20 ? [`${Q} goes deep... caught by ${c}! A ${ay}-yard strike.`, `${Q} launches it and ${c} runs under it! ${cap(yds(ay))}.`, `${c} gets behind them, and ${Q} finds him for ${ay}.`, `Big play! ${Q} to ${c} for ${ay}.`]
@@ -216,20 +216,19 @@ function callPlay(G, r) {
       : y < 0 ? [`${c} is stopped behind the line.`, `${c} hit in the backfield, a loss of ${ay}.`, `Nowhere to go for ${c}. Loss of ${ay}.`]
       : y === 0 ? [`${c} is stuffed. No gain.`, `${c} runs into a wall. Nothing there.`]
       : [`${c} up the middle for ${ay}.`, `${c} carries for ${ay}.`, `${c} picks up ${ay} on the ground.`, `${c} slashes ahead for ${ay}.`, `Handoff to ${c}, ${yds(ay)}.`, `${c} grinds out ${ay}.`];
-    let add = '';
     if (first && r.down === 4) { add = pickR([' They get it on fourth down!', ' Gutsy call, and it works.', ' Fourth-down conversion!']); pri = 3; }
     else if (first && r.down === 3) add = pickR([' And they convert on third down.', ' That keeps the drive alive.', ' Moves the chains on third down.']);
     else if (first) add = pickR([` And that's a first down.`, ' That moves the chains.', ` First down ${T}.`, ' Enough for the first.']);
     else if (r.down === 4) { add = pickR([' Short! Turnover on downs.', ' Stopped short on fourth down.']); pri = 3; }
-    else if (r.down === 3) add = pickR([` Short of the sticks. Fourth and ${Math.max(1, r.togo - y)}.`, ' Not enough. That brings up fourth down.', '']);
+    else if (r.down === 3) add = y <= 0 ? pickR([' That brings up fourth down.', '']) : pickR([` Short of the sticks. Fourth and ${Math.max(1, r.togo - y)}.`, ' Not enough. That brings up fourth down.', '']);
     if (!first && r.yl + y >= 80 && r.yl < 80) add += pickR([` ${T} knocking on the door.`, ' Inside the 20 now.', ' Into the red zone.']);
     else if (first && r.yl + y >= 90) add += ' First and goal.';
     if (late && oob) add += pickR([' And he gets out of bounds to stop the clock.', ' Out of bounds, clock stops.', ' Smart, he gets out of bounds.']);
-    else if (late && lead < 0 && !oob && !first) add += pickR([' Stays in bounds, and the clock is running.', ' The clock keeps running.']);
-    L = L.map(x => x + add);
+    else if (late && lead < 0 && !oob && !first && r.down < 3) add += pickR([' Stays in bounds, and the clock is running.', ' The clock keeps running.']);
   }
-  if (!L.length) return false;
-  return talk(G, 'pbp', L.map(x => x + tail), big ? 3 : pri);
+  // a call is never made twice in a game: pick a base line not used yet, then add what it means
+  const unused = L.filter(x => !B.said.has(x)); if (!unused.length) return false;
+  const base = pickR(unused), ok = talk(G, 'pbp', [base + add + tail], big ? 3 : pri); if (ok) B.said.add(base); return ok;
 }
 // the analyst, right after the call: what the play showed
 function colorAfter(G, r) {
@@ -318,7 +317,7 @@ function leaders(L0, G) {
 }
 function intro(G) {
   B.intro = true; const A = TM(G, G.aid), H = TM(G, G.hid), [p1, p2] = B.crew, rec = T => (T.w != null && T.w + T.l + (T.tie || 0) > 0 ? ` (${T.w}-${T.l}${T.tie ? '-' + T.tie : ''})` : '');
-  talk(G, 'pbp', [`${A.name}${rec(A)} at ${H.name}${rec(H)}. I'm ${p1}, alongside ${p2}.`, `Welcome to ${H.city}! ${A.name} and ${H.name}. ${p1} here with ${p2}.`, `It's ${A.name} at ${H.name}${G.playoffs ? ', win or go home' : ''}. ${p1} and ${p2} with you.`], 3);
+  talk(G, 'pbp', [`${A.name}${rec(A)} at ${H.name}${rec(H)}. I'm ${p1}, alongside ${p2}.`, `Welcome to ${H.city}! The ${A.name} and the ${H.name}. ${p1} here with ${p2}.`, `It's the ${A.name} and the ${H.name}${G.playoffs ? ', win or go home' : ''}. ${p1} and ${p2} with you.`], 3);
 }
 function lineFromPbp(G, l) {
   let m;
