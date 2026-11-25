@@ -130,7 +130,7 @@ function next(G, cont) {
   // drives that ended
   let hold = 0;
   while (G.drives.length > b.nDr) { const d = G.drives[b.nDr++], o = b.open && b.open.tid === d.tid ? b.open : null; d.top = o ? Math.max(0, t - gsec(G, o.q, o.clock)) : null; d.bcq = o ? o.q : d.q;
-    b.drives3[d.tid].push(d.result); if (!quiet && S.gfx && d.result !== 'TD' && d.result !== 'FG' && (d.plays >= 1 || /INT|Fumble|Downs/.test(d.result))) queueLT(G, driveHtml(G, d), 'drive', 5.2); }
+    b.drives3[d.tid].push(d.result); if (!quiet && S.gfx && d.result !== 'TD' && d.result !== 'FG' && (d.plays >= 1 || /INT|Fumble|Downs/.test(d.result))) { queueLT(G, driveHtml(G, d), 'drive', 5.2); hold = Math.max(hold, 1.8); } }
   if (G.drive && G.drive !== b.open) b.open = G.drive;
   // scores
   for (const tid of [G.hid, G.aid]) { const dlt = G.score[tid] - b.sc[tid]; if (dlt <= 0) continue; b.sc[tid] = G.score[tid]; const lr = b.plays[b.plays.length - 1], tryPts = dlt === 1 || (dlt === 2 && lr && lr.two && lr.off === tid);
@@ -145,6 +145,7 @@ function next(G, cont) {
   }
   if (!quiet) colorBetween(G, r, swing);
   if (!quiet && !b.intro) intro(G);
+  if (b.wantHold) { hold = Math.max(hold, b.wantHold); b.wantHold = 0; }
   if (hold && !G.sim && cont && G.mode === 'watch' && !b.hold) { const sp = spd(G); if (sp < 4) { b.hold = { until: b.t + hold / sp, cont }; return true; } }
   return false;
 }
@@ -357,7 +358,7 @@ function refreshScore(G) { const s = el && el.lt.querySelector('.bclt-sc'); if (
 function plate(G, pid, kind) {
   const p = P(pid), s = st(G, pid); if (!p || setts().gfx === false) return; const T = TM(G, p.tid != null && G.T[p.tid] ? p.tid : G.poss);
   const cells = kind === 'QB' ? [[`${s.pc || 0}/${s.pa || 0}`, 'Comp'], [s.py || 0, 'Yds'], [s.ptd || 0, 'TD'], [s.pint || 0, 'Int']] : kind === 'RB' ? [[s.ra || 0, 'Car'], [s.ry || 0, 'Yds'], [((s.ry || 0) / Math.max(1, s.ra || 1)).toFixed(1), 'Avg'], [s.rtd || 0, 'TD']] : [[s.rec || 0, 'Rec'], [s.recy || 0, 'Yds'], [s.tgt || 0, 'Tgt'], [s.rectd || 0, 'TD']];
-  queueLT(G, `<div class="bclt-p" style="${teamVars(T)}"><div class="bclt-pn"><span>#${p.num || ''} ${e(p.pos)}</span><b>${e(p.fn ? p.fn[0] + '. ' : '')}${e(p.ln)}</b></div><div class="bclt-n">${cells.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div></div>`, 'plate', 4.2);
+  queueLT(G, `<div class="bclt-p" style="${teamVars(T)}"><div class="bclt-pn"><span>#${p.num || ''} ${e(p.pos)}</span><b>${e(p.fn ? p.fn[0] + '. ' : '')}${e(p.ln)}</b></div><div class="bclt-n">${cells.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div></div>`, 'plate', 4.2); B.wantHold = 1.8;
 }
 
 // ------------------------------------------------------------ the halftime card (holds the flow; tap or wait)
@@ -508,8 +509,8 @@ function frame(G) {
   const showWp = S.wp && G.stage !== 'load' && !G.daily; el.wp.classList.toggle('on', showWp); if (game) game.classList.toggle('bcwpon', showWp);
   if (showWp) wpBar(G);
   // what may be on screen now: nothing over a live play or a kick
-  const calm = !G.paused && G.stage !== 'live' && G.stage !== 'final' && G.stage !== 'load' && !G.kickAnim && !G.kaim && !G.kpow && !(G.play && G.play.ret && G.stage === 'pre') && !quietNow(G) && !b.big && !(G.mode === 'play' && G.stage === 'pre' && G.userSide);
-  const capOk = calm && !(G.mode === 'play' && G.stage === 'pre' && G.userSide) && !document.querySelector('#hud .csay.show');
+  const calm = !G.paused && G.stage !== 'live' && G.stage !== 'final' && G.stage !== 'load' && !G.kickAnim && !G.kaim && !G.kpow && !(G.play && G.play.ret && G.stage === 'pre') && !quietNow(G) && !b.big;
+  const ltOk = calm && !(G.stage === 'pre' && !G.pat), capOk = calm && !(G.mode === 'play' && G.stage === 'pre' && G.userSide) && !document.querySelector('#hud .csay.show');
   // captions
   b.q2 = b.q2.filter(x => x.exp > b.t && !(G.stage === 'live' && x.pri < 3));
   if (b.cap && (b.t >= b.cap.until || !capOk)) { b.cap = null; el.cap.classList.remove('show'); }
@@ -518,9 +519,9 @@ function frame(G) {
     el.cap.innerHTML = `<em class="${x.who ? 'col' : 'pbp'}">${e(who)}</em><span>${e(x.text)}</span>`; el.cap.classList.remove('show'); void el.cap.offsetWidth; el.cap.classList.add('show'); }
   // lower thirds
   b.ltq = b.ltq.filter(x => x.exp > b.t);
-  if (b.lt && (b.t >= b.lt.until || !calm)) { if (!calm && b.lt.kind === 'score' && b.t < b.lt.until) { b.lt.paused = true; } else b.lt = null; el.lt.classList.remove('show'); }
-  if (b.lt && b.lt.paused && calm) { b.lt.paused = false; el.lt.classList.add('show'); }
-  if (!b.lt && calm && b.ltq.length && S.gfx) { const x = b.ltq.shift(), sp = spd(G); b.lt = { kind: x.kind, until: b.t + x.dur / Math.min(2.2, sp) }; el.lt.innerHTML = x.html; el.lt.className = 'bclt k-' + x.kind; if (typeof paintArt === 'function') { try { paintArt(el.lt); } catch (er) { } } void el.lt.offsetWidth; el.lt.classList.add('show'); }
+  if (b.lt && (b.t >= b.lt.until || !ltOk)) { if (!ltOk && b.lt.kind === 'score' && b.t < b.lt.until) { b.lt.paused = true; } else b.lt = null; el.lt.classList.remove('show'); }
+  if (b.lt && b.lt.paused && ltOk) { b.lt.paused = false; el.lt.classList.add('show'); }
+  if (!b.lt && ltOk && b.ltq.length && S.gfx) { const x = b.ltq.shift(), sp = spd(G); b.lt = { kind: x.kind, until: b.t + x.dur / Math.min(2.2, sp) }; el.lt.innerHTML = x.html; el.lt.className = 'bclt k-' + x.kind; if (typeof paintArt === 'function') { try { paintArt(el.lt); } catch (er) { } } void el.lt.offsetWidth; el.lt.classList.add('show'); }
   layout(G);
 }
 function bigPlay(r) { const s = r.res; return !!s && (s.td || s.to || Math.abs(s.y) >= 20 || r.down === 4 || r.two || (s.sack && r.down >= 3)); }
