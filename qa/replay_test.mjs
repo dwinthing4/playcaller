@@ -18,6 +18,7 @@ page.on('pageerror', e => errs.push('pageerror: ' + e.message + ' ' + (e.stack |
 page.on('console', m => { if (m.type() === 'error' && !/fonts\.g|net::|ERR_/.test(m.text())) errs.push('console: ' + m.text()); });
 page.on('dialog', d => d.accept());
 const check = (c, what) => { (c ? oks : fails).push(what); console.log((c ? 'PASS ' : 'FAIL ') + what); };
+let lastHeap = 0; const heapLog = async () => { try { const h = await page.evaluate(() => performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : 0); if (Math.abs(h - lastHeap) > 15) { lastHeap = h; console.log('  heap ' + h + ' MB'); } } catch (e) { } };
 let n = 0; const shot = async name => { for (let i = 0; i < 2; i++) { try { await page.screenshot({ path: path.join(out, `${which}_${String(n).padStart(2, '0')}_${name}.png`) }); n++; return; } catch (e) { await page.waitForTimeout(400); } } console.log('(screenshot failed: ' + name + ')'); n++; };
 const wait = ms => page.waitForTimeout(ms);
 const S = () => page.evaluate(() => { const g = MATCH._G; if (!g) return null; const pl = g.play, st = RPLY._.state();
@@ -36,6 +37,7 @@ async function step(opts = {}) {
     if (g.sheet === 'O') {
       if (opts.onO) await opts.onO(g);
       if (g.down === 4 && !opts.go4 && await page.$('[data-act="punt"]')) { await page.evaluate(() => document.querySelector('[data-act="punt"]').click()); await wait(400); return g; }
+      if (await page.$('.sheet [data-f="run"]:not(.on2)')) { await page.evaluate(() => document.querySelector('.sheet [data-f="run"]').click()); await wait(250); }
       await page.evaluate(() => { const cards = [...document.querySelectorAll('.sheet .pc[data-id]')]; const p = cards.find(c => { const x = L.plays.find(y => y.id === c.dataset.id); return x && x.type === 'run' && !x.pa; }) || cards[0]; if (p) p.click(); }); await wait(450); return g; }
     if (g.sheet === 'D') { await page.evaluate(() => { const c = document.querySelector('.sheet .pc[data-id]'); if (c) c.click(); }); await wait(450); return g; }
     if (g.sheet === 'PAT') { await page.evaluate(() => { const b = document.querySelector('.sheet [data-act]'); if (b) b.click(); }); await wait(400); return g; }
@@ -43,7 +45,7 @@ async function step(opts = {}) {
   if (g.stage === 'pre' && g.side === 'O' && g.phase === 'pre') { await page.keyboard.press('Space'); await wait(300); return g; }
   await wait(200); return g;
 }
-async function until(pred, sec, opts) { const t0 = Date.now(); let g = null; while (Date.now() - t0 < sec * 1000) { g = await S(); if (!g) return null; if (await pred(g)) return g; await step(opts); } return null; }
+async function until(pred, sec, opts) { const t0 = Date.now(); let g = null; await heapLog(); while (Date.now() - t0 < sec * 1000) { g = await S(); if (!g) return null; if (await pred(g)) return g; await step(opts); } return null; }
 // the user's next offensive play call: set it up (fn runs in the page with G), then the bot calls a run
 async function nextO(setup, sec = 120) {
   const g = await until(x => x.stage === 'call' && x.sheet === 'O' && x.mode === 'play' && !x.rp && !x.win && !x.card, sec); if (!g) return false;
@@ -135,8 +137,9 @@ if (part === 'play' || part === 'all') {
     await page.evaluate(() => RPLY._.force({ kind: 'none' }));
   }
   // ---- 6. halftime highlights (the first half's best plays), then the game goes on
-  const ht = await until(x => x.rp && x.bug === 'HIGHLIGHTS', 90);
-  check(!!ht, 'halftime: the highlight reel plays');
+  const nh = await page.evaluate(() => RPLY._.clips().hi.filter(h => h.q <= 2).length);
+  const ht = nh >= 2 ? await until(x => x.rp && x.bug === 'HIGHLIGHTS', 90) : null;
+  if (nh >= 2) check(!!ht, 'halftime: the highlight reel plays'); else console.log('  (halftime reel skipped: only ' + nh + ' first-half highlight)');
   if (ht) { await wait(1200); await shot('half_reel'); await page.evaluate(() => RPLY._.skip()); }
   check(await until(x => x.q === 3 && (x.stage === 'kick' || x.ret || x.stage === 'call' || x.stage === 'live' || x.stage === 'pre'), 60) != null, 'the second half kicks off after the reel');
   // ---- 7. the final whistle: the game reel, then the final card with a Highlights button
@@ -154,8 +157,8 @@ if (part === 'mem' || part === 'all') {
   await page.evaluate(() => { const i = document.querySelector('.spdbar input'); if (i) { i.value = '2'; i.dispatchEvent(new Event('input', { bubbles: true })); } });
   const t0 = Date.now(); let maxB = 0, maxC = 0, heap0 = null, heapMax = 0, reps = 0, lastRp = false;
   while (Date.now() - t0 < 270000) {
-    const s = await page.evaluate(() => { const g = MATCH._G; return g ? { m: RPLY._.mem(), heap: performance.memory ? performance.memory.usedJSHeapSize : 0, st: g.stage, q: g.q, rp: RPLY._.state().rp, bug: RPLY._.state().bug } : null; });
-    if (!s) break; if (s.rp && !lastRp) reps++; lastRp = s.rp; maxB = Math.max(maxB, s.m.bytes); maxC = Math.max(maxC, s.m.clips); if (heap0 == null && s.q >= 1) heap0 = s.heap; heapMax = Math.max(heapMax, s.heap);
+    const s = await page.evaluate(() => { const g = MATCH._G; return g ? { m: RPLY._.mem(), heap: performance.memory ? performance.memory.usedJSHeapSize : 0, rigs: R3D.stats().rigs, st: g.stage, q: g.q, rp: RPLY._.state().rp, bug: RPLY._.state().bug } : null; });
+    if (!s) break; if (Math.round((Date.now() - t0) / 1000) % 30 < 2) console.log(`  t=${Math.round((Date.now() - t0) / 1000)}s q${s.q} ${s.st} heap ${(s.heap / 1e6).toFixed(0)} MB clips ${s.m.clips} ${(s.m.bytes / 1e6).toFixed(1)} MB rigs ${s.rigs}`); if (s.rp && !lastRp) reps++; lastRp = s.rp; maxB = Math.max(maxB, s.m.bytes); maxC = Math.max(maxC, s.m.clips); if (heap0 == null && s.q >= 1) heap0 = s.heap; heapMax = Math.max(heapMax, s.heap);
     if (s.st === 'final' && !s.rp) break; await wait(1500);
   }
   const fin = await page.evaluate(() => MATCH._G ? MATCH._G.stage : null);

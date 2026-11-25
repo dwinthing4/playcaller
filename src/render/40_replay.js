@@ -15,8 +15,8 @@ const RPV = (() => {
   }
   // where the ball was: a short post and a disc (the review angle's "here")
   function spot(x, z, y, color) {
-    const c = color || 0xff7a1a, post = add(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.1, 8), mat(c, 0.95)), 32); post.position.set(x, (y || 0) + 0.55, z);
-    const d = add(new THREE.Mesh(new THREE.RingGeometry(0.1, 0.24, 28), mat(c, 0.95)), 32); d.rotation.x = -Math.PI / 2; d.position.set(x, 0.045, z);
+    const c = color || 0xff7a1a, post = add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.8, 10), mat(c, 1)), 32); post.position.set(x, (y || 0) + 0.9, z);
+    const d = add(new THREE.Mesh(new THREE.CircleGeometry(0.34, 28), mat(c, 0.95)), 32); d.rotation.x = -Math.PI / 2; d.position.set(x, 0.045, z);
   }
   // the ring under one player (moved every frame); pulses a little so it reads on a busy field
   function ring(x, z, color, dt) {

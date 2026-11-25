@@ -417,8 +417,8 @@ function offer(g, c, C, done) {
   let tip = `Close one. ${ch.left} challenge${ch.left === 1 ? '' : 's'} left; a lost one costs a timeout.`;
   if (perk()) { const read = R() < 0.85 ? C.wrong : !C.wrong; tip = read ? `Replay assistant: "Throw it, coach. I have it as ${C.tB.toLowerCase()}."` : `Replay assistant: "They got it right. Save the challenge."`; }
   win = { g, c, C, done };
-  ui.call.innerHTML = `<div class="rk">RULING ON THE FIELD</div><b>${esc(C.rTxt)}</b><div class="rq">${esc(C.q)}</div><div class="ra">${esc(tip)}</div>
-    <div class="rr"><button class="rpp chal on" data-rp="chal">${ICO.flag}<span>Challenge</span></button><button class="rpp on" data-rp="replay">Replay</button><button class="rpp on" data-rp="playon">Play on</button></div><i class="rt"></i>`;
+  ui.call.innerHTML = `<div class="rpk">RULING ON THE FIELD</div><b>${esc(C.rTxt)}</b><div class="rpq">${esc(C.q)}</div><div class="rpa">${esc(tip)}</div>
+    <div class="rpr"><button class="rpp chal on" data-rp="chal">${ICO.flag}<span>Challenge</span></button><button class="rpp on" data-rp="replay">Replay</button><button class="rpp on" data-rp="playon">Play on</button></div>`;
   ui.call.style.setProperty('--rc', (tm && tm.c1) || '#c8202a'); ui.call.classList.remove('show', 'dim'); void ui.call.offsetWidth; ui.call.classList.add('show');
   M.after(9000, () => { if (win && win.C === C) closeWin('play'); });
 }
@@ -443,7 +443,7 @@ function review(g, c, C, kicker, then) {
   segs.push({ cam: C.kind === 'fumble' ? 'tight' : 'side', t0: kT - 2.8, t1: kT + 0.2, pid: v.pid, lt: { k: kicker, b: C.q, s: `Ruling on the field: ${C.rTxt}` } });
   const rv = { cam: 'rev', t0: kT - 1.1, t1: kT, slow: [kT - 1.2, kT + 0.1, 0.3], hold: 1.8, bug: 'REVIEW', lt: { k: kicker, b: C.q, s: `Ruling on the field: ${C.rTxt}` } };
   if (C.kind === 'spot' || C.kind === 'goal') {
-    const z = v.z; rv.pos = [-(F.halfW + (C.kind === 'goal' ? 1.2 : 6)), C.kind === 'goal' ? 0.9 : 1.5, z]; rv.look = [cl(v.x, -F.halfW + 2, F.halfW), 0.35, z]; rv.hf = C.kind === 'goal' ? 34 : 24;
+    const z = v.z; rv.pos = [-(F.halfW + (C.kind === 'goal' ? 1.2 : 6)), C.kind === 'goal' ? 0.9 : 2.6, z]; rv.look = [cl(v.x, -F.halfW + 2, F.halfW), 0.35, z]; rv.hf = C.kind === 'goal' ? 34 : 24;
     rv.marks = () => { RPV.band(-F.halfW, z, F.halfW, z, 0.1, C.kind === 'goal' ? 0xffffff : 0xffd21a, 0.95); const b = ballAt(c, kT); RPV.spot(b.x, v.sz != null ? v.sz : b.z, 0, 0xff7a1a); };
   } else if (C.kind === 'side') {
     rv.pos = [sx * (F.halfW + 0.7), 1.1, v.z - 7.5]; rv.look = [sx * F.halfW, 0.3, v.z + 1]; rv.hf = 30; rv.ring = { pid: v.pid, col: 0xffffff };
@@ -463,7 +463,7 @@ function decide(g, c, C, tid, done, quiet) {
   if (c) c.review = word;
   if (quiet) { M.tick(`After review: ${word === 'overturned' ? 'overturned, ' + C.tA.toLowerCase() : 'the call ' + word}`); return done(res); }
   const big = word === 'overturned' ? 'RULING OVERTURNED' : word === 'stands' ? 'RULING STANDS' : 'RULING CONFIRMED';
-  ui.card.innerHTML = `<div class="rk">AFTER REVIEW</div><b class="${word}">${big}</b><div class="rs">The ruling on the field ${word === 'overturned' ? 'is overturned' : word === 'stands' ? 'stands' : 'is confirmed'}: ${esc(C.wrong ? C.tA : C.rTxt)}.</div>${note ? `<div class="rn">${esc(note)}</div>` : ''}<div class="rh">Tap to continue</div>`;
+  ui.card.innerHTML = `<div class="rpk">AFTER REVIEW</div><b class="${word}">${big}</b><div class="rps">The ruling on the field ${word === 'overturned' ? 'is overturned' : word === 'stands' ? 'stands' : 'is confirmed'}: ${esc(C.wrong ? C.tA : C.rTxt)}.</div>${note ? `<div class="rpn">${esc(note)}</div>` : ''}<div class="rpt">Tap to continue</div>`;
   ui.card.classList.remove('show'); void ui.card.offsetWidth; ui.card.classList.add('show'); if (M.buzz) M.buzz(word === 'overturned' ? 40 : 15);
   let fin = false; const go = () => { if (fin) return; fin = true; ui.card.onDone = null; ui.card.classList.remove('show'); done(res); };
   ui.card.onDone = go; M.after(3000, go);
