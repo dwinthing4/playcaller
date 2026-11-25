@@ -75,4 +75,5 @@ body.phonemode .rpbar{padding:5px 6px;gap:6px}
 body.phonemode .rpb{height:34px;padding:0 10px;font-size:12px}
 body.phonemode .rpp{height:36px;font-size:12px;padding:0 11px 0 10px}
 body.phonemode .rpbug b{font-size:18px;padding:7px 14px 5px 13px}
+body.phonemode .rpbug{top:calc(76px + var(--sat))}      /* below the win-probability chip */
 @media (max-height:500px){#gui .rpcall{top:calc(58px + var(--sat))}.rplt{bottom:calc(60px + var(--sab))}}

@@ -154,7 +154,8 @@ if (part === 'play' || part === 'all' || part === 'td' || part === 'end') {
   if (part !== 'play') {
   // ---- 7. the final whistle: the game reel, then the final card with a Highlights button
   if (part !== 'end') await page.evaluate(() => { const G = MATCH._G; G.q = 4; G.clock = 6; G.warned[4] = true; if (G.score[G.hid] === G.score[G.aid]) G.score[G.hid] += 3; });
-  const fr = await until(x => x.rp && x.bug === 'HIGHLIGHTS' && x.stage === 'final', 120);
+  let lastSt = '';
+  const fr = await until(async x => { const k = [x.stage, x.q, Math.round(x.clock), x.rp, x.bug, x.heap].join(' '); if (process.env.RPDBG && k !== lastSt) { lastSt = k; console.log('   ', k, JSON.stringify(await page.evaluate(() => { try { return R3D.stats(); } catch (e) { return null; } }))); } return x.rp && x.bug === 'HIGHLIGHTS' && x.stage === 'final'; }, 120);
   check(!!fr, 'final: the game reel plays on its own');
   if (fr) { await wait(1500); await shot('final_reel'); const m = await page.evaluate(() => RPLY._.clips()); console.log('  highlights:', m.hi.map(h => `${h.imp} ${h.desc}`).join(' | ')); await page.evaluate(() => RPLY._.next()); await wait(1600); await shot('final_reel_next'); await page.evaluate(() => RPLY._.skip()); await wait(600); }
   const hb = await page.$('#mHl'); check(!!hb, 'final card: a Highlights button'); await shot('final_card');
