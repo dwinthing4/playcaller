@@ -144,7 +144,6 @@ function next(G, cont) {
     if (!quiet && G.q === 5) talk(G, 'pbp', ['We are headed to overtime! Next score wins it.', 'Free football! The next score ends it.'], 3, 'ot');
   }
   if (!quiet) colorBetween(G, r, swing);
-  if (!quiet && !b.intro) intro(G);
   if (b.wantHold) { hold = Math.max(hold, b.wantHold); b.wantHold = 0; }
   if (hold && !G.sim && cont && G.mode === 'watch' && !b.hold) { const sp = spd(G); if (sp < 4) { b.hold = { until: b.t + hold / sp, cont }; return true; } }
   return false;
@@ -507,6 +506,7 @@ function frame(G) {
   if (b.hold && (b.t >= b.hold.until || G.sim || G.mode === 'play')) { const c = b.hold.cont; b.hold = null; c(); if (!G.bc) return; }
   // the call of the last play, once the match has processed it
   if (b.pending && G.stage !== 'live') { const r = b.pending; b.pending = null; settle(G, r); if (r.res && !quietNow(G)) { const s = setts(); if (s.comm !== 'off') { if (spd(G) < 4 || bigPlay(r)) { callPlay(G, r); if (spd(G) < 4 && Math.random() < 0.55) colorAfter(G, r); } } } }
+  if (!b.intro && G.stage !== 'load' && !G.daily && !quietNow(G)) intro(G);
   if (G.over && G.stage === 'final' && !b.fin) { b.fin = true; sample(G, 'Final'); }
   // the bar
   const showWp = S.wp && G.stage !== 'load' && !G.daily; el.wp.classList.toggle('on', showWp); if (game) game.classList.toggle('bcwpon', showWp);
