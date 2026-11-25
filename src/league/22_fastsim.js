@@ -257,6 +257,7 @@ function fastGame(g, opt) {
   // ---- the game loop: nextSnap() of the match, step for step
   S.poss = S.recvFirst; S.kickNext = opp(S.recvFirst);
   while (!S.over && guard++ < 2000) {
+    if (opt.onSnap) opt.onSnap(S, H.id, A.id);      // QA: the state before each step (qa/wp_calib.cjs calibrates the win probability on it)
     if (S.pat) { pat(); continue; }
     if (S.clock <= 0) { endQuarter(); continue; }
     if (S.kickNext != null) { const k = S.kickNext, fr = S.freeKick; S.kickNext = null; kickoff(k, fr); continue; }

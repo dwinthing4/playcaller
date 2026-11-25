@@ -15,6 +15,8 @@ const BST = { held: 0, air: 1, loose: 2, dead: 3, snap: 4 }, BSN = ['held', 'air
 let M = null, ui = null, lastG = null, home = new Set(), cur = null, recent = [], hi = [], seq = 0, seen = new WeakSet();
 let rp = null, win = null, nudge = 0, force = null, btnKey = '', cardT = 0;
 const g0 = () => (typeof MATCH !== 'undefined' ? MATCH._G : null);
+const bcBusy = () => typeof BCAST !== 'undefined' && BCAST.busy && BCAST.busy();      // a broadcast card holds the flow (src/match/30_broadcast.js)
+const bcMute = sec => { try { if (typeof BCAST !== 'undefined' && BCAST.mute) BCAST.mute(sec); } catch (e) { } };      // the booth and its lower thirds wait while ours are up
 const setting = () => { try { return localStorage.getItem('pc_replay') || 'auto'; } catch (e) { return 'auto'; } };
 const FD = () => PHYS.FIELD;
 const other = (g, tid) => (tid === g.hid ? g.aid : g.hid);
@@ -142,7 +144,7 @@ function kickMeta(g, c) {
   const k = c.kick, F = FD(), posts = F.goalZ + 10 * YD, good = k.end.z > posts && Math.abs(k.end.x) < 2.9 && k.end.y > 3.05, dist = Math.round(100 - c.yl0 + 17), late = c.q >= 4 && g.clock < 40 && Math.abs(g.score[g.hid] - g.score[g.aid]) <= 3;
   c.meta = { desc: `${dist}-yard field goal ${good ? 'is good' : 'no good'}`, good, dist, big: good && (dist >= 45 || late) ? (late ? 2 : 1) : 0, keyT: k.dur, keyPid: null, res: null };
 }
-// how much a play belongs in the highlights: the win-probability swing when the broadcast has one (wpNow), else points,
+// how much a play belongs in the highlights: the win-probability swing (wpNow, src/core/50_wp.js, before the snap vs the next snap), else points,
 // turnovers, yards and the hit, worth more late in a close game
 function importance(c) {
   const m = c.meta || {}, r = m.res || {}; let v = 0;
@@ -154,7 +156,7 @@ function importance(c) {
 }
 function wpSafe(g) {
   try { const f = typeof wpNow === 'function' ? wpNow : typeof MATCH !== 'undefined' && typeof MATCH.wpNow === 'function' ? MATCH.wpNow : null; if (!f) return null;
-    const v = f(g), h = typeof v === 'number' ? v : v && typeof v === 'object' ? (v.home != null ? v.home : v.h != null ? v.h : v.wp) : null; return typeof h === 'number' && isFinite(h) ? h : null; } catch (e) { return null; }
+    const v = f(g), h = typeof v === 'number' ? v : v && typeof v === 'object' ? (v.home != null ? v.home : v.h != null ? v.h : v.wp) : null; return typeof h === 'number' && isFinite(h) ? (h > 1.0001 ? h / 100 : h) : null; } catch (e) { return null; }
 }
 const lastClip = () => (cur && cur.endT != null && cur.T.length > 6 ? cur : recent[recent.length - 1] || null);
 function mem() { const s = new Set(recent.concat(hi)); if (cur) s.add(cur); let b = 0, n = 0; for (const c of s) { b += c.bytes || c.T.length * (c.ps.length * NV * 2 + 48); n++; } return { clips: n, bytes: b, recent: recent.length, hi: hi.length }; }
@@ -167,7 +169,7 @@ function play(items, opt, done) {
   if (!g || rp || !items.length || !M) { if (done) done(true); return false; }
   const q = []; for (const it of items) for (const s of it.segs) { clampSeg(it.c, s); q.push({ it, s }); }
   rp = { g, q, qi: -1, opt: opt || {}, done, t: 0, hold: 0, paused: false, scrub: false, cut: 0.28, pend: 0, prevCam: R3D.camOverride || null, entered: false, cam: null, reflag: opt && opt.reflag || null };
-  g.rp = true; win && ui.call.classList.add('dim'); stinger(rp.opt.wipe || 'REPLAY'); return true;
+  g.rp = true; win && ui.call.classList.add('dim'); bcMute(900); stinger(rp.opt.wipe || 'REPLAY'); return true;
 }
 function clampSeg(c, s) { const a = c.T[0], b = c.T[c.T.length - 1]; s.t0 = cl(s.t0, a, b); s.t1 = cl(s.t1, s.t0, b); }
 function frame(dt) {
@@ -208,7 +210,7 @@ function advance(dt) {
   if (r.t >= s.t1) { r.t = s.t1; if (s.hold) r.hold = s.hold; else nextSeg(); }
 }
 function stop(aborted) {
-  const r = rp; if (!r) return; rp = null; if (r.g) r.g.rp = false;
+  const r = rp; if (!r) return; rp = null; if (r.g) r.g.rp = false; bcMute(win || (ui && ui.card.classList.contains('show')) ? 12 : 0);
   try { exit(r); } catch (e) { console.error(e); }
   const d = r.done; r.done = null; if (d) { try { d(aborted); } catch (e) { console.error(e); } }
 }
@@ -418,14 +420,14 @@ function offer(g, c, C, done) {
   const ch = chal(g, g.user), tm = g.T[g.user];
   let tip = `Close one. ${ch.left} challenge${ch.left === 1 ? '' : 's'} left; a lost one costs a timeout.`;
   if (perk()) { const read = R() < 0.85 ? C.wrong : !C.wrong; tip = read ? `Replay assistant: "Throw it, coach. I have it as ${(C.wrong ? C.tA : C.tB).split(':')[0].toLowerCase()}."` : `Replay assistant: "They got it right. Save the challenge."`; }
-  win = { g, c, C, done };
+  win = { g, c, C, done }; bcMute(12);
   ui.call.innerHTML = `<div class="rpk">RULING ON THE FIELD</div><b>${esc(C.rTxt)}</b><div class="rpq">${esc(C.q)}</div><div class="rpa">${esc(tip)}</div>
     <div class="rpr"><button class="rpp chal on" data-rp="chal">${ICO.flag}<span>Challenge</span></button><button class="rpp on" data-rp="replay">Replay</button><button class="rpp on" data-rp="playon">Play on</button></div>`;
   ui.call.style.setProperty('--rc', (tm && tm.c1) || '#c8202a'); ui.call.classList.remove('show', 'dim'); void ui.call.offsetWidth; ui.call.classList.add('show');
   M.after(9000, () => { if (win && win.C === C) closeWin('play'); });
 }
 function closeWin(choice) {
-  const w = win; if (!w) return; win = null; ui.call.classList.remove('show');
+  const w = win; if (!w) return; win = null; ui.call.classList.remove('show'); if (!rp) bcMute(0);
   if (choice === 'chal' && canChal(w.g, w.g.user, w.C.ruled)) return challenge(w.g, w.c, w.C, w.done, w.g.user);
   w.done(w.C.ruled);
 }
@@ -466,13 +468,13 @@ function decide(g, c, C, tid, done, quiet) {
   if (quiet) { M.tick(`After review: ${word === 'overturned' ? 'overturned, ' + C.tA.toLowerCase() : 'the call ' + word}`); return done(res); }
   const big = word === 'overturned' ? 'RULING OVERTURNED' : word === 'stands' ? 'RULING STANDS' : 'RULING CONFIRMED';
   ui.card.innerHTML = `<div class="rpk">AFTER REVIEW</div><b class="${word}">${big}</b><div class="rps">The ruling on the field ${word === 'overturned' ? 'is overturned' : word === 'stands' ? 'stands' : 'is confirmed'}: ${esc(C.wrong ? C.tA : C.rTxt)}.</div>${note ? `<div class="rpn">${esc(note)}</div>` : ''}<div class="rpt">Tap to continue</div>`;
-  ui.card.classList.remove('show'); void ui.card.offsetWidth; ui.card.classList.add('show'); if (M.buzz) M.buzz(word === 'overturned' ? 40 : 15);
-  let fin = false; const go = () => { if (fin) return; fin = true; ui.card.onDone = null; ui.card.classList.remove('show'); done(res); };
+  ui.card.classList.remove('show'); void ui.card.offsetWidth; ui.card.classList.add('show'); bcMute(4); if (M.buzz) M.buzz(word === 'overturned' ? 40 : 15);
+  let fin = false; const go = () => { if (fin) return; fin = true; ui.card.onDone = null; ui.card.classList.remove('show'); bcMute(0); done(res); };
   ui.card.onDone = go; M.after(3000, go);
 }
 function redFlag(g, tid, then) {
   const f = ui.flag, T = g.T[tid]; f.querySelector('b').textContent = (T && (T.name || T.abbr) || '').toUpperCase(); f.style.setProperty('--rc', (T && T.c1) || '#333');
-  f.classList.remove('show'); void f.offsetWidth; f.classList.add('show'); if (M.buzz) M.buzz(25);
+  f.classList.remove('show'); void f.offsetWidth; f.classList.add('show'); bcMute(12); if (M.buzz) M.buzz(25);
   M.after(1500, () => { f.classList.remove('show'); then(); });
 }
 
@@ -509,7 +511,9 @@ function autoAfter(g, c, fouls) {
 }
 function autoGo(c, style) {
   const g = g0(); if (!g || g !== lastG || g.sim || rp || win || g.penWait || g.paused || g.stage === 'flag' || g.stage === 'pre' || g.stage === 'live' || g.stage === 'final' || (M.el.ovl && M.el.ovl.classList.contains('show'))) return;
-  if (pres(g) === 'none') return; playPlan(c, style);
+  if (pres(g) === 'none') return;
+  if (bcBusy()) { if ((c.waits = (c.waits || 0) + 1) <= 8) M.after(500, () => autoGo(c, style)); return; }      // a broadcast card is up: ours follows it
+  playPlan(c, style);
 }
 // a kick or punt return (retWhistle): the long ones and the touchdowns get a replay
 function ret(pl, res, R0) {
@@ -557,7 +561,7 @@ function final(ovl) {
 }
 
 // ------------------------------------------------------------ the Replay button, keys
-function replayable(g) { return !!(g && !rp && !win && !g.sim && !g.paused && !g.over && pres(g) === 'full' && (g.stage === 'dead' || g.stage === 'call') && !g.penWait && lastClip() && !(M.el.ovl && M.el.ovl.classList.contains('show'))); }
+function replayable(g) { return !!(g && !rp && !win && !g.sim && !g.paused && !g.over && pres(g) === 'full' && (g.stage === 'dead' || g.stage === 'call') && !g.penWait && !bcBusy() && lastClip() && !(M.el.ovl && M.el.ovl.classList.contains('show'))); }
 function userReplay() {
   const g = g0(), c = lastClip(); if (!g || !c || rp || g.sim) return; nudge = 0;
   if (c.foul) return void play([flagItem(c, c.foul)], { wipe: 'REPLAY' });

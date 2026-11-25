@@ -124,3 +124,14 @@ Playbook dy (+ = right) maps to x = -dy * YD. Engine always runs plays toward +z
 - Hooks in 10_match.js (one line each, search RPLY): init, frame, onWhistle (`RPLY.whistle(pl, info, go)`: flag replay, then the call on the field and any review, then `judge` with the result that stands), retWhistle, deadBall, endQuarter (halftime reel), finalCard (Highlights button). 20_scene.js: `R3D.addObj/delObj`, `R3D.noDirt`.
 - Calls on the field: close spots (first down), the goal line, sideline catches, fumble vs down by contact. Each has the truth (the engine) and the other outcome; the official errs more the closer it was; a review always finds the truth. Challenges: 2 a game, a 3rd after two wins, a lost one costs a timeout, none inside two minutes / OT (the booth reviews instead); scores and turnovers ruled on the field are reviewed upstairs. Coach perk str4: the replay assistant gives a read (right ~85%). QA: `RPLY._` (force, state, mem, clips, skip ...), test qa/replay_test.mjs.
 - Setting `localStorage.pc_replay` = auto | ask | off (Settings > Game).
+
+## Broadcast package (src/core/50_wp.js, src/match/30_broadcast.js, src/shell/30_bcast.css)
+- Win probability: `WP.of(state)` / `wpNow(G)` (home win %, ties count half) from score, share of the game left, ball, field position, down and distance (RULES.ep),
+  timeouts, a pending kickoff or try, the pregame edge (`LG.wpPower`: teamPower off+def, home minus away; the hub uses the same), the leader kneeling it out,
+  sudden-death overtime. Constants in `WP.K` per quarter length, fitted on fast-sim games: `node qa/wp_calib.cjs [games] [--fit]` prints the calibration table
+  (fastGame takes `opt.onSnap(S, hid, aid)` for this).
+- BCAST (one-line hooks in 10_match.js): `step(G, pl)` after each physics step collects routes (5 Hz), the target, landing spot and separation at arrival, run paths;
+  `next(G, nextSnap)` at the top of nextSnap samples WP (`G.bc.wph`), time of possession, 3rd downs, closes drives into lower thirds, scores into scoring cards,
+  halftime into a held card (returns true to hold; it calls nextSnap itself); `frame(G)` shows the WP bar, booth captions (queued, never over a live play)
+  and lower thirds; `pause(el.ovl)` adds Game stats to the pause menu; `finalHtml(G)` adds the WP graph and chart buttons to the final card.
+  `BCAST.busy()` / `BCAST.mute(sec)` for other overlays (replays). Settings: L.settings.comm (on/big/off), wpbar, bcgfx.

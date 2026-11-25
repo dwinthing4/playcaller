@@ -48,6 +48,7 @@ async function bot(maxSec, opts = {}) {
     if (seen.maxStuck > 45) { seen.stuck = key; break; }
     if (g.auto === 'side') { if (g.poss === g.user) seen.autoO++; else seen.autoD++; }
     if (opts.fast && g.auto) await page.evaluate(() => { const i = document.querySelector('.spdbar input'); if (i && i.value !== '4') { i.value = '4'; i.dispatchEvent(new Event('input', { bubbles: true })); } });
+    if (await page.$('.bcbig.show [data-bc="go"]')) { await page.evaluate(() => document.querySelector('.bcbig.show [data-bc="go"]').click()); await wait(300); continue; }      // halftime card: on to the second half
     if (g.kick) { await page.keyboard.press('Space'); await wait(500); continue; }
     if (g.pen) { await page.keyboard.press('Space'); await wait(400); continue; }
     if (g.stage === 'call' && g.mode === 'play') {

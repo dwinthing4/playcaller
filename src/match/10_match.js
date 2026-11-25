@@ -110,7 +110,7 @@ function frame(now) {
     const pl = G.play;
     if (pl && !G.sim && (G.stage === 'pre' || G.stage === 'live' || G.stage === 'dead' || G.stage === 'call')) {
       applyInput(pl); acc += dt * G.speed; let n = 0;
-      while (acc >= DT && n < 60) { pl.step(DT); if (G.rot) LG.rotStep(G.rot, pl, DT); acc -= DT; n++;
+      while (acc >= DT && n < 60) { pl.step(DT); if (G.rot) LG.rotStep(G.rot, pl, DT); if (typeof BCAST !== 'undefined') BCAST.step(G, pl); acc -= DT; n++;
         if (G.stage === 'pre' && pl.phase === 'live') { G.stage = 'live'; R3D.overlay(null); el.say.classList.remove('show'); }
         if (G.stage === 'live' && pl.phase === 'dead') { onWhistle(); break; } }
       if (acc > DT * 4) acc = 0;
@@ -215,6 +215,7 @@ function score(tid, pts, why, td) {
 }
 function nextSnap() {
   if (!G || G.over) return;
+  if (typeof BCAST !== 'undefined' && BCAST.next(G, nextSnap)) return;      // broadcast: win probability, drive and score cards (may hold for a card, then calls nextSnap)
   if (G.daily && gmDailyCheck()) return;      // the daily drive ends with its drive
   G.userSide = null; actsFor('none');
   if (G.pat) return patStage();
@@ -336,8 +337,9 @@ function simPlay(fake) {
   { const pre = preRoll(opts); if (pre && pre.dead) { const d = applyFoul(pre, null, null); simProgress(); if (d >= 0) after(0, nextSnap); return; } if (pre) G.fouls.push(pre); }
   const pl = new PHYS.Play(opts); let n = 0; while (pl.phase === 'pre' && n < 1500) { if (n === 20) pl.snap(); pl.step(DT); n++; if (n % 4 === 0) pl.updatePoses(); }
   if (pl.phase === 'pre') pl.goLive();                       // long motion: snap anyway
-  let m = 0; while (pl.phase === 'live' && m < 120 * 30) { pl.step(DT); if (G.rot) LG.rotStep(G.rot, pl, DT); m++; if (m % 4 === 0) pl.updatePoses(); }
+  let m = 0; while (pl.phase === 'live' && m < 120 * 30) { pl.step(DT); if (G.rot) LG.rotStep(G.rot, pl, DT); if (typeof BCAST !== 'undefined') BCAST.step(G, pl); m++; if (m % 4 === 0) pl.updatePoses(); }
   if (pl.phase === 'live' || !pl.result) { pl.phase = 'live'; pl.endPlay('tackle', 'Whistle', pl.carrier, pl.carrier ? pl.carrier.p.z : pl.losZ); }
+  if (typeof BCAST !== 'undefined') BCAST.step(G, pl);      // broadcast stats: the finished play (src/match/30_broadcast.js)
   flagWatch(pl); const c = pl.carrier, d = judge(pl.result, { lists: G.cur.lists, lastX: c ? c.p.x : 0 });
   simProgress(); if (d >= 0) after(0, nextSnap);
 }
@@ -962,6 +964,7 @@ function hudFrame() {
   if (pl && G.stage === 'live' && pl.flagEv && pl.flagEv.length > (G.fev || 0)) flagWatch(pl);
   condHud();
   gmFrame();      // the play clock, motion at the line
+  if (typeof BCAST !== 'undefined') BCAST.frame(G);      // broadcast graphics and the booth
 }
 // the player you control and the ratings that matter for what he is doing right now
 const CHIP_KEYS = { pass: ['thp', 'tha', 'awr'], run: ['spd', 'elu', 'btk'], rec: ['spd', 'cth', 'elu'], def: ['spd', 'tak', 'pur'], cov: ['spd', 'mcv', 'zcv'], rush: ['prs', 'pow', 'spd'] };
@@ -1365,6 +1368,7 @@ function pauseMenu() {
   overlay(`<div class="card"><h2>Paused</h2><div class="small mute">${esc(TM(G.aid).abbr)} ${G.score[G.aid]} — ${esc(TM(G.hid).abbr)} ${G.score[G.hid]} · ${qTxt(G.q)} ${clockTxt(G.clock)}</div>
     <div class="row" style="margin-top:14px;flex-direction:column;align-items:stretch"><button class="pri on" data-m="resume">Resume</button><button class="on" data-m="cam">Camera…</button>${G.mode === 'watch' ? '<button class="on" data-m="take">Take over (play)</button>' : '<button class="on" data-m="watch">Sim to the end (watch, any speed)</button>'}<button class="on" data-m="simg">Finish instantly</button><button class="bad on" data-m="quit">Quit game (not saved)</button></div></div>`);
   gmPause();      // switch between full game / offense only / defense only
+  if (typeof BCAST !== 'undefined') BCAST.pause(el.ovl);      // Game stats and charts
   el.ovl.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
     const m = b.dataset.m; if (m === 'resume') return resume();
     if (m === 'cam') { closeOverlay(); G.paused = false; camPanel(); G.camWasPaused = false; return; }
@@ -1400,6 +1404,7 @@ function finalCard(pog) {
   overlay(`<div class="card fin"><div class="small mute" style="text-align:center;letter-spacing:.08em">FINAL${G.q >= 5 ? ' / OT' : ''}</div>
     <div class="mu"><div class="t">${typeof logoC === 'function' ? logoC(A, 56) : ''}<b>${esc(A.name)}</b><span class="big${G.score[G.aid] >= G.score[G.hid] ? '' : ' lo'}">${G.score[G.aid]}</span></div><div class="at">@</div><div class="t">${typeof logoC === 'function' ? logoC(H, 56) : ''}<b>${esc(H.name)}</b><span class="big${G.score[G.hid] >= G.score[G.aid] ? '' : ' lo'}">${G.score[G.hid]}</span></div></div>
     ${G.mode === 'play' ? `<div style="text-align:center;font:600 26px var(--disp);color:${tie ? 'var(--mute)' : won ? 'var(--good)' : 'var(--bad)'}">${tie ? 'TIE GAME' : won ? 'VICTORY' : 'DEFEAT'}</div>` : ''}
+    ${typeof BCAST !== 'undefined' ? BCAST.finalHtml(G) : ''}
     <table>${row('', esc(A.abbr), esc(H.abbr))}${row('Total yards', a.ty, h.ty)}${row('Passing', a.py, h.py)}${row('Rushing', a.ry, h.ry)}${row('Comp / Att', `${a.pc}/${a.pa}`, `${h.pc}/${h.pa}`)}${row('First downs', a.fd, h.fd)}${row('Turnovers', a.to, h.to)}${row('Sacks', a.sk, h.sk)}${row('Penalties', a.pen, h.pen)}</table>
     <div class="ld">${L1('py', s => `${s.py} yds`, 'PASSING')}${L1('ry', s => `${s.ry} yds`, 'RUSHING')}${L1('recy', s => `${s.recy} yds`, 'RECEIVING')}${L1('tk', s => `${s.tk} tk`, 'TACKLES')}</div>
     ${pg ? `<div class="pog">${typeof bustC === 'function' ? bustC(pg, 48) : ''}<div><div class="small" style="color:var(--gold);font-weight:700;letter-spacing:.06em">PLAYER OF THE GAME</div><b>${esc(pg.pos)} ${esc(pg.fn)} ${esc(pg.ln)}</b><div class="small mute">${esc(line(ps))}</div></div></div>` : ''}

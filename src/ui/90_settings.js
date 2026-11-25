@@ -14,7 +14,7 @@ VIEWS.settings = function () { const S = L.settings;
   <div class="panel"><h2>Saves</h2><p class="small">Career slot ${CUR_SLOT}. Saves on this device after every action.</p><div class="row"><button class="pri" onclick="saveNow().then(()=>toast('Saved'))">Save now</button><button onclick="exportLeague()">Export league file</button></div>
    <p class="small mute">Export makes a file you can import on any device from the title screen.</p>
    <div class="row" style="margin-top:12px"><button onclick="saveNow().then(()=>{L=null;render()})">Back to title</button><button class="bad" onclick="if(confirm('Delete this career? This cannot be undone.')){deleteSlot(CUR_SLOT).then(()=>{L=null;render()})}">Delete career</button></div></div></div>
-  ${soundPanel(S)}`; };
+  ${soundPanel(S)}${typeof bcSettingsPanel === 'function' ? bcSettingsPanel(S) : ''}`; };
 // Sound: the switch, two levels, menu clicks, the touchdown sting, and a button per sound (the stadium is synthesized in src/render/30_audio.js)
 function soundPanel(S) {
   const pct = (v, d) => Math.round((v == null || isNaN(+v) ? d : +v) * 100), has = typeof SND !== 'undefined';
