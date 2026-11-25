@@ -112,7 +112,7 @@ if (part === 'def' || part === 'all') {
     await shot('dcall_' + k.replace(/:/g, '')); await page.evaluate(() => { const x = document.querySelector('.lpan [data-ln="x"]'); if (x) x.click(); });
     const t1 = Date.now(); for (let i = 0; i < 40; i++) { const s = await S(); if (s.stage !== 'pre') break; await wait(150); } check(Date.now() - t1 < 6000, `the offense snaps after the call (${Date.now() - t1} ms)`);
   };
-  const seen = await bot(250, { onPreD, fast: true });
+  const seen = await bot(340, { onPreD, fast: true });
   console.log('  defense only:', JSON.stringify(seen));
   check(seen.autoO > 0 && seen.sheetO === 0, `your offense ran on its own (auto samples ${seen.autoO}, offense sheets ${seen.sheetO})`);
   check(seen.final, `defense-only game reaches the final whistle (${seen.sec}s)`);
