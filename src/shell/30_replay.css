@@ -1,0 +1,78 @@
+/* ============ Replays (src/match/20_replay.js): the REPLAY bug, the lower third, the name tag over the flagged man,
+   pause / scrub / skip, the wipe, the Replay button, the ruling plate with the red-flag Challenge, the review decision ============ */
+#gui .rpui{position:absolute;inset:0;z-index:8;pointer-events:none}
+.rpui>*{position:absolute}
+.rpui .rptap{inset:0;display:none}
+.rpui.show .rptap{display:block;pointer-events:auto}.rpui.show.notap .rptap{display:none}
+.rpbug{left:calc(10px + var(--sal));top:calc(60px + var(--sat));display:none}
+.rpui.show .rpbug{display:block;animation:rpIn .3s cubic-bezier(.2,1,.3,1)}
+.rpbug b{display:block;font:var(--disp-w) 21px/1 var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--h-ink);background:var(--h-bg);padding:8px 18px 6px 16px;padding-top:calc(8px + var(--disp-pt));box-shadow:inset 6px 0 0 var(--h-hi);clip-path:polygon(0 0,100% 0,calc(100% - var(--cut)) 100%,0 100%);border-radius:var(--r)}
+.rplt{left:calc(12px + var(--sal));bottom:calc(74px + var(--sab));max-width:min(560px,calc(100% - 24px));display:none;flex-direction:column;align-items:flex-start}
+.rplt.show{display:flex;animation:rpIn .38s cubic-bezier(.2,1,.3,1)}
+.rplt small{font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.12em;text-transform:uppercase;color:#0b0c0e;background:var(--h-hi);padding:5px 10px 4px}
+.rplt b{font:var(--disp-w) 27px/1.02 var(--disp);text-transform:var(--disp-tt);letter-spacing:.01em;color:var(--h-ink);background:var(--h-bg);padding:7px 13px 5px;padding-top:calc(7px + var(--disp-pt));max-width:100%}
+.rplt b:empty{display:none}
+.rplt span{font:500 14px/1.3 var(--body);color:var(--h-ink);background:var(--h-bga);padding:5px 13px 6px;max-width:100%}
+.rplt span:empty{display:none}
+.rplt.flag small{background:#ffd21a;color:#14110a}
+.rptag{left:0;top:0;display:none}
+.rptag.show{display:block}
+.rptag b{position:relative;display:block;font:var(--cond-w) 15px/1 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:#14110a;background:#ffd21a;padding:5px 9px 4px;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.rptag b::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:#ffd21a}
+.rpbar{left:50%;bottom:calc(14px + var(--sab));transform:translateX(-50%);width:min(560px,calc(100% - 24px));display:none;align-items:center;gap:8px;background:var(--h-bga);padding:6px 8px;border-radius:var(--r);box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.rpui.show .rpbar{display:flex;pointer-events:auto}
+.rpbar input{flex:1;min-width:0;accent-color:var(--h-hi);height:28px;margin:0}
+.rpb{height:36px;min-width:40px;border:0;background:var(--h-fill);color:var(--h-ink);font:var(--cond-w) 13px/1 var(--cond);letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;justify-content:center;padding:0 12px;border-radius:var(--r);flex:none;cursor:pointer}
+.rpb[data-rp="skip"]{background:var(--h-hi);color:#0b0c0e}
+.rpwipe{inset:0;overflow:hidden;display:none}
+.rpwipe.go{display:block}
+.rpwipe i{position:absolute;top:-25%;bottom:-25%;left:-145%;width:130%;background:var(--h-bg);box-shadow:-14px 0 0 var(--h-hi),-26px 0 0 var(--tc,#1d4f91);transform:skewX(-14deg);animation:rpWipe .58s cubic-bezier(.65,0,.35,1) forwards;display:flex;align-items:center;justify-content:center}
+.rpwipe b{transform:skewX(14deg);font:900 clamp(40px,10vw,84px)/1 var(--disp);letter-spacing:.08em;text-transform:uppercase;color:var(--h-ink)}
+.rpwipe.out b{display:none}
+@keyframes rpWipe{from{transform:translateX(0) skewX(-14deg)}to{transform:translateX(200%) skewX(-14deg)}}
+@keyframes rpIn{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+/* the Replay button after a play (bottom left; it rides above the play-call sheet when the sheet would cover it) */
+#gui .rpbtns{position:absolute;left:calc(12px + var(--sal));bottom:calc(16px + var(--sab));z-index:7;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+.rpp{height:40px;border:0;display:inline-flex;align-items:center;gap:7px;padding:0 14px 0 12px;background:var(--h-bga);color:var(--h-ink);font:var(--cond-w) 14px/1 var(--cond);letter-spacing:.07em;text-transform:uppercase;border-radius:var(--r);box-shadow:inset 4px 0 0 var(--h-hi),0 3px 10px rgba(0,0,0,.3);pointer-events:auto;cursor:pointer}
+.rpp.hot{animation:rpHot 1.2s ease-in-out infinite}
+@keyframes rpHot{50%{box-shadow:inset 4px 0 0 var(--h-hi),0 0 0 3px var(--h-hi)}}
+.rpp.chal{background:#c8202a;color:#fff;box-shadow:0 3px 10px rgba(0,0,0,.3)}
+#game.rpOn .rpbtns{display:none}
+/* the ruling on the field, with the red flag */
+#gui .rpcall{position:absolute;left:50%;top:calc(112px + var(--sat));transform:translate(-50%,-8px);opacity:0;visibility:hidden;z-index:7;width:min(420px,92vw);background:var(--h-bga);color:var(--h-ink);padding:9px 14px 11px 18px;box-shadow:inset 6px 0 0 #c8202a,0 8px 22px rgba(0,0,0,.35);border-radius:var(--r);transition:opacity .2s,transform .25s,visibility 0s linear .25s}
+.rpcall.show{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity .2s,transform .25s}
+.rpcall.dim{opacity:0;visibility:hidden}
+.rpcall .rk{font:var(--cond-w) 11px/1 var(--cond);letter-spacing:.14em;color:var(--h-ink2)}
+.rpcall b{display:block;font:var(--disp-w) 25px/1.05 var(--disp);text-transform:var(--disp-tt);margin-top:5px;padding-top:var(--disp-pt)}
+.rpcall .rq{font:600 14px/1.3 var(--body);margin-top:3px}
+.rpcall .ra{font:500 13px/1.35 var(--body);color:var(--h-ink2);margin-top:4px}
+.rpcall .rr{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.rpcall .rpp{height:38px;box-shadow:inset 0 0 0 1px var(--h-rule2)}.rpcall .rpp.chal{box-shadow:none}
+/* after review */
+#gui .rpcard{position:absolute;left:50%;top:27%;transform:translate(-50%,12px);opacity:0;visibility:hidden;z-index:8;width:min(480px,92vw);text-align:center;background:var(--h-bg);color:var(--h-ink);padding:14px 18px 12px;box-shadow:0 14px 40px rgba(0,0,0,.45);border-top:5px solid var(--h-hi);border-radius:var(--r);transition:opacity .22s,transform .3s cubic-bezier(.2,1,.3,1),visibility 0s linear .3s}
+.rpcard.show{opacity:1;visibility:visible;transform:translate(-50%,0);pointer-events:auto;transition:opacity .22s,transform .3s cubic-bezier(.2,1,.3,1);cursor:pointer}
+.rpcard .rk{font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.16em;color:var(--h-ink2)}
+.rpcard b{display:block;font:900 clamp(34px,9vw,56px)/.95 var(--disp);text-transform:uppercase;letter-spacing:.01em;margin:8px 0 7px;padding-top:var(--disp-pt)}
+.rpcard b.overturned{color:var(--h-hi)}
+.rpcard .rs{font:600 15px/1.35 var(--body)}
+.rpcard .rn{font:var(--cond-w) 13px/1.2 var(--cond);letter-spacing:.07em;text-transform:uppercase;color:var(--h-ink2);margin-top:7px}
+.rpcard .rh{font:500 11px var(--body);color:var(--h-ink2);margin-top:9px;opacity:.7}
+/* the red flag comes out */
+#gui .rpflag{position:absolute;left:50%;top:32%;z-index:8;display:flex;align-items:center;gap:12px;transform:translateX(-50%);opacity:0;visibility:hidden;pointer-events:none}
+.rpflag.show{opacity:1;visibility:visible}
+.rpflag .rf{flex:none;width:54px;height:54px;background:#d11f2a;position:relative;box-shadow:0 6px 18px rgba(0,0,0,.4);animation:rpToss .7s cubic-bezier(.2,.9,.3,1.15) both}
+.rpflag .rf::after{content:'';position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#7d0f15}
+.rpflag div{background:var(--h-bg);color:var(--h-ink);padding:8px 16px 6px 14px;box-shadow:inset 5px 0 0 var(--rc,#d11f2a);animation:rpIn .4s .25s both;border-radius:var(--r)}
+.rpflag small{display:block;font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.16em;color:#ff5a4e}
+.rpflag b{display:block;font:var(--disp-w) 28px/1 var(--disp);text-transform:uppercase;margin-top:4px;padding-top:var(--disp-pt)}
+@keyframes rpToss{from{transform:translate(-38vw,34vh) rotate(-280deg) scale(.6);opacity:0}55%{opacity:1}to{transform:rotate(-8deg)}}
+/* while a replay runs: the live graphics step aside (the scorebug stays) */
+#game.rpOn .tick,#game.rpOn .ban,#game.rpOn .bub,#game.rpOn .csay,#game.rpOn .pchip,#game.rpOn .acts,#game.rpOn .hint,#game.rpOn .sheet,#game.rpOn .kbar,#game.rpOn .spdbar,#game.rpOn .lpan,#game.rpOn .refc,#game.rpOn .campnl,#game.rpOn .stick,#game.rpOn .joy,#game.rpOn .pclk,#game.rpOn .gday{visibility:hidden!important}
+#game.rpOvl .ovl{visibility:hidden!important}
+body.phonemode .rplt{bottom:calc(64px + var(--sab))}
+body.phonemode .rplt b{font-size:21px}body.phonemode .rplt span{font-size:13px}
+body.phonemode .rpbar{padding:5px 6px;gap:6px}
+body.phonemode .rpb{height:34px;padding:0 10px;font-size:12px}
+body.phonemode .rpp{height:36px;font-size:12px;padding:0 11px 0 10px}
+body.phonemode .rpbug b{font-size:18px;padding:7px 14px 5px 13px}
+@media (max-height:500px){#gui .rpcall{top:calc(58px + var(--sat))}.rplt{bottom:calc(60px + var(--sab))}}

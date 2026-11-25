@@ -293,7 +293,7 @@ function updateSkin(r, J) {
     const Fs = frameDir(sub3(ik.end, ik.mid), Vx(Ft.x), fT); setBone(r, BIx['kn' + L], Fs, sz * st, gb(BIx['kn' + L]), ik.mid);
     const Fa = frameDir(sub3(Lg.toe, Lg.ankle), Vx(Fs.x), fT); setBone(r, BIx['an' + L], Fa, sz, sz, ik.end);
   }
-  if (r.dirt) groundDirt(r, J);
+  if (r.dirt && !R3D.noDirt) groundDirt(r, J);      // (replays: no new dirt)
 }
 // dirt and grass stains build up through the game: knees on the turf mark the legs, going down marks the jersey (and scuffs the
 // helmet), a hand in the dirt (three-point stance) marks the gloves. One uniform per rig; the shader decides where it shows.
@@ -1313,6 +1313,7 @@ const R = {
     const key = home.id + '_' + view + '_' + VEN.sig + '_' + FIELD.halfW.toFixed(2); if (key !== lastField) { fieldMat.map = fieldTexture(home, view); fieldMat.needsUpdate = true; lastField = key; }
     losLine.position.z = losZ; fdLine.position.z = fdZ; fdLine.visible = !goal;
   },
+  addObj(o) { if (scene) scene.add(o); }, delObj(o) { if (scene && o) scene.remove(o); },      // replay markers (src/render/40_replay.js)
   overlay(play, side) { if (!play) { clearOverlay(); return; } drawOverlay(play, side); },
   // draw the play. opts: {ctl: player|null, target: player|null, camMode:'O'|'D', snapCam}
   draw(play, dt, opts = {}) {

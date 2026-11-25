@@ -56,6 +56,7 @@ function init() {
   addEventListener('blur', () => keys.clear());
   addEventListener('resize', () => applyRot()); addEventListener('orientationchange', () => setTimeout(applyRot, 120));
   gmInit();      // game modes, calls at the line, the play clock (section at the end)
+  if (typeof RPLY !== 'undefined') RPLY.init({ el, after, tick, buzz, describe, camView, qTxt, clockTxt });      // replays, reviews, highlights (src/match/20_replay.js)
 }
 function ensureGL() { if (glOk) return true; try { R3D.init(el.canvas); glOk = true; } catch (e) { console.error(e); glOk = false; } return glOk; }
 
@@ -100,6 +101,7 @@ function loopStart() { lastT = performance.now(); acc = 0; if (!raf) raf = reque
 function frame(now) {
   raf = requestAnimationFrame(frame); if (!G) return;
   const dt = Math.min(0.1, Math.max(0.001, (now - lastT) / 1000)); lastT = now;
+  if (typeof RPLY !== 'undefined' && RPLY.frame(dt)) { hudFrame(); return; }      // a replay on screen: the game waits
   if (!G.paused) {
     G.time += dt * (G.mode === 'watch' ? G.speed : 1);
     if (G.sim) { const t0 = performance.now(); do { runTimers(); } while (G && G.sim && performance.now() - t0 < 24 && G.timers.length && G.timers.some(x => x.t <= G.time)); if (!G) return; G.time += 0.0001; }
@@ -117,7 +119,7 @@ function frame(now) {
   if (!G) return;
   if (G.kickAnim && !G.paused) { kickFrame(dt); if (!G) return; }
   if (G.kaim && !G.paused) kickAimFrame();
-  if (glOk && !G.sim) { aimFrame(); const pl = G.play; R3D.draw(pl, dt * (G.mode === 'watch' ? Math.min(G.speed || 1, 3) : 1), { ctl: pl && G.userSide && G.stage === 'live' ? pl.controlled() : (pl && G.userSide === 'D' && G.stage === 'pre' ? pl.userD : null), target: pl && pl.ball && pl.ball.state === 'air' && pl.ball.land ? pl.ball.land : null, camMode: G.camMode || 'O', bigBall: !!G.kickAnim, zoom: pl && pl.result && (pl.result.type === 'td' || pl.result.type === 'deftd') ? Math.max(0.72, 1 - pl.deadT * 0.2) : 1, focus: pl && G.userSide === 'D' && G.mode === 'play' ? pl.userD : null }); }
+  if (glOk && !G.sim) { aimFrame(); const pl = G.play; R3D.draw(pl, dt * (G.mode === 'watch' ? Math.min(G.speed || 1, 3) : 1), { ctl: pl && G.userSide && G.stage === 'live' ? pl.controlled() : (pl && G.userSide === 'D' && G.stage === 'pre' ? pl.userD : null), target: pl && pl.ball && pl.ball.state === 'air' && pl.ball.land ? pl.ball.land : null, camMode: G.camMode || 'O', bigBall: !!G.kickAnim, zoom: pl && pl.result && (pl.result.type === 'td' || pl.result.type === 'deftd') ? Math.max(0.72, 1 - pl.deadT * 0.2) : 1, focus: pl && G.userSide === 'D' && G.mode === 'play' ? pl.userD : null }); if (typeof RPLY !== 'undefined') RPLY.rec(); }
   if (typeof SND !== 'undefined') SND.frame(G, dt);
   hudFrame();
 }
@@ -231,7 +233,7 @@ function nextSnap() {
 function endQuarter() {
   const q = G.q; G.runoff = 0; G.toChecked = false; if (G.rot) LG.rotRest(G.rot, q === 2 ? 'half' : 'quarter');
   if (G.auto && G.auto.kind === 'drive' && (q === 2 || q >= 4)) endAuto('End of the half: back to you');
-  if (q === 2) { closeDrive('End of half'); G.q = 3; G.clock = G.qlen; G.to[G.hid] = G.to[G.aid] = 3; G.kickNext = G.recvFirst; G.freeKick = false; banner('HALFTIME', `${TM(G.aid).abbr} ${G.score[G.aid]} — ${TM(G.hid).abbr} ${G.score[G.hid]}`, '', 2600); return after(2600, nextSnap); }
+  if (q === 2) { closeDrive('End of half'); G.q = 3; G.clock = G.qlen; G.to[G.hid] = G.to[G.aid] = 3; G.kickNext = G.recvFirst; G.freeKick = false; banner('HALFTIME', `${TM(G.aid).abbr} ${G.score[G.aid]} — ${TM(G.hid).abbr} ${G.score[G.hid]}`, '', 2600); return after(2600, () => (typeof RPLY !== 'undefined' ? RPLY.half(nextSnap) : nextSnap())); }
   if (q === 1 || q === 3) { G.q++; G.clock = G.qlen; banner(`END OF ${qTxt(q)}`, '', '', 1300); return after(1300, nextSnap); }
   const tie = G.score[G.hid] === G.score[G.aid];
   if (tie && (q === 4 || G.playoffs)) { closeDrive('End of regulation'); G.q++; G.clock = G.qlen; G.to[G.hid] = G.to[G.aid] = 2; G.kickNext = null; G.pat = null;
@@ -319,8 +321,9 @@ function onWhistle() {
   const pl = G.play; if (pl && pl.ret) return retWhistle(pl);
   G.stage = 'dead'; actsFor('none'); R3D.overlay(null);
   const c = pl.carrier, x = c ? c.p.x : (pl.ball && pl.ball.p ? pl.ball.p.x : G.ballX);
-  flagWatch(pl); const delay = judge(pl.result, { lists: G.cur.lists, lastX: x, target: pl.ball && pl.ball.target ? pl.ball.target.pid : null });
-  if (delay >= 0) after(delay, nextSnap);
+  flagWatch(pl); const info = { lists: G.cur.lists, lastX: x, target: pl.ball && pl.ball.target ? pl.ball.target.pid : null };
+  const go = res => { if (!G) return; const delay = judge(res, info); if (delay >= 0) after(delay, nextSnap); };
+  if (typeof RPLY !== 'undefined') RPLY.whistle(pl, info, go); else go(pl.result);      // flag replay, the call on the field, challenges and reviews
 }
 function simPlay(fake) {
   if (!G || G.over) return;
@@ -514,7 +517,7 @@ function retWhistle(pl) {
   const R = G.retPlay, res = pl.result; G.retPlay = null; G.stage = 'dead'; actsFor('none'); R3D.overlay(null);
   if (!R || !res) { const r2 = R || {}; return after(800, () => setPossession(r2.recv != null ? r2.recv : opp(G.poss), 25, 'kick')); }
   const { kind, kicker, recv } = R, spot = res.spotZ / YDm, who = pnm(res.carrier);
-  flagWatch(pl);
+  flagWatch(pl); if (typeof RPLY !== 'undefined') RPLY.ret(pl, res, R);
   for (const pid in (res.stats || {})) { const st = res.stats[pid]; for (const k of KEEP) if (st[k]) addSt(pid, k, st[k]); }
   for (const pid in (res.perf || {})) { const fx = res.perf[pid], t = G.perf[pid] || (G.perf[pid] = { good: 0, bad: 0, notes: [] }); t.good += fx.good; t.bad += fx.bad; for (const n of fx.notes) if (t.notes.length < 6 && !t.notes.includes(n)) t.notes.push(n); }
   for (const lst of G.cur.lists) for (const e of lst) { const pid = e.rp.id; G.snaps[pid] = (G.snaps[pid] || 0) + 1; }
@@ -738,7 +741,7 @@ function deadBall(pl, f) {
   Object.assign(f, { t: 0, at: pl.t, x: p ? p.p.x : pl.ballX, z: p ? p.p.z : pl.losZ }); f.what = foulWhat(f);
   after(f.code === 'DOG' ? 0 : 420, () => { if (!G || G.play !== pl) return;
     throwFlag(p ? p.p.x : pl.ballX, pl.losZ + (p && p.unit === 'D' ? 0.7 : -0.7)); tick(f.code === 'DOG' ? 'The play clock hits zero' : f.what); buzz(30);
-    after(1000, () => { if (!G) return; const d = applyFoul(f, null, null); if (d >= 0) after(d, nextSnap); }); });
+    after(1000, () => { if (!G) return; const go = () => { if (!G) return; const d = applyFoul(f, null, null); if (d >= 0) after(d, nextSnap); }; if (typeof RPLY !== 'undefined') RPLY.preFlag(pl, f, go); else go(); }); });
 }
 function throwFlag(x, z) { G.flagUp = true; if (glOk && !G.sim && R3D.flag) R3D.flag({ x, z }); if (!G.sim) tick('FLAG on the play'); }
 // new engine events since the last look: does the flag come out? (RULES.chance: the plain ones)
@@ -1405,6 +1408,7 @@ function finalCard(pog) {
     <div class="row" style="margin-top:14px"><button class="pri big on" id="mDone">Continue</button></div></div>`);
   if (typeof paintArt === 'function') { try { paintArt(el.ovl); } catch (e) { } }
   document.getElementById('mDone').onclick = () => close(G.result);
+  if (typeof RPLY !== 'undefined') RPLY.final(el.ovl);      // Highlights
 }
 
 // ------------------------------------------------------------ game modes and calls at the line
