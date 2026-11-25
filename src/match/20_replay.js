@@ -260,7 +260,7 @@ function draw(dt, g) {
   camera(r, s, dt);
   if (s.ring) { const p = pelAt(c, s.ring.pid, r.t); if (p) RPV.ring(p.x, p.z, s.ring.col, dt); }
   R3D.draw(r.fake, ft, { camMode: 'O' });
-  if (s.tag) { const p = pelAt(c, s.tag.pid, r.t), q = p && R3D.project(p.x, 2.35, p.z); if (q && !q.behind) { ui.tag.style.transform = `translate(${Math.round(q.x)}px,${Math.round(q.y)}px) translate(-50%,-100%)`; ui.tag.querySelector('b').textContent = s.tag.txt; ui.tag.classList.add('show'); } else ui.tag.classList.remove('show'); }
+  if (s.tag) { const i = c.pi.get(s.tag.pid), h = i != null ? r.fake.tg[i].P[3] : null, q = h && R3D.project(h.x, h.y + 0.42, h.z); if (q && !q.behind) { ui.tag.style.transform = `translate(${Math.round(q.x)}px,${Math.round(q.y)}px) translate(-50%,-100%)`; ui.tag.querySelector('b').textContent = s.tag.txt; ui.tag.classList.add('show'); } else ui.tag.classList.remove('show'); }
   if (!r.scrub) ui.rng.value = String(Math.round(1000 * (r.t - s.t0) / Math.max(0.01, s.t1 - s.t0)));
   const pz = r.paused ? 'p' : 'r'; if (ui.pz.dataset.st !== pz) { ui.pz.dataset.st = pz; ui.pz.innerHTML = r.paused ? ICO.play : ICO.pause; }
 }
@@ -271,13 +271,13 @@ function camera(r, s, dt) {
   const b = r.fake.ball.p.y > -10 ? r.fake.ball.p : { x: 0, y: 0, z: c.los }, foc = s.pid != null ? pelAt(c, s.pid, t) : null;
   let pos, look, hf;
   if (s.cam === 'rev') { pos = s.pos; look = s.look; hf = port ? s.hf * 1.3 : s.hf; }
-  else if (s.cam === 'end') { const dir = s.dir || 1, ze = dir > 0 ? F.goalZ + 22 : -22, d = Math.max(14, Math.abs(ze - b.z)); pos = [b.x * 0.2, 8 + d * 0.1, ze]; look = [b.x * 0.85, 0.9, b.z]; hf = cl(2 * Math.atan(15 / d) * 57.3, 13, 55) * (port ? 1.45 : 1); }
+  else if (s.cam === 'end') { const dir = s.dir || 1, ze = dir > 0 ? F.goalZ + 22 : -22, d = Math.max(14, Math.abs(ze - b.z)); pos = [b.x * 0.2, 20 + d * 0.12, dir > 0 ? ze + 4 : ze - 4]; look = [b.x * 0.85, 0.9, b.z]; hf = cl(2 * Math.atan(15 / (d + 4)) * 57.3, 12, 55) * (port ? 1.45 : 1); }
   else if (s.cam === 'tight' || s.cam === 'flag') {
     const p = foc || b, v = s.pid != null ? velAt(c, s.pid, t) : { x: 0, z: 0 }, sp = Math.hypot(v.x, v.z); let dx = r.dirX, dz = r.dirZ;
     if (sp > 1.2 || dx == null) { dx = sp > 0.3 ? v.x / sp : 0; dz = sp > 0.3 ? v.z / sp : 1; } r.dirX = dx; r.dirZ = dz;
     let px = -dz, pz = dx; if (px > 0.01 || (Math.abs(px) <= 0.01 && pz > 0)) { px = -px; pz = -pz; }
     if (s.cam === 'flag') { const D = port ? 11 : 9; pos = [p.x + px * D - dx * 4, 4.4, p.z + pz * D - dz * 4]; look = [p.x, 0.9, p.z]; hf = port ? 50 : 40; }
-    else { const D = port ? 8.5 : 7.2, ld = Math.min(2.6, sp * 0.35); pos = [p.x + px * D + dx * ld, 2.3, p.z + pz * D + dz * ld]; look = [p.x + dx * 1.1, 1.0, p.z + dz * 1.1]; hf = port ? 44 : 32; }
+    else { const D = port ? 10.5 : 9, ld = Math.min(2.6, sp * 0.35); pos = [p.x + px * D + dx * ld, 3.1, p.z + pz * D + dz * ld]; look = [p.x + dx * 1.1, 1.0, p.z + dz * 1.1]; hf = port ? 38 : 28; }
   }
   else if (s.cam === 'sky') { pos = [b.x * 0.6, 34, b.z - 20]; look = [b.x * 0.8, 0, b.z + 4]; hf = port ? 70 : 58; }
   else if (s.cam === 'kick') { const k = c.kick; pos = [k.start.x * 0.7, 3.4, k.start.z - 8]; look = [k.end.x * 0.3, 3.5, F.goalZ + 10 * YD]; hf = port ? 62 : 50; }
@@ -325,7 +325,7 @@ function reelSegs(c, top) {
   return segs;
 }
 function ltOf(c, k) { const m = c.meta || {}, g = g0(); return { k: k || `${M.qTxt(c.q)} ${M.clockTxt(c.clock)}${c.score && g ? ` · ${abbr(g, g.aid)} ${c.score[0]} – ${abbr(g, g.hid)} ${c.score[1]}` : ''}`, b: m.desc || '', s: '' }; }
-function playPlan(c, style, done) { return play([{ c, segs: planOf(c, style), lt: style === 'brief' ? null : ltOf(c, 'REPLAY') }], { wipe: 'REPLAY' }, done); }
+function playPlan(c, style, done) { return play([{ c, segs: planOf(c, style), lt: style === 'brief' ? null : ltOf(c) }], { wipe: 'REPLAY' }, done); }
 function flagItem(c, f) {
   const P0 = (typeof RULES !== 'undefined' && RULES.PEN[f.code]) || { n: 'Penalty' }, pre = !f.t || f.pre, at0 = f.at || (c.snapT || c.T[c.T.length - 1]), who = numName(f.pid);
   const seg = { cam: pre ? 'rev' : 'flag', t0: at0 - (pre ? 1.1 : 1.9), t1: at0 + (pre ? 0.9 : 1.1), slow: [at0 - (pre ? 0.25 : 0.6), at0 + 0.6, 0.35], hold: 0.8, pid: f.pid, ring: { pid: f.pid, col: 0xffd21a }, tag: who ? { pid: f.pid, txt: who } : null, flagAt: { t: at0 + (pre ? 0.4 : 0.15), x: f.x, z: f.z },
@@ -341,9 +341,9 @@ const yardsOf = (z, los) => (z - los) / YD;
 function stAdd(st, list) { const o = Object.assign({}, st || {}); for (const [pid, k, v] of list) { if (pid == null || !v) continue; const s = o[pid] = Object.assign({}, o[pid] || {}); s[k] = Math.max(0, (s[k] || 0) + v); } return o; }
 const tdCredit = (r, sg) => (r.catcher != null && r.carrier === r.catcher ? [[r.passer, 'ptd', sg], [r.catcher, 'rectd', sg]] : [[r.carrier, 'rtd', sg]]);
 function judgeCall(g, pl, res, c) {
-  if (!res || g.pat || (g.fouls && g.fouls.length) || pl.ret || pres(g) === 'none') return null;
+  if (!res || g.pat || (g.fouls && g.fouls.length) || pl.ret || pres(g) === 'none' || (force && force.kind === 'none')) return null;
   const F = FD(), los = pl.losZ, off = g.poss, def = other(g, off), fz = force, e = c.endT != null ? c.endT : pl.t;
-  const mk = (kind, close, wrong, A, B, aFavO, tA, tB, view, qn) => { const ruled = wrong ? B : A, rFavO = wrong ? !aFavO : aFavO; return { kind, close, wrong, truth: A, other: B, ruled, aFavO, hurts: rFavO ? def : off, tA, tB, rTxt: wrong ? tB : tA, view, q: qn }; };
+  const mk = (kind, close, wrong, A, B, aFavO, tA, tB, view, qn) => { const ruled = wrong ? B : A, rFavO = wrong ? !aFavO : aFavO, forced = !!(fz && fz.kind === kind); if (forced) force = null; return { forced, kind, close, wrong, truth: A, other: B, ruled, aFavO, hurts: rFavO ? def : off, tA, tB, rTxt: wrong ? tB : tA, view, q: qn }; };
   const k = pl.carrier;
   // a sideline catch the official called out (the whistle blew at the catch): truth = a catch, spotted where he went out
   if (c.ruledOut) {
@@ -400,8 +400,8 @@ const lateOf = (g, res) => g.q >= 5 || ((g.q === 2 || g.q === 4) && g.clock - ((
 function canChal(g, tid, res) { const ch = chal(g, tid); return ch.left > 0 && (g.to[tid] || 0) > 0 && !lateOf(g, res); }
 function resolve(g, c, C, done) {
   const sc = C.ruled.td || C.ruled.turnover || C.ruled.safety;
-  if (sc) { if (C.wrong || (C.close > 0.45 && R() < 0.55)) return booth(g, c, C, done); return done(C.ruled); }   // every score and turnover is looked at upstairs
-  if (lateOf(g, C.ruled)) { if (C.wrong ? R() < 0.92 : R() < 0.35 * C.close) return booth(g, c, C, done); return done(C.ruled); }
+  if (sc) { if (C.wrong || C.forced || (C.close > 0.45 && R() < 0.55)) return booth(g, c, C, done); return done(C.ruled); }   // every score and turnover is looked at upstairs
+  if (lateOf(g, C.ruled)) { if (C.forced || (C.wrong ? R() < 0.92 : R() < 0.35 * C.close)) return booth(g, c, C, done); return done(C.ruled); }
   const t = C.hurts, uPlay = g.mode === 'play' && !g.auto && t === g.user;
   if (uPlay) { if (canChal(g, t, C.ruled) && pres(g) === 'full') return offer(g, c, C, done); return done(C.ruled); }
   if (canChal(g, t, C.ruled) && cpuWants(g, C)) return challenge(g, c, C, done, t);
@@ -453,7 +453,7 @@ function review(g, c, C, kicker, then) {
     rv.marks = () => { const b = ballAt(c, kT); RPV.spot(b.x, b.z, Math.max(0, b.y - 0.55), 0xff7a1a); };
   }
   segs.push(rv);
-  play([{ c, segs }], { wipe: 'REVIEW', bug: 'REVIEW' }, () => then());
+  if (!play([{ c, segs }], { wipe: 'REVIEW', bug: 'REVIEW' }, () => then())) then();
 }
 function decide(g, c, C, tid, done, quiet) {
   const word = C.wrong ? 'overturned' : C.close > 0.62 ? 'stands' : 'confirmed', res = C.truth; C.word = word;
@@ -483,7 +483,7 @@ function whistle(pl, info, go) {
   try {
     if (!g || g.sim || !res || !c) return fin(res);
     const fouls = (g.fouls || []).slice(), P = pres(g), S = setting();
-    let C = null; try { C = judgeCall(g, pl, res, c); } catch (e) { console.error(e); } force = null;
+    let C = null; try { C = judgeCall(g, pl, res, c); } catch (e) { console.error(e); }
     const done = r => { try { noteMeta(g, c, r, info, fouls); } catch (e) { console.error(e); } fin(r); try { autoAfter(g, c, fouls); } catch (e) { console.error(e); } };
     const step2 = () => { if (!C) return done(res); try { resolve(g, c, C, done); } catch (e) { console.error(e); done(res); } };
     const f0 = fouls.find(f => f.pid != null && f.at != null);
