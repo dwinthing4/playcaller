@@ -1,0 +1,167 @@
+/* ============ Broadcast package (src/match/30_broadcast.js): win-probability bar, captions, lower thirds, halftime card, stats viewer ============ */
+#game .bccap,#game .bclt,#game .bcwp{--surf:var(--h-bg);--ink:var(--h-ink);--ink2:var(--h-ink2);--rule:var(--h-rule);--fill:var(--h-fill);--gold:var(--h-hi);--good:var(--h-good);--bad:var(--h-bad);color:var(--ink)}
+#hud .bcwp,#hud .bccap,#hud .bclt{z-index:3}
+#gui .bcbig{z-index:8}#gui .bcview{z-index:11}
+/* ---- win probability: a hairline under the scorebug, the leader's number hangs off its end between plays */
+.bcwp{position:absolute;left:50%;top:calc(51px + var(--sat));transform:translateX(-50%);height:4px;display:none}
+.bcwp.on{display:block}
+.bcwp-b{display:flex;gap:2px;height:4px;background:var(--sb-mid,#0b0c0e)}
+.bcwp-b i{display:block;height:100%;transition:width .9s cubic-bezier(.22,.9,.25,1),background .3s}
+.bcwp-b i.a{margin-right:auto}
+.bcwp-t{position:absolute;top:6px;font:var(--cond-w) 11px/1 var(--cond);letter-spacing:.06em;text-transform:uppercase;background:var(--h-bga);color:var(--h-ink2);padding:3px 6px 2px;white-space:nowrap;border-radius:var(--r);transition:opacity .25s}
+.bcwp-t b{font:var(--num-w) 13px/1 var(--num);color:var(--h-ink);margin-left:2px}
+.bcwp-t.r{right:0}.bcwp-t.l{left:0}
+.bcwp.tagoff .bcwp-t,#game.pcon .bcwp-t{opacity:0}
+.bcwp.jolt .bcwp-t{animation:bcjolt .9s ease-out}
+@keyframes bcjolt{0%{background:var(--h-hi);color:#0b0c0e}100%{background:var(--h-bga)}}
+/* ---- the booth: one caption at a time, just above whatever owns the bottom of the screen */
+.bccap{position:absolute;left:50%;bottom:calc(22px + var(--sab));transform:translate(-50%,6px);display:flex;gap:9px;align-items:baseline;max-width:min(600px,calc(100vw - 20px));width:max-content;
+  background:var(--h-bga);padding:7px 13px 6px 11px;border-radius:var(--r);opacity:0;transition:opacity .22s,transform .28s cubic-bezier(.2,.9,.3,1),bottom .25s}
+.bccap.show{opacity:1;transform:translate(-50%,0)}
+.bccap em{font:var(--cond-w) 11px/1 var(--cond);font-style:normal;letter-spacing:.1em;text-transform:uppercase;flex:none;color:var(--h-hi)}
+.bccap em.col{color:var(--h-ink2)}
+.bccap span{font:500 15px/1.32 var(--body);color:var(--h-ink)}
+@media (max-width:480px){.bccap span{font-size:14px}.bccap{padding:6px 11px 5px 9px}}
+/* ---- lower thirds: drive summary, scoring card, stat plate */
+.bclt{position:absolute;left:50%;bottom:calc(64px + var(--sab));transform:translate(-50%,10px);width:min(500px,calc(100vw - 20px));opacity:0;transition:opacity .22s,transform .32s cubic-bezier(.2,.9,.3,1),bottom .25s}
+.bclt.show{opacity:1;transform:translate(-50%,0)}
+.bclt canvas{flex:none}
+.bclt-d,.bclt-p{background:var(--h-bga);border-radius:var(--r);box-shadow:inset 4px 0 0 var(--bcc);overflow:hidden}
+.bclt-h{display:flex;align-items:center;gap:8px;padding:7px 10px 4px 13px}
+.bclt-h canvas{width:24px;height:24px}
+.bclt-h b{font:var(--disp-w) 19px/1 var(--disp);letter-spacing:.03em;padding-top:var(--disp-pt)}
+.bclt-h span{font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.1em;text-transform:uppercase;color:var(--h-ink2)}
+.bclt-h em{margin-left:auto;font:var(--cond-w) 13px/1 var(--cond);font-style:normal;letter-spacing:.06em;text-transform:uppercase;background:#f4f4f0;color:#0b0c0e;padding:5px 8px 4px;border-radius:var(--r)}
+.bclt-h em.bad{background:var(--bad-bg,#c42b20);color:#fff}
+.bclt-n{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:2px 10px 8px 13px}
+.bclt-n div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bclt-n b{font:var(--num-w) 23px/1 var(--num);padding-top:var(--disp-pt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bclt-n span{font:var(--cond-w) 10.5px/1 var(--cond);letter-spacing:.1em;text-transform:uppercase;color:var(--h-ink2)}
+.bclt-s{border-radius:var(--r);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.bclt-sb{display:flex;align-items:center;gap:10px;padding:8px 12px 6px;background:var(--bcc);color:var(--bci)}
+.bclt-sb canvas{width:38px;height:38px}
+.bclt-sb span{display:block;font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.1em;text-transform:uppercase;opacity:.85}
+.bclt-sb b{display:block;font:var(--disp-w) 32px/.95 var(--disp);letter-spacing:.02em;text-transform:uppercase;padding-top:var(--disp-pt)}
+.bclt-sw{background:var(--h-bga);padding:7px 12px 8px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
+.bclt-who{font:600 15px/1.25 var(--body)}
+.bclt-dr{grid-row:2;font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--h-ink2)}
+.bclt-sc{grid-row:1/3;grid-column:2;display:flex;align-items:center;gap:5px;font:var(--cond-w) 13px/1 var(--cond);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.bclt-sc b{font:var(--num-w) 22px/1 var(--num);margin-right:6px}
+.bclt-sc i{width:4px;height:18px;display:inline-block}
+.bclt-p{display:flex;align-items:stretch}
+.bclt-pn{display:flex;flex-direction:column;justify-content:center;gap:3px;padding:7px 10px 6px 14px;min-width:0;flex:0 1 46%}
+.bclt-pn span{font:var(--cond-w) 11px/1 var(--cond);letter-spacing:.1em;text-transform:uppercase;color:var(--h-ink2)}
+.bclt-pn b{font:var(--disp-w) 20px/1 var(--disp);text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-top:var(--disp-pt)}
+.bclt-p .bclt-n{flex:1;padding:8px 10px 7px 4px;align-content:center}
+.bclt-p .bclt-n b{font-size:20px}
+/* ---- halftime card */
+.bcbig{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(4,6,9,.55);padding:12px}
+.bcbig.show{display:flex}
+.bcc,.bcv-c{background-color:var(--s-bg);background-image:var(--s-img);color:var(--ink);border-radius:var(--r2);box-shadow:0 20px 60px rgba(0,0,0,.55),inset 0 5px 0 var(--tc);width:100%;max-height:calc(100% - 8px);overflow:auto;position:relative}
+.bcc{max-width:540px;padding:14px 14px 12px;animation:bcin .35s cubic-bezier(.2,.9,.3,1)}
+@keyframes bcin{from{opacity:0;transform:translateY(14px)}}
+.bcc-hd{display:flex;flex-direction:column;align-items:center;gap:4px;margin:2px 0 10px}
+.bcc-hd span{font:var(--cond-w) 13px/1 var(--cond);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+.bcc-hd b,.bcv-hd span{display:flex;align-items:center;gap:7px;font:var(--disp-w) 30px/1 var(--disp);text-transform:uppercase;letter-spacing:.02em;padding-top:var(--disp-pt)}
+.bcc-hd b i,.bcv-hd span i{width:5px;height:22px;display:inline-block}
+.bcc-hd b em{font-style:normal;color:var(--ink2);font-size:.7em}
+.bcc-ft{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.bcc-sl{margin-top:12px}
+.bcc-sl h4,.bcts-h{font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);margin:0 0 6px}
+.bcc-sl div{display:grid;grid-template-columns:62px 40px 1fr auto;gap:6px;font-size:13px;padding:4px 0;border-top:1px solid var(--rule);align-items:baseline}
+.bcc-sl span,.bcc-sl i{font:var(--cond-w) 12px var(--cond);color:var(--ink2);font-style:normal;white-space:nowrap}
+.bcc-sl b{font:var(--cond-w) 13px var(--cond)}
+.bcc-sl em{font-style:normal;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---- team stat comparison */
+.bcts{margin-top:10px}
+.bcts-h{display:flex;justify-content:space-between}.bcts-h span{display:flex;align-items:center;gap:6px}.bcts-h canvas{width:20px;height:20px}
+.bcts-r{display:grid;grid-template-columns:58px 1fr 58px;align-items:center;gap:8px;padding:4px 0}
+.bcts-r>b{font:var(--num-w) 18px/1 var(--num);text-align:left;color:var(--ink2)}.bcts-r>b:last-child{text-align:right}.bcts-r>b.w{color:var(--ink)}
+.bcts-m span{display:block;text-align:center;font:var(--cond-w) 11.5px/1 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin-bottom:4px}
+.bcts-m div{display:flex;gap:2px;height:6px;background:var(--fill)}
+.bcts-m i{display:block;height:100%;min-width:0;transition:width .6s}
+/* ---- win-probability graph */
+.bcwpg{position:relative;margin:4px 0 2px}
+.bcwpg.empty{font-size:13px;color:var(--ink2);text-align:center;padding:18px 0}
+.bcwpg-l{display:flex;justify-content:space-between;align-items:center;font:var(--cond-w) 12px/1 var(--cond);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
+.bcwpg-l span{display:flex;align-items:center;gap:5px}.bcwpg-l i{width:10px;height:10px;display:inline-block;border-radius:2px}
+.bcwpg-l em{font-style:normal;color:var(--ink2);letter-spacing:.12em}
+.bcwpg svg{display:block;width:100%;touch-action:none}
+.bcwpg .g-bg{fill:var(--fill)}
+.bcwpg .g-grid{stroke:var(--rule);stroke-width:1;vector-effect:non-scaling-stroke}
+.bcwpg .g-q{stroke:var(--rule2,var(--rule));stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.bcwpg .g-a{opacity:.42}
+.bcwpg .g-mid{stroke:var(--ink2);stroke-width:1;vector-effect:non-scaling-stroke}
+.bcwpg .g-ln{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round}
+.bcwpg .g-x{stroke:var(--ink);stroke-width:1;opacity:.6}
+.bcwpg-d{position:absolute;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:var(--gold);color:#0b0c0e;font:var(--cond-w) 10px/15px var(--cond);text-align:center;box-shadow:0 0 0 2px var(--surf);pointer-events:none}
+.bcwpg-q{position:relative;height:13px}
+.bcwpg-q span{position:absolute;top:2px;transform:translateX(-50%);font:var(--cond-w) 10px/1 var(--cond);letter-spacing:.06em;color:var(--ink2)}
+.bcwpg-tip{position:absolute;left:0;top:20px;background:var(--h-bg);color:var(--h-ink);font:500 12px/1.3 var(--body);padding:4px 8px;border-radius:var(--r);max-width:min(300px,80%);opacity:0;transition:opacity .15s;pointer-events:none;z-index:2}
+.bcwpg-tip.show{opacity:1}.bcwpg-tip b{font:var(--cond-w) 12px var(--cond);letter-spacing:.04em;margin-right:4px}
+.bcwpg-k{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.bcwpg-k span{display:flex;gap:7px;align-items:baseline;font-size:12.5px;line-height:1.3;min-width:0}
+.bcwpg-k b{flex:none;width:15px;height:15px;border-radius:50%;background:var(--gold);color:#0b0c0e;font:var(--cond-w) 10px/15px var(--cond);text-align:center}
+.bcwpg-k em{font:var(--cond-w) 12px var(--cond);font-style:normal;color:var(--ink2);margin-left:auto;white-space:nowrap;padding-left:6px}
+/* ---- stats viewer */
+.bcview{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(4,6,9,.62);padding:10px}
+.bcview.show{display:flex}
+.bcv-c{max-width:620px;padding:12px 14px 14px}
+.bcv-hd{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.bcv-hd b{font:var(--disp-w) 24px/1 var(--disp);text-transform:var(--disp-tt);padding-top:var(--disp-pt)}
+.bcv-hd span{font-size:17px;color:var(--ink2);gap:5px}.bcv-hd span i{height:14px;width:4px}
+.bcv-x{margin-left:auto;width:36px;height:36px;padding:0;flex:none}
+.bcv-tabs,.bcv-team,.bcchips{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}
+.bcv-tabs button,.bcv-team button,.bcchips button{flex:none;background:var(--fill);color:var(--ink);font:var(--cond-w) 13px/1 var(--cond);letter-spacing:.05em;text-transform:uppercase;padding:9px 11px 8px;border:0;border-radius:var(--r)}
+.bcv-tabs button.sel,.bcchips button.sel{background:var(--on);color:var(--onink)}
+.bcv-team button{display:flex;align-items:center;gap:6px;box-shadow:inset 3px 0 0 var(--bcc)}.bcv-team button canvas{width:18px;height:18px}
+.bcv-team button.sel{background:var(--bcc);color:var(--bci)}
+.bcchips button em{font-style:normal;opacity:.65;margin-left:3px}
+.bcv-tip{position:absolute;background:var(--h-bg);color:var(--h-ink);font:500 12px/1.3 var(--body);padding:5px 8px;border-radius:var(--r);width:max-content;max-width:220px;opacity:0;transition:opacity .12s;pointer-events:none;z-index:3}
+.bcv-tip.show{opacity:1}
+.bcf{display:block;width:100%;max-width:440px;margin:0 auto;border-radius:var(--r)}
+.bcf .f-bg{fill:#1a222c}
+.bcf .f-yl{stroke:rgba(255,255,255,.16);stroke-width:.6}
+.bcf .f-los{stroke:#6fa8ff;stroke-width:1.3}
+.bcf .f-t{fill:rgba(255,255,255,.55);font:700 6px var(--cond,sans-serif)}
+.bcf .m-c{fill:#45d27e;stroke:#1a222c;stroke-width:1.2}
+.bcf .m-t{fill:#ffcf3f;stroke:#1a222c;stroke-width:1.2}
+.bcf .m-i{fill:none;stroke:rgba(255,255,255,.8);stroke-width:1.3}
+.bcf .m-x path{stroke:#ff6b5e;stroke-width:2;stroke-linecap:round}
+.bcf .m-x{fill:transparent}
+.bcf .m-heat{fill:#ffae2e}
+.bcf .m-run{fill:none;stroke:rgba(255,255,255,.35);stroke-width:.8;stroke-linejoin:round}
+.bcf .m-rt{fill:none;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.bcf .r-c,.bcf .r-t{stroke:#45d27e}.bcf .r-i{stroke:rgba(255,255,255,.78)}.bcf .r-x{stroke:#ff6b5e}.bcf .r-n{stroke:rgba(255,255,255,.2);stroke-width:1}
+.bcf .r-end{stroke-width:1}
+.bcf [data-tip]{cursor:pointer}
+.bcleg{display:flex;flex-wrap:wrap;gap:5px 14px;align-items:center;font:var(--cond-w) 12.5px/1 var(--cond);letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);margin:2px 0 8px}
+.bcleg span{display:flex;align-items:center;gap:5px}.bcleg .r{margin-left:auto;color:var(--ink)}
+.bcleg i{display:inline-block;width:10px;height:10px;border-radius:50%;font-style:normal}
+.bcleg .k-c{background:#2fbf6a}.bcleg .k-i{box-shadow:inset 0 0 0 1.6px var(--ink2)}.bcleg .k-x{color:#e2463b;width:auto;height:auto;font-size:12px}
+.bcleg .k-n{height:2px;border-radius:0;width:14px;background:var(--ink2);opacity:.5}.bcleg .k-avg{width:2px;height:12px;border-radius:0;background:var(--ink)}
+.bcnote{font-size:12px;color:var(--ink2);margin:8px 0 0;text-align:center}
+.bcempty{text-align:center;color:var(--ink2);padding:34px 0;font-size:14px}
+.bcdir{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.bcdir div{background:var(--fill);padding:7px 8px 6px;border-radius:var(--r);display:flex;flex-direction:column;gap:3px}
+.bcdir b{font:var(--num-w) 22px/1 var(--num)}.bcdir span{font:var(--cond-w) 11px/1.1 var(--cond);letter-spacing:.05em;text-transform:uppercase;color:var(--ink2)}
+.bcsep{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.bcsep-ax,.bcsep-r{display:grid;grid-template-columns:minmax(92px,30%) 1fr 34px;gap:10px;align-items:center}
+.bcsep-ax div{position:relative;height:12px}.bcsep-ax i{position:absolute;transform:translateX(-50%);font:var(--cond-w) 10.5px/1 var(--cond);color:var(--ink2);font-style:normal;white-space:nowrap}
+.bcsep-ax i:last-child{transform:translateX(-100%)}
+.bcsep-ax b{font:var(--cond-w) 11px var(--cond);color:var(--ink2);text-align:right;text-transform:uppercase}
+.bcsep-r{padding:6px 0;border-top:1px solid var(--rule)}
+.bcsep-r>span{display:flex;flex-direction:column;gap:2px;font:600 13.5px/1.1 var(--body);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bcsep-r>span em{font:var(--cond-w) 11px/1 var(--cond);font-style:normal;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase}
+.bcsep-r>b{font:var(--num-w) 18px/1 var(--num);text-align:right}
+.bcsep-t{position:relative;height:20px;background:linear-gradient(var(--rule),var(--rule)) 0 50%/100% 1px no-repeat}
+.bcsep-t i{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;box-shadow:0 0 0 1.5px var(--surf)}
+.bcsep-t .d-c{background:#2fbf6a}.bcsep-t .d-i{background:var(--surf);box-shadow:inset 0 0 0 1.6px var(--ink2),0 0 0 1.5px var(--surf)}.bcsep-t .d-x{background:#e2463b}
+.bcsep-t u{position:absolute;top:2px;bottom:2px;width:2px;margin-left:-1px;background:var(--ink)}
+/* ---- on the final card */
+.bcfin{margin:12px 0 4px;padding-top:10px;border-top:1px solid var(--rule)}
+.bcfin-x{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font:var(--cond-w) 13px/1.2 var(--cond);letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);margin-top:6px}
+.bcfin-x b{color:var(--ink)}
+.bcfin-b{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.bcfin-b button{flex:1 1 auto;font-size:13px;padding:.55em .8em .5em}
+.bcwpg-p{position:relative}
