@@ -140,7 +140,7 @@ function next(G, cont) {
   // quarters
   if (G.q !== q0) { b.q = G.q;
     if (q0 === 2 && G.q === 3 && !G.sim && spd(G) < 10) { halftime(G, cont); return true; }
-    if (!quiet && G.q <= 4) talk(G, 'pbp', [`That'll do it for the ${['first', 'second', 'third'][q0 - 1] || 'quarter'} quarter. ${scoreLine(G)}.`, `End of ${['one', 'two', 'three'][q0 - 1]}, ${scoreLine(G)}.`, `${cap(['first', 'second', 'third'][q0 - 1] || 'that')} quarter in the books. ${scoreLine(G)}.`], 2, 'q' + q0);
+    if (!quiet && G.q <= 4) talk(G, 'pbp', [`That'll do it for the ${['first', 'second', 'third'][q0 - 1] || 'quarter'} quarter. ${scoreLine(G)}.`, `End of the ${['first', 'second', 'third'][q0 - 1]}: ${scoreLine(G)}.`, `${cap(['first', 'second', 'third'][q0 - 1] || 'that')} quarter in the books. ${scoreLine(G)}.`], 2, 'q' + q0);
     if (!quiet && G.q === 5) talk(G, 'pbp', ['We are headed to overtime! Next score wins it.', 'Free football! The next score ends it.'], 3, 'ot');
   }
   if (!quiet) colorBetween(G, r, swing);
