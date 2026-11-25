@@ -525,7 +525,7 @@ function frame(G) {
 }
 function bigPlay(r) { const s = r.res; return !!s && (s.td || s.to || Math.abs(s.y) >= 20 || r.down === 4 || r.two || (s.sack && r.down >= 3)); }
 function wpBar(G) {
-  const wp = wpNow(G), b = B, A = TM(G, G.aid), H = TM(G, G.hid), sb = document.querySelector('#hud .sb');
+  const b = B, wp = b.wph.length ? b.wph[b.wph.length - 1].wp : wpNow(G), A = TM(G, G.aid), H = TM(G, G.hid), sb = document.querySelector('#hud .sb');
   if (!b.geo || b.t - b.geoT > 0.5) { b.geoT = b.t; b.geo = sb ? [sb.offsetWidth, sb.offsetTop + sb.offsetHeight] : [0, 0]; }
   const key = [Math.round(wp), A.c1, H.c1, b.geo[0], b.geo[1]].join('|');
   const live = G.stage === 'live';
