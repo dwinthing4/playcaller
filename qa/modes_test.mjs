@@ -20,7 +20,7 @@ const wait = ms => page.waitForTimeout(ms);
 const tap = async sel => { const b = await page.$(sel); if (!b) return false; try { await b.click({ timeout: 1500 }); return true; } catch (e) { await page.evaluate(s => { const x = document.querySelector(s); if (x) x.click(); }, sel); return true; } };
 const S = () => page.evaluate(() => { const g = MATCH._G; if (!g) return null; const pl = g.play; return { stage: g.stage, ready: g.ready, mode: g.mode, side: g.userSide, sheet: g.sheet ? g.sheet.side : null, hq: !!(g.sheet && g.sheet.hq), auto: g.auto ? (g.auto.side ? 'side' : g.auto.kind) : null, poss: g.poss, user: g.user, over: g.over, phase: pl && pl.phase, ret: !!(pl && pl.ret), pass: !!(pl && pl.pass), thrown: !!(pl && pl.thrown), q: g.q, clock: Math.round(g.clock), kick: !!(g.kpow || g.kaim || g.kickCb), pen: !!g.penWait, ln: g.ln, pc: g.pc ? Math.ceil(g.pc.len - (g.time - g.pc.t0)) : null, score: [g.score[g.hid], g.score[g.aid]], down: g.down, sideMode: g.sideMode, final: !!document.querySelector('#mDone') }; });
 await page.goto('file:///' + path.join(root, 'dist', 'playcaller.html').replace(/\\/g, '/')); await wait(700);
-await page.evaluate(() => { try { localStorage.removeItem('pc_cam_v1'); localStorage.removeItem('pc_gmode'); } catch (e) { } });
+await page.evaluate(() => { try { localStorage.removeItem('pc_cam_v1'); localStorage.removeItem('pc_gmode'); localStorage.setItem('pc_replay', 'off'); } catch (e) { } });      // (replays are tested in qa/replay_test.mjs)
 
 // ---------- the title: the daily drive card; the daily league is the same every time for a date
 if (part === 'title' || part === 'all') {
@@ -37,7 +37,7 @@ if (part === 'title' || part === 'all') {
 async function career(slot) {
   await page.evaluate(s => { L = null; NG.slot = s; NG.qlen = 60; createLeague(); pickTeam(L.teams[5].id); startUserGame('play'); }, slot);
   for (let i = 0; i < 300; i++) { const g = await S(); if (g && g.ready) break; await wait(300); }
-  await page.evaluate(() => { MATCH._G.noFlags = true; }); await wait(300);
+  await page.evaluate(() => { MATCH._G.noFlags = true; if (typeof RPLY !== 'undefined') RPLY._.force({ kind: 'none' }); }); await wait(300);
 }
 // the bot: plays whatever the user has to play; returns a log of what it saw
 async function bot(maxSec, opts = {}) {
@@ -143,7 +143,7 @@ if (part === 'clock' || part === 'all') {
 if (part === 'daily' || part === 'all') {
   await page.evaluate(() => { L = null; render(); dailyPlay(); });
   for (let i = 0; i < 300; i++) { const g = await S(); if (g && g.ready) break; await wait(300); }
-  await page.evaluate(() => { MATCH._G.noFlags = true; }); await wait(300); await shot('daily_intro');
+  await page.evaluate(() => { MATCH._G.noFlags = true; if (typeof RPLY !== 'undefined') RPLY._.force({ kind: 'none' }); }); await wait(300); await shot('daily_intro');
   check(await page.$('.dlyi') != null, 'daily: the intro shows the situation');
   await tap('#mKick');
   const seen = await bot(150, { hurry: false });
